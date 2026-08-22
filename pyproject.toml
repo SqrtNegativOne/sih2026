@@ -16,3 +16,4 @@ packages = ["src/sih"]
 
 [project.scripts]
 build-master = "sih.build_master:main"
+build-samples = "sih.build_samples:main"
