@@ -1,0 +1,39 @@
+week_end_date,route_code,index_name,value,unit,notes
+2026-07-17,C5,C5 (West Australia-Qingdao),11.81,USD/mt,-1.51 WoW; closing Week 29
+2026-07-17,C3,C3 (Tubarao-Qingdao),32.72,USD/mt,-0.28 WoW
+2026-07-17,,BCI,4097,index,-242 day-on-day; -558 week-on-week; 52-wk high 5517 / low 2175
+2026-07-17,,C5TC,33653,USD/day,-2196 day-on-day; -5058 week-on-week
+2026-07-17,,BDI,2752,index,-192 WoW; -3.1% on the day
+2026-07-17,P2A_82,Panamax Pacific round voyage,31099,USD/day,-3% WoW
+2026-07-17,P6_82,Panamax Singapore round via Atlantic,20341,USD/day,+2% WoW
+2026-07-17,P1A_82,Panamax transatlantic round voyage,21941,USD/day,-5% WoW
+2026-07-17,P5_82,Panamax South China Indonesia round voyage,16861,USD/day,+13% WoW
+2026-07-17,,BPI,2248,index,-9 day-on-day; -5 week-on-week; 5-yr avg 1887
+2026-07-17,,P5TC,20236,USD/day,Panamax TC average; stable
+2026-07-17,S1C,Supramax US Gulf trip Skaw-Passero,32079,USD/day,eased ~5% WoW from elevated levels
+2026-07-17,S4A,Supramax US Gulf trip Skaw-Passero,31961,USD/day,eased ~5% WoW
+2026-07-17,,BSI,1737,index,+7 day-on-day; +31 week-on-week
+2026-07-17,S10TC,Supramax TC average,19926,USD/day,+2% WoW
+2026-07-17,S11TC,Ultramax TC average,21960,USD/day,+2% WoW
+2026-07-17,S2,Supramax North China Australia/Pacific round voyage,,USD/day,+7% WoW (level not stated)
+2026-07-17,S3TC_63,Baltic Supramax Asia,,USD/day,+8% WoW (level not stated)
+2026-07-17,,BHSI,903,index,-1 day-on-day; -12 week-on-week
+2026-07-17,,HS7TC,16261,USD/day,-1% WoW; Handysize TC average
+2026-07-17,HS1_38,Handysize Continent trip Skaw-Passero,8429,USD/day,+5% WoW
+2026-07-17,HS2_38,Handysize UK Continent/Baltic,11064,USD/day,+6% WoW
+2026-07-17,HS3_38,Handysize Med trip,22928,USD/day,-6% WoW
+2026-07-17,HS4_38,Handysize USG trip Skaw-Passero,20550,USD/day,-5% WoW
+2026-07-17,HS6_38,Handysize NOPAC round voyage,,USD/day,+44% YoY (level not stated)
+2026-07-17,HS7_38,Handysize North China trip SE Asia,,USD/day,+45% YoY (level not stated)
+2026-07-17,,Port Hedland average vessel waiting time,8.7,days,week to 17 July; up from ~8.4 days prior week; 30-day MA 8.66 days; weekly high 9.44 days on 16 Jul during BHP stoppage
+2026-07-17,,Tonne-mile index Panamax,106,%,"eased from 110%"
+2026-07-17,,Tonne-mile index Post-Panamax,102,%,"eased from 106%"
+2026-07-17,,Tonne-mile index Handymax,143,%,
+2026-07-17,,Tonne-mile index Supramax,112,%,
+2026-07-17,,Tonne-mile index Handysize,93,%,
+2026-07-17,,Ballaster count Capesize global,610,vessels,Australasia 189; Indian Ocean/S.Africa 186; N Atlantic +23% WoW; S Atlantic +14% WoW
+2026-07-17,,Ballaster count Panamax global,833,vessels,ECSA 280 (+7% WoW); Indian Ocean/S.Africa 238; FEAST/NOPAC 201; Australasia 194
+2026-07-17,,Ballaster count Supramax global,687,vessels,FEAST/NOPAC 214; Australasia 177; N Atlantic +44% WoW
+2026-07-17,,Ballaster count Handysize global,689,vessels,N Atlantic 220; FEAST/NOPAC 166 (+35% WoW)
+2026-07-17,,Congestion South China Panamax,148,vessels,12-month average 94
+2026-07-17,,Congestion North/Central China Supramax,186,vessels,12-month average 108; +63% WoW

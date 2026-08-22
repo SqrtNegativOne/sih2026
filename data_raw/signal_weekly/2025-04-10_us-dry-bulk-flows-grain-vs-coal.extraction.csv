@@ -1,0 +1,12 @@
+week_end_date,route_code,index_name,value,unit,notes
+2025-04-10,C3,Capesize Brazil-North China freight rate,20,USD/tonne,-10% compared to last month
+2025-04-10,Panamax Continent-Far East,Panamax Continent freight rate,30,USD/tonne,above $30 per tonne; -6% weekly; +8% month-on-month
+2025-04-10,Supramax Indonesia-ECI,Supramax Indo-ECI freight rate,9,USD/tonne,almost $9 per tonne; +13% month-on-month
+2025-04-10,Handysize NOPAC-FE,Handysize NOPAC Far East freight rate,30,USD/tonne,above $30 per tonne since late February; +8% over past month
+2025-04-10,,Ballaster count Capesize SE Africa,96,vessels,up from ~80 two weeks earlier; annual average 110
+2025-04-10,,Ballaster count Panamax SE Africa,100,vessels,nearly 100; ~30 below annual average
+2025-04-10,,Ballaster count Handysize NOPAC,98,vessels,upward trend since end of week 11
+2025-04-10,,Congestion China Capesize,112,vessels,+5 WoW
+2025-04-10,,Congestion China Panamax,180,vessels,+8 WoW
+2025-04-10,,Congestion China Supramax,300,vessels,-6 WoW
+2025-04-10,,Congestion China Handysize,200,vessels,above 200; +12 WoW
