@@ -1,0 +1,37 @@
+route_code,index_name,vessel_class,description_short,load_range,discharge_or_redelivery_range,cargo_basis,unit_type,weighting_in_index_pct,basis_vessel_dwt,notes
+C2,BCI,Capesize,Tubarao to Rotterdam iron ore,Tubarao,Rotterdam,iron ore,voyage_usd_per_tonne,,180000,long tons basis
+C3,BCI,Capesize,Tubarao to Qingdao iron ore,Tubarao,Qingdao,iron ore,voyage_usd_per_tonne,,180000,
+C5,BCI,Capesize,West Australia to Qingdao iron ore,West Australia (Port Hedland),Qingdao,iron ore,voyage_usd_per_tonne,,180000,AUSTRALIA origin proxy
+C7,BCI,Capesize,Bolivar to Rotterdam coal,Bolivar,Rotterdam,coal,voyage_usd_per_tonne,,180000,
+C17,BCI,Capesize,Saldanha Bay to Qingdao iron ore,Saldanha Bay,Qingdao,iron ore,voyage_usd_per_tonne,,180000,not in BCI average
+C8_14,BCI,Capesize,Gibraltar-Hamburg transatlantic round voyage,Gibraltar-Hamburg range,Gibraltar-Hamburg range,n/a,tce_usd_per_day,25,180000,
+C9_14,BCI,Capesize,Cont-Med trip to China-Japan,ARA range or passing Passero,China-Japan range,n/a,tce_usd_per_day,12.5,180000,
+C10_14,BCI,Capesize,China-Japan transpacific round voyage,Qingdao,China-Japan range,n/a,tce_usd_per_day,25,180000,
+C14,BCI,Capesize,China-Brazil round voyage,Qingdao (retro up to 15 days),China-Japan range via Brazil,n/a,tce_usd_per_day,25,180000,
+C16,BCI,Capesize,Revised backhaul,North China-South Japan,UK-Cont-Med Skaw-Passero via Australia OR Indonesia OR US West Coast OR South Africa OR Brazil,n/a,tce_usd_per_day,12.5,180000,trips via Indonesia common for this route
+P1A_82,BPI,Panamax,Skaw-Gibraltar transatlantic round voyage,Skaw-Gibraltar,Skaw-Gibraltar,n/a,tce_usd_per_day,25,82500,
+P2A_82,BPI,Panamax,Skaw-Gib trip to Taiwan-Japan,Skaw-Gibraltar,Hong Kong-S Korea incl Taiwan,n/a,tce_usd_per_day,10,82500,
+P3A_82,BPI,Panamax,Transpacific round voyage,Hong Kong-S Korea incl Taiwan,Hong Kong-S Korea incl Taiwan,n/a,tce_usd_per_day,25,82500,
+P4_82,BPI,Panamax,HK-S Korea trip to Skaw-Gibraltar,Hong Kong-S Korea incl Taiwan,Skaw-Gibraltar,n/a,tce_usd_per_day,10,82500,
+P5_82,BPI,Panamax,South China Indonesian round voyage (BEP Asia),S China Fuzhou-Hong Kong or passing Taipei southbound,S China Fuzhou-Hong Kong via Indonesia,coal,tce_usd_per_day,not_in_current_average,82500,INDONESIA coal loop; assessed daily but excluded from P5TC weighting per Veson listing
+P6_82,BPI,Panamax,Singapore round voyage via Atlantic,Singapore,Hong Kong-S Korea incl Taiwan,n/a,tce_usd_per_day,30,82500,enters Indian Ocean leg
+P7,BPI,Panamax,US Gulf to Qingdao grain,Mississippi river,Qingdao min 13m arrival draft,grain HSS,voyage_usd_per_tonne,,76000,USA origin proxy
+P8,BPI,Panamax,Santos to Qingdao grain,Santos,Qingdao min 13m arrival draft,grain HSS,voyage_usd_per_tonne,,76000,
+S1B_58,BSI,Supramax,Canakkale via Med or Black Sea to China-S Korea,passing Canakkale,China-S Korea range,n/a,tce_usd_per_day,5,58328,
+S1C_58,BSI,Supramax,US Gulf trip to China-S Japan,South West Pass,N China-S Japan Shanghai-Tokyo bay,n/a,tce_usd_per_day,5,58328,
+S2_58,BSI,Supramax,N China Australian or Pacific round voyage,N China Shanghai-Dalian,N China Shanghai-Dalian via Australia,n/a,tce_usd_per_day,20,58328,AUSTRALIA touching
+S3_58,BSI,Supramax,N China trip to West Africa,N China Shanghai-Dalian,W Africa Dakar-Douala,n/a,tce_usd_per_day,15,58328,
+S4A_58,BSI,Supramax,US Gulf trip to Skaw-Passero,US Gulf,Skaw-Passero,n/a,tce_usd_per_day,7.5,58328,
+S4B_58,BSI,Supramax,Skaw-Passero trip to US Gulf,Skaw-Passero,US Gulf,n/a,tce_usd_per_day,10,58328,
+S5_58,BSI,Supramax,W Africa via ECSA to N China,W Africa Dakar-Douala,N China Shanghai-Dalian via ECSA,n/a,tce_usd_per_day,5,58328,
+S8_58,BSI,Supramax,South China via Indonesia to east coast India,S China Fuzhou-Fangcheng incl Taiwan,EC INDIA Chennai-Paradip range via Indonesia,coal,tce_usd_per_day,15,58328,INDIA DIRECT ROUTE - one of problem statement's exact trades; heavy 15% weight in S10TC
+S9_58,BSI,Supramax,W Africa via ECSA to Skaw-Passero,W Africa Dakar-Douala,Skaw-Passero via ECSA,n/a,tce_usd_per_day,7.5,58328,
+S10_58,BSI,Supramax,South China via Indonesia to south China,S China Fuzhou-Fangcheng incl Taiwan,S China Fangcheng-Fuzhou via Indonesia,coal,tce_usd_per_day,10,58328,INDONESIA coal loop
+S15_63,BSI,Supramax,newer _63 suite route (definition not yet documented here),unknown,unknown,unknown,tce_usd_per_day,10,63500,appears only in S11TC weighting formula; fetch definition later
+HS1_38,BHSI,Handysize,Skaw-Passero trip to Rio de Janeiro-Recalada,Skaw-Passero,Recalada-Rio de Janeiro,n/a,tce_usd_per_day,12.5,38200,
+HS2_38,BHSI,Handysize,Skaw-Passero trip to Boston-Galveston,Skaw-Passero,Boston-Galveston,n/a,tce_usd_per_day,12.5,38200,
+HS3_38,BHSI,Handysize,Rio de Janeiro-Recalada trip to Skaw-Passero,Recalada-Rio de Janeiro,Skaw-Passero,n/a,tce_usd_per_day,12.5,38200,
+HS4_38,BHSI,Handysize,USG via NC South America to Skaw-Passero,Brownsville-Key West,Skaw-Passero via USG or NCSA,n/a,tce_usd_per_day,12.5,38200,
+HS5_38,BHSI,Handysize,SE Asia trip to Singapore-Japan,Krabi-Campha incl Malaysia Indonesia Philippines,Singapore-Japan incl China,n/a,tce_usd_per_day,20,38200,INDONESIA touching
+HS6_38,BHSI,Handysize,N China-S Korea-Japan round voyage,N China-S Korea-Japan,N China-S Korea-Japan,n/a,tce_usd_per_day,20,38200,
+HS7_38,BHSI,Handysize,N China-S Korea-Japan trip to SE Asia,N China-S Korea-Japan,SE Asia Krabi-Campha,n/a,tce_usd_per_day,10,38200,
