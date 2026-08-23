@@ -98,11 +98,13 @@ def main() -> None:
         target_exprs = []
         target_cols = []
         for h in horizons:
-            col_name = f"y_h{h}"
-            target_exprs.append(
-                pl.col("log_value").shift(-h).alias(col_name)
-            )
-            target_cols.append(col_name)
+            col_name = f"y_step_h{h}"
+            mean_col_name = f"y_mean_h{h}"
+            target_exprs.extend([
+                pl.col("log_value").shift(-h).alias(col_name),
+                pl.col("target_value").shift(-1).rolling_mean(window_size=h).shift(-(h-1)).log().alias(mean_col_name)
+            ])
+            target_cols.extend([col_name, mean_col_name])
             
         df_target = df_target.with_columns(target_exprs)
         df_target = df_target.drop_nulls(subset=target_cols)

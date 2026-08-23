@@ -29,8 +29,8 @@ def mock_test_split() -> pl.DataFrame:
         "date": [date(2025, 1, 1), date(2025, 1, 2)],
         "target_class": ["Supramax", "Supramax"],
         "log_value": [math.log(10_000), math.log(10_000)],
-        "y_h30": [math.log(12_000), math.log(8_000)],
-        "y_h90": [math.log(15_000), math.log(7_000)],
+        "y_step_h30": [math.log(12_000), math.log(8_000)],
+        "y_step_h90": [math.log(15_000), math.log(7_000)],
     })
 
 

@@ -36,8 +36,8 @@ def predict(
     es = train.sort("date").tail(train.height - core_n)
     names, x_tr = make_matrix(tr, h)
     _, x_es = make_matrix(es, h)
-    y_tr = (tr[f"y_h{h}"] - tr["log_value"]).to_numpy()
-    y_es = (es[f"y_h{h}"] - es["log_value"]).to_numpy()
+    y_tr = (tr[f"y_step_h{h}"] - tr["log_value"]).to_numpy()
+    y_es = (es[f"y_step_h{h}"] - es["log_value"]).to_numpy()
 
     feature_types = ["c" if n == "target_class" else "q" for n in names]
 

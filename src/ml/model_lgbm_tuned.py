@@ -82,8 +82,8 @@ def predict(
     names, x_tr = make_matrix_tuned(tr, h)
     _, x_es = make_matrix_tuned(es, h)
     
-    y_tr = (tr[f"y_h{h}"] - tr["log_value"]).to_numpy()
-    y_es = (es[f"y_h{h}"] - es["log_value"]).to_numpy()
+    y_tr = (tr[f"y_step_h{h}"] - tr["log_value"]).to_numpy()
+    y_es = (es[f"y_step_h{h}"] - es["log_value"]).to_numpy()
     
     cat_idx = [names.index("target_class")]
     per_quantile: dict[str, list[pl.DataFrame]] = {}

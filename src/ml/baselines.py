@@ -28,7 +28,8 @@ CLASSES: Final[tuple[str, ...]] = ("Capesize", "Panamax", "Supramax", "Handysize
 CLASS_CODES: Final[dict[str, int]] = {c: i for i, c in enumerate(CLASSES)}
 EXCLUDE: Final[frozenset[str]] = frozenset(
     {"date", "target_value", "log_value",
-     "y_h7", "y_h30", "y_h90"}
+     "y_step_h7", "y_step_h30", "y_step_h90",
+     "y_mean_h7", "y_mean_h30", "y_mean_h90"}
 )
 LGB_PARAMS: Final[dict[str, object]] = {
     "objective": "quantile",
@@ -52,7 +53,7 @@ def load_split(name: str) -> pl.DataFrame:
     df = pl.read_parquet(DATA / f"samples_{name}.parquet")
     floats = [c for c, t in df.schema.items() if t == pl.Float64]
     df = df.with_columns([pl.col(c).fill_nan(None) for c in floats])
-    return df.drop_nulls(["log_value", "y_h7", "y_h30", "y_h90"])
+    return df.drop_nulls(["log_value", "y_step_h7", "y_step_h30", "y_step_h90"])
 
 
 def pinball(y: pl.Series, p: pl.Series, q: float) -> float:
@@ -75,7 +76,7 @@ def fit_rw_sigmas(train: pl.DataFrame, h: int) -> dict[str, float]:
     """Per-class random-walk residual sigma on train, pooled fallback."""
     res = train.select(
         pl.col("target_class"),
-        (pl.col(f"y_h{h}") - pl.col("log_value")).alias("e"),
+        (pl.col(f"y_step_h{h}") - pl.col("log_value")).alias("e"),
     ).drop_nulls()
     pooled = float(res["e"].std())
     out = {
@@ -102,9 +103,9 @@ def predict_rw(df: pl.DataFrame, h: int, sigmas: dict[str, float]) -> pl.DataFra
 
 def fit_ar1(train: pl.DataFrame, h: int) -> dict[str, object]:
     """Pooled AR(1) coefficients plus per-class residual sigmas."""
-    d = train.drop_nulls([f"y_h{h}"])
+    d = train.drop_nulls([f"y_step_h{h}"])
     x = d["log_value"].to_numpy()
-    y = d[f"y_h{h}"].to_numpy()
+    y = d[f"y_step_h{h}"].to_numpy()
     b = float(((x * y).mean() - x.mean() * y.mean()) / ((x * x).mean() - x.mean() ** 2))
     a = float(y.mean() - b * x.mean())
     resid = y - (a + b * x)
@@ -162,8 +163,8 @@ def predict_lgbm(
     es = train.sort("date").tail(train.height - core_n)
     names, x_tr = make_matrix(tr, h)
     _, x_es = make_matrix(es, h)
-    y_tr = (tr[f"y_h{h}"] - tr["log_value"]).to_numpy()
-    y_es = (es[f"y_h{h}"] - es["log_value"]).to_numpy()
+    y_tr = (tr[f"y_step_h{h}"] - tr["log_value"]).to_numpy()
+    y_es = (es[f"y_step_h{h}"] - es["log_value"]).to_numpy()
     cat_idx = [names.index("target_class")]
     per_quantile: dict[str, list[pl.DataFrame]] = {}
     median_booster: lgb.Booster | None = None
@@ -218,7 +219,7 @@ def evaluate(
     h = int(pred["h"][0])
     truth = source.select(
         "date", "target_class",
-        pl.col(f"y_h{h}").alias("y"), pl.col("log_value"),
+        pl.col(f"y_step_h{h}").alias("y"), pl.col("log_value"),
     )
     j = pred.join(truth, on=["date", "target_class"], how="inner")
     rows: list[dict[str, object]] = []

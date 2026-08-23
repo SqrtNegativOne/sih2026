@@ -6,15 +6,17 @@ save money vs naive baselines, measured against actual historical data?
 The test split (Jan 2025 – Apr 2026) gives us 828 rows across 4 vessel
 classes, each with:
   - log_value  : actual spot TCE at date t
-  - y_h30      : actual spot TCE at t + 30 calendar days (log-level)
-  - y_h90      : actual spot TCE at t + 90 calendar days (log-level)
+  - y_step_h30      : actual spot TCE at t + 30 calendar days (log-level)
+  - y_mean_h30      : actual avg spot TCE over next 30 days (log-level)
+  - y_step_h90      : actual spot TCE at t + 90 calendar days (log-level)
+  - y_mean_h90      : actual avg spot TCE over next 90 days (log-level)
 
 And the ML model predictions (from baseline_metrics.csv or a predict()
 call) give us P10/P50/P90 at those horizons.
 
 We simulate:
   - TC quote  = spot_t × (1 − broker_spread)   [what a broker would offer]
-  - Realised spot cost over the contract term   [exp(y_h30) or exp(y_h90)]
+  - Realised spot cost over the contract term   [exp(y_mean_h30) or exp(y_mean_h90)]
   - Savings from LOCK vs SPOT                  [quote - realised_spot per day]
 
 Five strategies are compared for each (date, class) observation:
@@ -68,7 +70,7 @@ class BacktestRow:
     vessel_class: str
     spot_usd: float       # exp(log_value) — current market rate USD/day
     quote_usd: float      # simulated TC quote = spot × (1 - broker_spread)
-    realised_spot: float  # exp(y_h{term}) — actual avg spot over contract term
+    realised_spot: float  # exp(y_step_h{term}) — actual avg spot over contract term
     ceiling_usd: float    # optimizer's LOCK threshold (analytic ceiling, or
                           # risk-blended simulated spot cost when mc_config is set)
 
@@ -154,14 +156,14 @@ def simulate(
     ----------
     test_split:
         samples_test.parquet — must have columns date, target_class,
-        log_value, y_h30, y_h90.
+        log_value, y_step_h30, y_step_h90.
     ml_predictions:
         Combined P10/P50/P90 predictions from any model's predict() output,
         for all horizons. Columns: date, target_class, h, p_0.1, p_0.5, p_0.9
         (all in LOG-LEVEL space).
     contract_term_days:
         Length of TC contract to simulate. Only 30 and 90 are supported
-        (must match an available y_h* column).
+        (must match an available y_step_h* column).
     broker_spread:
         Fraction by which TC quote is discounted below spot.
         quote = spot × (1 - broker_spread).
@@ -188,7 +190,7 @@ def simulate(
     """
     if contract_term_days not in (30, 90):
         raise ValueError(
-            f"contract_term_days must be 30 or 90 (matching y_h* columns); "
+            f"contract_term_days must be 30 or 90 (matching y_step_h* columns); "
             f"got {contract_term_days}."
         )
     if not (0.0 <= broker_spread < 1.0):
@@ -196,7 +198,7 @@ def simulate(
     if not (0.0 <= risk_tolerance <= 1.0):
         raise ValueError(f"risk_tolerance must be in [0, 1], got {risk_tolerance}.")
 
-    y_col = f"y_h{contract_term_days}"
+    y_col = f"y_mean_h{contract_term_days}"
     if y_col not in test_split.columns:
         raise ValueError(f"Column {y_col!r} not found in test_split.")
 

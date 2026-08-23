@@ -41,11 +41,11 @@ def mock_test_split() -> pl.DataFrame:
             math.log(10_000), math.log(10_000),
             math.log(10_000), math.log(10_000),
         ],
-        "y_h30": [
+        "y_step_h30": [
             math.log(13_000), math.log(8_000),
             math.log(14_000), math.log(7_000),
         ],
-        "y_h90": [
+        "y_step_h90": [
             math.log(15_000), math.log(6_000),
             math.log(16_000), math.log(5_000),
         ],
@@ -268,8 +268,8 @@ class TestObjectiveWiring:
             "date": [date(2025, 1, 1)],
             "target_class": ["Supramax"],
             "log_value": [math.log(10_824.74)],
-            "y_h30": [math.log(12_000)],
-            "y_h90": [math.log(14_000)],
+            "y_step_h30": [math.log(12_000)],
+            "y_step_h90": [math.log(14_000)],
         })
 
     @pytest.fixture

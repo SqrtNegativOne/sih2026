@@ -41,14 +41,14 @@ def main() -> None:
     for h in HORIZONS:
         LOGGER.info(f"Training XGBoost model for h={h}...")
         
-        train_h = train_df.drop_nulls([f"y_h{h}"])
-        valid_h = valid_df.drop_nulls([f"y_h{h}"])
+        train_h = train_df.drop_nulls([f"y_step_h{h}"])
+        valid_h = valid_df.drop_nulls([f"y_step_h{h}"])
         
         names, x_tr = make_matrix(train_h, h)
         _, x_val = make_matrix(valid_h, h)
         
-        y_tr = (train_h[f"y_h{h}"] - train_h["log_value"]).to_numpy()
-        y_val = (valid_h[f"y_h{h}"] - valid_h["log_value"]).to_numpy()
+        y_tr = (train_h[f"y_step_h{h}"] - train_h["log_value"]).to_numpy()
+        y_val = (valid_h[f"y_step_h{h}"] - valid_h["log_value"]).to_numpy()
 
         feature_types = ["c" if n == "target_class" else "q" for n in names]
 

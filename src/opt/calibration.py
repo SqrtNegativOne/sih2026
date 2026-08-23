@@ -149,7 +149,7 @@ def calibrate_pso(
     ----------
     test_split:
         Historical test-set rows — same format as ``backtest.simulate`` expects
-        (columns: date, target_class, log_value, y_h30, y_h90).
+        (columns: date, target_class, log_value, y_step_h30, y_step_h90).
     ml_predictions:
         ML model quantile predictions (columns: date, target_class, h,
         p_0.1, p_0.5, p_0.9 in log-level space).

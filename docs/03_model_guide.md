@@ -27,7 +27,7 @@ One row = (target_class, date t). 40 columns:
 
 - keys: `date` (Date), `target_class` (str: Capesize/Panamax/Supramax/Handysize)
 - target level: `log_value` = ln(TCE $/day) at t
-- targets: `y_h7`, `y_h30`, `y_h90` = log levels at t+h (calendar-day horizons,
+- targets: `y_step_h7`, `y_step_h30`, `y_step_h90` = log levels at t+h (calendar-day horizons,
   resolved to next available trading day)
 - features: lags (`lag_1..lag_63`), rolling stats (30d/90d mean/std/zscore),
   returns (`ret_1/7/30`), calendar (`dayofweek, month, weekofyear,
@@ -105,7 +105,7 @@ far below what recurrent nets want. Treat this as (a) a learning exercise,
 
 - Input: sliding window of length L=60 trading days of features per class.
 - Output: quantile predictions of the LOG-RETURN at horizon h
-  (r_{t+h} = y_h{h} - log_value), three heads (q10/q50/q90).
+  (r_{t+h} = y_step_h{h} - log_value), three heads (q10/q50/q90).
 - Loss: sum of pinball losses across the three quantiles.
 - One shared model across classes: feed target_class as a small learned
   embedding (dim 2) concatenated to the window summary.
@@ -127,7 +127,7 @@ sd = train.select([pl.col(c).std() for c in FEATURE_COLS])
 For each split, sort by (target_class, date); emit windows only within a
 class's contiguous runs so no window straddles a data gap (check
 `date.diff() > 5 days` to cut runs). Label = return at index t+h if it exists
-in the SAME run, else drop the window. This mirrors how y_h* was built.
+in the SAME run, else drop the window. This mirrors how y_step_h* was built.
 
 ### Skeleton (PyTorch, CPU is fine at this size)
 

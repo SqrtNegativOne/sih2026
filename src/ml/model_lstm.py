@@ -13,7 +13,8 @@ from torch.utils.data import DataLoader, TensorDataset
 LOGGER: Final[logging.Logger] = logging.getLogger(__name__)
 
 EXCLUDE: Final[frozenset[str]] = frozenset(
-    {"date", "target_value", "log_value", "y_h7", "y_h30", "y_h90", "target_class"}
+    {"date", "target_value", "log_value", "y_step_h7", "y_step_h30", "y_step_h90",
+     "y_mean_h7", "y_mean_h30", "y_mean_h90", "target_class"}
 )
 
 CLASSES: Final[tuple[str, ...]] = ("Capesize", "Panamax", "Supramax", "Handysize")
@@ -67,8 +68,8 @@ def create_windows(df: pl.DataFrame, h: int, feature_cols: list[str]) -> tuple[t
             
             x_arr = run_grp.select(feature_cols).to_numpy()
             
-            if f"y_h{h}" in run_grp.columns:
-                y_arr = (run_grp[f"y_h{h}"] - run_grp["log_value"]).to_numpy()
+            if f"y_step_h{h}" in run_grp.columns:
+                y_arr = (run_grp[f"y_step_h{h}"] - run_grp["log_value"]).to_numpy()
             else:
                 y_arr = np.full(run_grp.height, np.nan)
             
