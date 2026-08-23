@@ -59,6 +59,7 @@ class CargoParcel(BaseModel):
     parcel_id: str
     origin_port: PortEnum
     dest_port: PortEnum
+    alternative_dest_ports: list[PortEnum] | None = None
     commodity: str
     volume_dwt: float
     laycan_start: date

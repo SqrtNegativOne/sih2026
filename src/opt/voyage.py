@@ -31,6 +31,7 @@ from opt.network import PortEnum, RouteEnum, BLENDED_BUNKER_USD_PER_TONNE
 class VoyageAssignment:
     vessel_id: str
     parcel_id: str
+    dest_port: PortEnum
     arrival_hours: int
     wait_hours: int              # anchorage wait before laycan opens
     start_operation_hours: int
@@ -45,7 +46,7 @@ class VoyageScheduleResult:
     assignments: list[VoyageAssignment]
     total_profit_usd: float
     solver_status: str
-    infeasible_pairs: list[tuple[str, str]]  # (vessel_id, parcel_id) ruled out by port constraints
+    infeasible_pairs: list[tuple[str, str, str]]  # (vessel_id, parcel_id, reason) ruled out by port constraints
 
 
 def _get_distance_nm(
@@ -62,18 +63,13 @@ def _get_distance_nm(
 
 def _vessel_can_call(
     vessel: Vessel, port: PortEnum
-) -> bool:
+) -> tuple[bool, str | None]:
     spec = port.value
     if spec.max_dwt is not None and vessel.dwt > spec.max_dwt:
-        return False
+        return False, f"Vessel DWT ({vessel.dwt}) exceeds port max ({spec.max_dwt}) at {port.name}"
     if spec.max_draft_m is not None and vessel.draft_m > spec.max_draft_m:
-        return False
-    return True
-    if spec.max_dwt is not None and vessel.dwt > spec.max_dwt:
-        return False
-    if spec.max_draft_m is not None and vessel.draft_m > spec.max_draft_m:
-        return False
-    return True
+        return False, f"Vessel draft ({vessel.draft_m}m) exceeds port max ({spec.max_draft_m}m) at {port.name}"
+    return True, None
 
 
 def schedule_voyages(
@@ -94,7 +90,25 @@ def schedule_voyages(
     def date_to_hours(d: Any) -> int:
         return (d - epoch_date).days * 24
 
-    C = inputs.parcels
+    C: list[CargoParcel] = []
+    parent_map: dict[str, str] = {} # sub_id -> parent_id
+    group_map: dict[str, list[str]] = {} # parent_id -> list of sub_ids
+    
+    for p in inputs.parcels:
+        dests = [p.dest_port]
+        if p.alternative_dest_ports:
+            for dp in p.alternative_dest_ports:
+                if dp not in dests:
+                    dests.append(dp)
+        
+        group_map[p.parcel_id] = []
+        for d in dests:
+            sub_id = f"{p.parcel_id}__{d.name}"
+            sub_p = p.model_copy(update={"parcel_id": sub_id, "dest_port": d})
+            C.append(sub_p)
+            parent_map[sub_id] = p.parcel_id
+            group_map[p.parcel_id].append(sub_id)
+
     V = inputs.vessels
 
     max_time_hours = (inputs.planning_horizon_days + 60) * 24
@@ -120,22 +134,22 @@ def schedule_voyages(
     # Port compatibility pre-filter
     # ---------------------------------------------------------------------------
     # Build a set of (v_id, c_id) pairs that are physically impossible.
-    infeasible_pairs: list[tuple[str, str]] = []
+    infeasible_pairs: list[tuple[str, str, str]] = []
     feasible: dict[tuple[str, str], bool] = {}
     for v in V:
         for c in C:
-            ok = (
-                _vessel_can_call(v, c.origin_port)
-                and _vessel_can_call(v, c.dest_port)
-            )
+            ok_orig, reason_orig = _vessel_can_call(v, c.origin_port)
+            ok_dest, reason_dest = _vessel_can_call(v, c.dest_port)
+            ok = ok_orig and ok_dest
             feasible[v.vessel_id, c.parcel_id] = ok
             if not ok:
-                infeasible_pairs.append((v.vessel_id, c.parcel_id))
+                reason = reason_orig if not ok_orig else reason_dest
+                infeasible_pairs.append((v.vessel_id, c.parcel_id, reason)) # type: ignore
 
     # ---------------------------------------------------------------------------
     # Decision variables
     # ---------------------------------------------------------------------------
-    served = {c.parcel_id: model.NewBoolVar(f"served_{c.parcel_id}") for c in C}
+    served_group = {p.parcel_id: model.NewBoolVar(f"served_grp_{p.parcel_id}") for p in inputs.parcels}
 
     x: dict[tuple[str, str], Any] = {}
     for v in V:
@@ -143,12 +157,15 @@ def schedule_voyages(
             x[v.vessel_id, c.parcel_id] = model.NewBoolVar(f"x_{v.vessel_id}_{c.parcel_id}")
 
     # Infeasible pairs are permanently 0
-    for v_id, c_id in infeasible_pairs:
+    for v_id, c_id, _ in infeasible_pairs:
         model.Add(x[v_id, c_id] == 0)
 
-    # Each cargo served by at most one vessel
-    for c in C:
-        model.Add(sum(x[v.vessel_id, c.parcel_id] for v in V) == served[c.parcel_id])
+    # Each parent cargo served by at most one vessel at exactly one port
+    for p in inputs.parcels:
+        model.Add(
+            sum(x[v.vessel_id, sub_id] for v in V for sub_id in group_map[p.parcel_id]) 
+            == served_group[p.parcel_id]
+        )
 
     # Routing flow variables
     trans: dict[tuple[str, str, str], Any] = {}
@@ -161,7 +178,7 @@ def schedule_voyages(
             start_node[v_id, c_id] = model.NewBoolVar(f"snode_{v_id}_{c_id}")
             end_node[v_id, c_id] = model.NewBoolVar(f"enode_{v_id}_{c_id}")
             for c2 in C:
-                if c_id != c2.parcel_id:
+                if parent_map[c_id] != parent_map[c2.parcel_id]:
                     trans[v_id, c_id, c2.parcel_id] = model.NewBoolVar(f"tr_{v_id}_{c_id}_{c2.parcel_id}")
 
     # Flow conservation
@@ -173,12 +190,12 @@ def schedule_voyages(
         for c in C:
             c_id = c.parcel_id
             in_edges = start_node[v_id, c_id] + sum(
-                trans[v_id, p.parcel_id, c_id] for p in C if p.parcel_id != c_id
+                trans[v_id, p.parcel_id, c_id] for p in C if parent_map[p.parcel_id] != parent_map[c_id]
             )
             model.Add(in_edges == x[v_id, c_id])
 
             out_edges = end_node[v_id, c_id] + sum(
-                trans[v_id, c_id, n.parcel_id] for n in C if n.parcel_id != c_id
+                trans[v_id, c_id, n.parcel_id] for n in C if parent_map[n.parcel_id] != parent_map[c_id]
             )
             model.Add(out_edges == x[v_id, c_id])
 
@@ -251,7 +268,7 @@ def schedule_voyages(
 
             # Ballast between cargoes
             for c2 in C:
-                if c_id == c2.parcel_id:
+                if parent_map[c_id] == parent_map[c2.parcel_id]:
                     continue
                 b_nm = _get_distance_nm(c.dest_port, c2.origin_port)
                 b_h = int(b_nm / v.speed_kn) if v.speed_kn > 0 else 0
@@ -327,7 +344,7 @@ def schedule_voyages(
 
             # --- Ballast fuel + penalty + inter-cargo idle gap for transitions ---
             for c2 in C:
-                if c_id == c2.parcel_id:
+                if parent_map[c_id] == parent_map[c2.parcel_id]:
                     continue
                 b_nm = _get_distance_nm(c.dest_port, c2.origin_port)
                 b_days = b_nm / (v.speed_kn * 24.0) if v.speed_kn > 0 else 0
@@ -396,7 +413,7 @@ def schedule_voyages(
             else:
                 prev_fin = assignments[-1].finish_hours
                 b_nm = _get_distance_nm(
-                    next(c.dest_port for c in C if c.parcel_id == assignments[-1].parcel_id),
+                    assignments[-1].dest_port,
                     next(c.origin_port for c in C if c.parcel_id == curr_c_id)
                 )
                 b_h = int(b_nm / v.speed_kn) if v.speed_kn > 0 else 0
@@ -404,7 +421,8 @@ def schedule_voyages(
 
             assignments.append(VoyageAssignment(
                 vessel_id=v_id,
-                parcel_id=curr_c_id,
+                parcel_id=parent_map[curr_c_id],
+                dest_port=next(c.dest_port for c in C if c.parcel_id == curr_c_id),
                 arrival_hours=arr,
                 wait_hours=max(0, st - arr),
                 start_operation_hours=st,
@@ -415,7 +433,7 @@ def schedule_voyages(
             ))
 
             curr_c_id = next(
-                (c2.parcel_id for c2 in C if c2.parcel_id != curr_c_id and solver.Value(trans[v_id, curr_c_id, c2.parcel_id])),
+                (c2.parcel_id for c2 in C if parent_map[c2.parcel_id] != parent_map[curr_c_id] and solver.Value(trans[v_id, curr_c_id, c2.parcel_id])),
                 None
             )
 

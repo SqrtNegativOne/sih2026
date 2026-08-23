@@ -70,27 +70,31 @@ def base_inputs(vessels, parcels) -> OptimizerInputs:
 class TestVesselCanCall:
     def test_no_spec_allows_all(self):
         v = make_supramax()
-        assert _vessel_can_call(v, PortEnum.SINGAPORE) is True
+        assert _vessel_can_call(v, PortEnum.SINGAPORE)[0] is True
 
     def test_dwt_too_large_blocked(self):
         v = make_supramax()  # 55k DWT
-        assert _vessel_can_call(v, PortEnum.GOPALPUR) is False
+        ok, reason = _vessel_can_call(v, PortEnum.GOPALPUR)
+        assert ok is False
+        assert "DWT" in reason
 
     def test_dwt_exactly_at_limit_allowed(self):
         v = make_supramax()  # 55k DWT
-        assert _vessel_can_call(v, PortEnum.PARADIP) is True
+        assert _vessel_can_call(v, PortEnum.PARADIP)[0] is True
 
     def test_draft_too_deep_blocked(self):
         v = make_supramax()  # draft 12.0m
-        assert _vessel_can_call(v, PortEnum.HALDIA) is False
+        ok, reason = _vessel_can_call(v, PortEnum.HALDIA)
+        assert ok is False
+        assert reason is not None
 
     def test_draft_exactly_at_limit_allowed(self):
         v = make_supramax()
-        assert _vessel_can_call(v, PortEnum.PARADIP) is True
+        assert _vessel_can_call(v, PortEnum.PARADIP)[0] is True
 
     def test_both_dwt_and_draft_fine(self):
         v = make_supramax()
-        assert _vessel_can_call(v, PortEnum.VIZAG) is True
+        assert _vessel_can_call(v, PortEnum.VIZAG)[0] is True
 
 
 # ---------------------------------------------------------------------------
@@ -152,7 +156,7 @@ class TestPortCompatibility:
         inputs = base_inputs([v], [c]
         )
         result = schedule_voyages(inputs, max_solve_seconds=2.0)
-        assert ("V1", "C1") in result.infeasible_pairs
+        assert any(v_id == "V1" and c_id.startswith("C1") for v_id, c_id, _ in result.infeasible_pairs)
         # Cargo cannot be served by any vessel -> no assignments
         assert len(result.assignments) == 0
 
@@ -165,7 +169,7 @@ class TestPortCompatibility:
         )
         result = schedule_voyages(inputs, max_solve_seconds=2.0)
         assert result.solver_status in ("OPTIMAL", "FEASIBLE")
-        assert ("V1", "C1") not in result.infeasible_pairs
+        assert not any(v_id == "V1" and c_id.startswith("C1") for v_id, c_id, _ in result.infeasible_pairs)
         assert len(result.assignments) == 1
 
     def test_two_vessels_only_compatible_one_assigned(self):
@@ -191,8 +195,8 @@ class TestPortCompatibility:
         result = schedule_voyages(inputs, max_solve_seconds=3.0)
         # Capesize is blocked at Gopalpur by draft AND dwt; Supramax is ALSO blocked by dwt (55k > 35k)
         # Both should be infeasible — this is the correct real-world outcome.
-        assert ("V_Cape", "C1") in result.infeasible_pairs
-        assert ("V_Supra", "C1") in result.infeasible_pairs
+        assert any(v_id == "V_Cape" and c_id.startswith("C1") for v_id, c_id, _ in result.infeasible_pairs)
+        assert any(v_id == "V_Supra" and c_id.startswith("C1") for v_id, c_id, _ in result.infeasible_pairs)
         assert len(result.assignments) == 0
 
 
@@ -237,3 +241,25 @@ class TestPenalties:
         assigned_ids = {a.parcel_id for a in result.assignments}
         # Distant cargo should be unprofitable and skipped
         assert "C_distant" not in assigned_ids
+
+
+# ---------------------------------------------------------------------------
+# Multiple Destinations
+# ---------------------------------------------------------------------------
+
+class TestAlternativeDestinations:
+    def test_alternative_destinations_picks_closer_port(self):
+        v = make_supramax(port=PortEnum.PARADIP)
+        # Paradip to Vizag is closer than Paradip to Richards Bay.
+        # We offer Richards Bay (primary) and Vizag (alternative).
+        c = make_cargo("C_alt", PortEnum.PARADIP, PortEnum.RICHARDS_BAY, date(2025, 1, 5), date(2025, 1, 15))
+        c = c.model_copy(update={"alternative_dest_ports": [PortEnum.VIZAG]})
+        
+        inputs = base_inputs([v], [c])
+        result = schedule_voyages(inputs, max_solve_seconds=3.0)
+        
+        assert result.solver_status in ("OPTIMAL", "FEASIBLE")
+        assert len(result.assignments) == 1
+        a = result.assignments[0]
+        # Should pick the closer port (Vizag)
+        assert a.dest_port == PortEnum.VIZAG

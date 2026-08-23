@@ -61,13 +61,35 @@ def run_optimizer(inputs: OptimizerInputs, target_class: VesselClass) -> Optimiz
     if lw_result.action == "LOCK":
         lw_text = f"Sign a {inputs.contract_term_days}-day {target_class.value} TC now at ${tc_quote:,.0f}/day (Ceiling is ${lw_result.ceiling_usd_per_day:,.0f}/day)."
     else:
-        lw_text = f"WAIT. Do not sign at ${tc_quote:,.0f}/day. Walk away above ${lw_result.ceiling_usd_per_day:,.0f}/day."
+        # Find optimal entry window by scanning the P50 forward curve
+        from opt.monte_carlo import _interpolate_fan_for_day
+        class_fans = [f for f in inputs.forecasts if f.vessel_class == target_class]
+        
+        best_day = 1
+        min_p50 = float('inf')
+        for d in range(1, inputs.planning_horizon_days + 1):
+            _, p50, _ = _interpolate_fan_for_day(class_fans, d)
+            if p50 < min_p50:
+                min_p50 = p50
+                best_day = d
+                
+        # Propose a 7-day window around the trough
+        start_day = max(1, best_day - 3)
+        end_day = min(inputs.planning_horizon_days, best_day + 3)
+        lw_text = (
+            f"WAIT. Do not sign at ${tc_quote:,.0f}/day. Walk away above ${lw_result.ceiling_usd_per_day:,.0f}/day.\n"
+            f"Optimal entry window: Day {start_day} to {end_day} (P50 trough at ~${min_p50:,.0f}/day)."
+        )
 
     # --- 2. Voyage Scheduling ---
     vs_result = schedule_voyages(inputs, max_solve_seconds=5.0)
     
     if not vs_result.assignments:
         vs_text = "No profitable voyages found in the current pool."
+        if vs_result.infeasible_pairs:
+            vs_text += "\n\nRejected options:\n" + "\n".join(
+                [f"  - Vessel {v_id} -> Parcel {c_id}: {reason}" for v_id, c_id, reason in vs_result.infeasible_pairs]
+            )
     else:
         # Group by vessel for text output
         v_schedules = {}
@@ -80,8 +102,14 @@ def run_optimizer(inputs: OptimizerInputs, target_class: VesselClass) -> Optimiz
         for v_id, assigns in v_schedules.items():
             # Sort by start time
             assigns.sort(key=lambda x: x.start_operation_hours)
-            seq = " -> ".join([f"parcel {a.parcel_id} (Hr {a.start_operation_hours})" for a in assigns])
+            seq = " -> ".join([f"parcel {a.parcel_id} to {a.dest_port.name} (Hr {a.start_operation_hours})" for a in assigns])
             vs_lines.append(f"Vessel {v_id} routes: {seq}")
+            
+        if vs_result.infeasible_pairs:
+            vs_lines.append("\nRejected options:")
+            for v_id, c_id, reason in vs_result.infeasible_pairs:
+                vs_lines.append(f"  - Vessel {v_id} -> Parcel {c_id}: {reason}")
+                
         vs_text = "\n".join(vs_lines)
 
     # --- 3. Repositioning ---
