@@ -243,6 +243,10 @@ def evaluate(
 
 def main() -> None:
     """Run all baselines, evaluate on valid/test, write metrics csv."""
+    from sih.model_lstm import predict as predict_lstm
+    from sih.model_xgb import predict as predict_xgb
+    from sih.model_lgbm_tuned import predict as predict_lgbm_tuned
+
     _setup_logging()
     splits = {name: load_split(name) for name in ("train", "valid", "test")}
     all_rows: list[dict[str, object]] = []
@@ -257,6 +261,21 @@ def main() -> None:
                 s: predict_ar1(splits[s], h, ar1_m) for s in ("valid", "test")
             },
             "lgbm": predict_lgbm(
+                splits["train"],
+                {"valid": splits["valid"], "test": splits["test"]},
+                h,
+            ),
+            "lstm": predict_lstm(
+                splits["train"],
+                {"valid": splits["valid"], "test": splits["test"]},
+                h,
+            ),
+            "xgb": predict_xgb(
+                splits["train"],
+                {"valid": splits["valid"], "test": splits["test"]},
+                h,
+            ),
+            "lgbm_tuned": predict_lgbm_tuned(
                 splits["train"],
                 {"valid": splits["valid"], "test": splits["test"]},
                 h,
