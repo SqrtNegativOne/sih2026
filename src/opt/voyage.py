@@ -176,6 +176,14 @@ def schedule_voyages(
             # Must arrive before laycan_end
             model.Add(arr <= cargo_windows[c_id]["end"]).OnlyEnforceIf(x[v_id, c_id])
 
+            # BUG FIX: when a cargo is NOT assigned, pin all time vars to 0.
+            # Without this, finish_time is free to take any value in [0, horizon],
+            # which can vacuously satisfy transition constraints on multi-cargo problems.
+            not_assigned = x[v_id, c_id].Not()
+            model.Add(arr == 0).OnlyEnforceIf(not_assigned)
+            model.Add(st == 0).OnlyEnforceIf(not_assigned)
+            model.Add(fin == 0).OnlyEnforceIf(not_assigned)
+
             # Duration computation
             laden_nm = _get_distance_nm(c.origin_port, c.dest_port, inputs.port_distances)
             laden_hours = int((laden_nm / v.speed_kn) if v.speed_kn > 0 else 0)
