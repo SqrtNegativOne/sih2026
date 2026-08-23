@@ -7,7 +7,7 @@ from typing import Final
 import polars as pl
 import xgboost as xgb
 
-from sih.baselines import QUANTILES, make_matrix
+from ml.baselines import QUANTILES, make_matrix
 
 LOGGER: Final[logging.Logger] = logging.getLogger(__name__)
 

@@ -31,7 +31,7 @@ from __future__ import annotations
 import math
 from typing import Sequence
 
-from sih.optimizer.types import (
+from opt.types import (
     BasisEntry,
     ForecastFan,
     LockWaitResult,

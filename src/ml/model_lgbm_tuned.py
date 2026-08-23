@@ -4,7 +4,7 @@ from typing import Final
 import lightgbm as lgb
 import polars as pl
 
-from sih.baselines import CLASS_CODES, EXCLUDE, QUANTILES
+from ml.baselines import CLASS_CODES, EXCLUDE, QUANTILES
 
 LOGGER = logging.getLogger(__name__)
 

@@ -8,11 +8,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from sih.optimizer.types import OptimizerInputs, VesselClass
-from sih.optimizer.ceiling import lock_or_wait
-from sih.optimizer.voyage import schedule_voyages
-from sih.optimizer.repositioning import recommend_repositioning
-from sih.optimizer.monte_carlo import estimate_savings_distribution
+from opt.types import OptimizerInputs, VesselClass
+from opt.ceiling import lock_or_wait
+from opt.voyage import schedule_voyages
+from opt.repositioning import recommend_repositioning
+from opt.monte_carlo import estimate_savings_distribution
 
 
 @dataclass

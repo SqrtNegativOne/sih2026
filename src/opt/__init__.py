@@ -8,7 +8,7 @@ ceiling     Lock/wait decision — ceiling rate calculator.
 """
 from __future__ import annotations
 
-from sih.optimizer.types import (
+from opt.types import (
     VesselClass,
     ForecastFan,
     BasisEntry,
@@ -18,7 +18,7 @@ from sih.optimizer.types import (
     OptimizerInputs,
     LockWaitResult,
 )
-from sih.optimizer.ceiling import compute_ceiling, lock_or_wait
+from opt.ceiling import compute_ceiling, lock_or_wait
 
 __all__ = [
     "VesselClass",

@@ -1,7 +1,7 @@
 import pytest
 from datetime import date
-from sih.optimizer.types import Vessel, VesselClass, OptimizerInputs, PortSpec, BasisEntry, ForecastFan
-from sih.optimizer.repositioning import recommend_repositioning
+from opt.types import Vessel, VesselClass, OptimizerInputs, PortSpec, BasisEntry, ForecastFan
+from opt.repositioning import recommend_repositioning
 
 def test_repositioning_logic():
     v = Vessel(

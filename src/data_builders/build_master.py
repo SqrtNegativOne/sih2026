@@ -23,8 +23,8 @@ import polars as pl
 LOGGER: Final[logging.Logger] = logging.getLogger(__name__)
 
 REPO_ROOT: Final[Path] = Path(__file__).resolve().parents[2]
-DATA_RAW: Final[Path] = REPO_ROOT / "data_raw"
-DATA_OUT: Final[Path] = REPO_ROOT / "data"
+DATA_RAW: Final[Path] = REPO_ROOT / "raw_data"
+DATA_OUT: Final[Path] = REPO_ROOT / "src" / "data"
 
 SOURCE_RANK: Final[dict[str, int]] = {"handybulk": 2, "investing": 1}
 INVESTING_SERIES: Final[dict[str, str]] = {

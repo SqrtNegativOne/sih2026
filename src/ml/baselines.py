@@ -20,7 +20,7 @@ import polars as pl
 LOGGER: Final[logging.Logger] = logging.getLogger(__name__)
 
 REPO_ROOT: Final[Path] = Path(__file__).resolve().parents[2]
-DATA: Final[Path] = REPO_ROOT / "data"
+DATA: Final[Path] = REPO_ROOT / "src" / "data"
 HORIZONS: Final[tuple[int, ...]] = (7, 30, 90)
 QUANTILES: Final[tuple[float, ...]] = (0.1, 0.5, 0.9)
 ZSCORES: Final[dict[float, float]] = {0.1: -1.2816, 0.5: 0.0, 0.9: 1.2816}
@@ -243,9 +243,9 @@ def evaluate(
 
 def main() -> None:
     """Run all baselines, evaluate on valid/test, write metrics csv."""
-    from sih.model_lstm import predict as predict_lstm
-    from sih.model_xgb import predict as predict_xgb
-    from sih.model_lgbm_tuned import predict as predict_lgbm_tuned
+    from ml.model_lstm import predict as predict_lstm
+    from ml.model_xgb import predict as predict_xgb
+    from ml.model_lgbm_tuned import predict as predict_lgbm_tuned
 
     _setup_logging()
     splits = {name: load_split(name) for name in ("train", "valid", "test")}

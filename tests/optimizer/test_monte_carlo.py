@@ -1,6 +1,6 @@
 import pytest
-from sih.optimizer.types import ForecastFan, VesselClass
-from sih.optimizer.monte_carlo import estimate_savings_distribution
+from opt.types import ForecastFan, VesselClass
+from opt.monte_carlo import estimate_savings_distribution
 
 def test_monte_carlo_savings():
     # Model predicts market going UP from 10k to 14k over 90 days.

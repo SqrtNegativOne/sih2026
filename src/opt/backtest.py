@@ -39,8 +39,8 @@ from typing import Literal, Sequence
 
 import polars as pl
 
-from sih.optimizer.ceiling import compute_ceiling, lock_or_wait
-from sih.optimizer.types import BasisEntry, ForecastFan, LockWaitResult, VesselClass
+from opt.ceiling import compute_ceiling, lock_or_wait
+from opt.types import BasisEntry, ForecastFan, LockWaitResult, VesselClass
 
 # ---------------------------------------------------------------------------
 # Types

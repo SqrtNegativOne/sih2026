@@ -52,7 +52,7 @@ i.e., predictions of ln(TCE) at t+h. If your model predicts log-returns,
 add `log_value` back before evaluation (see `predict_lgbm`).
 
 Anything that emits those frames plugs into the existing evaluator:
-`sih.baselines.evaluate(pred, source_df, split_name, model_name)` computes
+`ml.baselines.evaluate(pred, source_df, split_name, model_name)` computes
 pinball@10/50/90, median MAE, and directional hit-rate, pooled and per class.
 
 ## Adding a model: the rules
@@ -89,7 +89,7 @@ Cleanest pattern: one module per family, same shape as `baselines.py`.
 3. In `baselines.py::main`, append it to `candidates`:
 
 ```python
-from sih.model_lstm import predict as predict_lstm
+from ml.model_lstm import predict as predict_lstm
 candidates["lstm"] = predict_lstm(splits["train"], {"valid": ..., "test": ...}, h)
 ```
 

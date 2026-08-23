@@ -14,7 +14,7 @@ Scenario:
 from datetime import date
 from pprint import pprint
 
-from sih.optimizer.types import (
+from opt.types import (
     BasisEntry,
     CargoParcel,
     ForecastFan,
@@ -23,7 +23,7 @@ from sih.optimizer.types import (
     Vessel,
     VesselClass,
 )
-from sih.optimizer.api import run_optimizer
+from opt.api import run_optimizer
 
 def main():
     print("Setting up Real-Life Scenario...\n")

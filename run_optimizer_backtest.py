@@ -7,9 +7,9 @@ optimizer backtester.
 
 import math
 import polars as pl
-from sih.baselines import load_split
-from sih.model_lgbm_tuned import predict as predict_lgbm
-from sih.optimizer.backtest import simulate, summarise, to_dataframe
+from ml.baselines import load_split
+from ml.model_lgbm_tuned import predict as predict_lgbm
+from opt.backtest import simulate, summarise, to_dataframe
 
 def main():
     print("Loading test split (Jan 2025 - Apr 2026)...")

@@ -1,10 +1,10 @@
-"""Tests for sih.optimizer.types — dataclass validation."""
+"""Tests for opt.types — dataclass validation."""
 from __future__ import annotations
 
 import pytest
 from datetime import date
 
-from sih.optimizer.types import (
+from opt.types import (
     BasisEntry,
     CargoParcel,
     ForecastFan,

@@ -1,7 +1,7 @@
 import pytest
 from datetime import date
-from sih.optimizer.types import Vessel, CargoParcel, VesselClass, OptimizerInputs, PortSpec
-from sih.optimizer.voyage import schedule_voyages
+from opt.types import Vessel, CargoParcel, VesselClass, OptimizerInputs, PortSpec
+from opt.voyage import schedule_voyages
 
 def test_simple_voyage_schedule():
     # 1 Vessel, 2 Cargoes. 

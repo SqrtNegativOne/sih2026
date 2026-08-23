@@ -12,7 +12,7 @@ from typing import Any, Sequence
 
 from ortools.sat.python import cp_model
 
-from sih.optimizer.types import CargoParcel, OptimizerInputs, Vessel, VesselClass
+from opt.types import CargoParcel, OptimizerInputs, Vessel, VesselClass
 
 
 @dataclass

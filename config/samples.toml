@@ -1,9 +1,9 @@
 [paths]
-master_parquet = "data/master_long.parquet"
-samples_train = "data/samples_train.parquet"
-samples_valid = "data/samples_valid.parquet"
-samples_test = "data/samples_test.parquet"
-samples_manifest = "data/samples_manifest.csv"
+master_parquet = "src/data/master_long.parquet"
+samples_train = "src/data/samples_train.parquet"
+samples_valid = "src/data/samples_valid.parquet"
+samples_test = "src/data/samples_test.parquet"
+samples_manifest = "src/data/samples_manifest.csv"
 
 [targets.classes]
 BC_INDEX = "Capesize"

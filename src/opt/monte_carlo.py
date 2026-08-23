@@ -13,7 +13,7 @@ import statistics
 from dataclasses import dataclass
 import random
 
-from sih.optimizer.types import ForecastFan, VesselClass
+from opt.types import ForecastFan, VesselClass
 
 
 @dataclass

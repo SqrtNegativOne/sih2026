@@ -9,8 +9,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from sih.optimizer.ceiling import compute_ceiling
-from sih.optimizer.types import BasisEntry, ForecastFan, OptimizerInputs, Vessel, VesselClass
+from opt.ceiling import compute_ceiling
+from opt.types import BasisEntry, ForecastFan, OptimizerInputs, Vessel, VesselClass
 
 
 @dataclass

@@ -1,4 +1,4 @@
-"""Tests for sih.optimizer.ceiling — ceiling rate calculator and lock/wait decision.
+"""Tests for opt.ceiling — ceiling rate calculator and lock/wait decision.
 
 Test strategy
 -------------
@@ -31,8 +31,8 @@ from __future__ import annotations
 import math
 import pytest
 
-from sih.optimizer.types import BasisEntry, ForecastFan, VesselClass
-from sih.optimizer.ceiling import (
+from opt.types import BasisEntry, ForecastFan, VesselClass
+from opt.ceiling import (
     _apply_basis,
     _blend_quantile,
     _horizon_weight,

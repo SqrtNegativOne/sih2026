@@ -9,7 +9,7 @@ import tomllib
 
 import polars as pl
 
-from sih.features import (
+from ml.features import (
     LagsFeature,
     RollingFeature,
     ReturnsFeature,
@@ -153,7 +153,7 @@ def main() -> None:
     valid_df = final_df.filter((pl.col("date") >= valid_start) & (pl.col("date") <= valid_end))
     test_df = final_df.filter(pl.col("date") >= test_start)
     
-    out_dir = REPO_ROOT / "data"
+    out_dir = REPO_ROOT / "src" / "data"
     out_dir.mkdir(parents=True, exist_ok=True)
     
     train_path = REPO_ROOT / config["paths"]["samples_train"]

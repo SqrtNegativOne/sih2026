@@ -1,4 +1,4 @@
-"""Tests for sih.optimizer.backtest — the decision value backtester."""
+"""Tests for opt.backtest — the decision value backtester."""
 from __future__ import annotations
 
 import math
@@ -7,14 +7,14 @@ from datetime import date
 import polars as pl
 import pytest
 
-from sih.optimizer.backtest import (
+from opt.backtest import (
     BacktestRow,
     _build_fan,
     simulate,
     summarise,
     to_dataframe,
 )
-from sih.optimizer.types import VesselClass
+from opt.types import VesselClass
 
 
 @pytest.fixture
