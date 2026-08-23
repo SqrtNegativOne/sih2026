@@ -88,7 +88,13 @@ def schedule_voyages(
     epoch_date = min(v.available_from for v in inputs.vessels)
 
     def date_to_hours(d: Any) -> int:
-        return (d - epoch_date).days * 24
+        from datetime import datetime
+        if isinstance(d, datetime):
+            d = d.date()
+        e = epoch_date
+        if isinstance(e, datetime):
+            e = e.date()
+        return (d - e).days * 24
 
     C: list[CargoParcel] = []
     parent_map: dict[str, str] = {} # sub_id -> parent_id
@@ -205,6 +211,8 @@ def schedule_voyages(
     arrival_time: dict[tuple[str, str], Any] = {}
     start_time: dict[tuple[str, str], Any] = {}
     finish_time: dict[tuple[str, str], Any] = {}
+    actual_laden_hours_var: dict[tuple[str, str], Any] = {}
+    actual_port_hours_var: dict[tuple[str, str], Any] = {}
 
     for v in V:
         for c in C:
@@ -212,6 +220,8 @@ def schedule_voyages(
             arrival_time[v_id, c_id] = model.NewIntVar(0, max_time_hours, f"arr_{v_id}_{c_id}")
             start_time[v_id, c_id] = model.NewIntVar(0, max_time_hours, f"st_{v_id}_{c_id}")
             finish_time[v_id, c_id] = model.NewIntVar(0, max_time_hours, f"fin_{v_id}_{c_id}")
+            actual_laden_hours_var[v_id, c_id] = model.NewIntVar(0, max_time_hours, f"act_laden_{v_id}_{c_id}")
+            actual_port_hours_var[v_id, c_id] = model.NewIntVar(0, max_time_hours, f"act_port_{v_id}_{c_id}")
 
     # ---------------------------------------------------------------------------
     # Time variables — second pass: constrain
@@ -256,8 +266,85 @@ def schedule_voyages(
             model.Add(st >= cargo_windows[c_id]["start"]).OnlyEnforceIf(x[v_id, c_id])
             model.Add(arr <= cargo_windows[c_id]["end"]).OnlyEnforceIf(x[v_id, c_id])
 
-            duration = laden_hours_map[v_id, c_id] + port_hours_map[v_id, c_id]
-            model.Add(fin == st + duration).OnlyEnforceIf(x[v_id, c_id])
+            base_laden = laden_hours_map[v_id, c_id]
+            base_port = port_hours_map[v_id, c_id]
+            
+            # 1. Weather Events (Laden Transit Delay)
+            delay_vars = []
+            route = None
+            from opt.network import RouteEnum
+            for r in RouteEnum:
+                if (r.value.origin.id == c.origin_port.value.id and r.value.destination.id == c.dest_port.value.id) or \
+                   (r.value.origin.id == c.dest_port.value.id and r.value.destination.id == c.origin_port.value.id):
+                    route = r
+                    break
+            
+            if route:
+                weather_events_on_route = [w for w in inputs.weather_events if w.route == route]
+                for w in weather_events_on_route:
+                    w_start_h = date_to_hours(w.start_time)
+                    w_end_h = date_to_hours(w.end_time)
+                    
+                    hits_weather = model.NewBoolVar(f"weather_{v_id}_{c_id}_{w.event_id}")
+                    
+                    after_w_start = model.NewBoolVar(f"after_w_start_{v_id}_{c_id}_{w.event_id}")
+                    before_w_end = model.NewBoolVar(f"before_w_end_{v_id}_{c_id}_{w.event_id}")
+                    
+                    model.Add(st >= w_start_h).OnlyEnforceIf(after_w_start)
+                    model.Add(st < w_start_h).OnlyEnforceIf(after_w_start.Not())
+                    
+                    model.Add(st <= w_end_h).OnlyEnforceIf(before_w_end)
+                    model.Add(st > w_end_h).OnlyEnforceIf(before_w_end.Not())
+                    
+                    model.AddBoolAnd([after_w_start, before_w_end]).OnlyEnforceIf(hits_weather)
+                    model.AddBoolOr([after_w_start.Not(), before_w_end.Not()]).OnlyEnforceIf(hits_weather.Not())
+                    
+                    delay_var = model.NewIntVar(0, max_time_hours, f"delay_{v_id}_{c_id}_{w.event_id}")
+                    model.Add(delay_var == w.delay_hours).OnlyEnforceIf(hits_weather)
+                    model.Add(delay_var == 0).OnlyEnforceIf(hits_weather.Not())
+                    delay_vars.append(delay_var)
+            
+            actual_laden_var = actual_laden_hours_var[v_id, c_id]
+            model.Add(actual_laden_var == base_laden + sum(delay_vars)).OnlyEnforceIf(x[v_id, c_id])
+            model.Add(actual_laden_var == 0).OnlyEnforceIf(not_x)
+
+            # 2. Port Logistics (Congestion Wait & Handling Rate)
+            port_events_at_origin = [e for e in inputs.port_events if e.port == c.origin_port]
+            extra_port_vars = []
+
+            for e in port_events_at_origin:
+                e_start_h = date_to_hours(e.start_time)
+                e_end_h = date_to_hours(e.end_time)
+                
+                is_congested = model.NewBoolVar(f"congest_{v_id}_{c_id}_{e.status_id}")
+                
+                after_e_start = model.NewBoolVar(f"after_e_start_{v_id}_{c_id}_{e.status_id}")
+                before_e_end = model.NewBoolVar(f"before_e_end_{v_id}_{c_id}_{e.status_id}")
+                
+                model.Add(arr >= e_start_h).OnlyEnforceIf(after_e_start)
+                model.Add(arr < e_start_h).OnlyEnforceIf(after_e_start.Not())
+                
+                model.Add(arr <= e_end_h).OnlyEnforceIf(before_e_end)
+                model.Add(arr > e_end_h).OnlyEnforceIf(before_e_end.Not())
+                
+                model.AddBoolAnd([after_e_start, before_e_end]).OnlyEnforceIf(is_congested)
+                model.AddBoolOr([after_e_start.Not(), before_e_end.Not()]).OnlyEnforceIf(is_congested.Not())
+                
+                model.Add(st - arr >= e.additional_wait_hours).OnlyEnforceIf(is_congested)
+                
+                if e.handling_rate_multiplier > 0 and e.handling_rate_multiplier < 1.0:
+                    extra_hours = int(base_port / e.handling_rate_multiplier) - base_port
+                    if extra_hours > 0:
+                        extra_p_var = model.NewIntVar(0, max_time_hours, f"extrap_{v_id}_{c_id}_{e.status_id}")
+                        model.Add(extra_p_var == extra_hours).OnlyEnforceIf(is_congested)
+                        model.Add(extra_p_var == 0).OnlyEnforceIf(is_congested.Not())
+                        extra_port_vars.append(extra_p_var)
+            
+            actual_port_var = actual_port_hours_var[v_id, c_id]
+            model.Add(actual_port_var == base_port + sum(extra_port_vars)).OnlyEnforceIf(x[v_id, c_id])
+            model.Add(actual_port_var == 0).OnlyEnforceIf(not_x)
+
+            model.Add(fin == st + actual_laden_var + actual_port_var).OnlyEnforceIf(x[v_id, c_id])
 
             # Ballast from vessel home to first cargo
             ballast_nm = _get_distance_nm(v.current_port, c.origin_port)

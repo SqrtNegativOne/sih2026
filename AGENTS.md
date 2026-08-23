@@ -13,8 +13,11 @@
 - `src/ml/`: Machine learning models and feature engineering.
 - `src/opt/`: Optimizer and operations research models.
 
-## Style Guide
+## Python Style Guide
 - Use Polars over Pandas.
 - Use PyTorch over TensorFlow.
 - Use `uv` instead of `pip` as package manager, and runner.
 - Use strict typing and type hints.
+
+## Future
+- Create two folders: backend, and frontend. backend will be written in Python+FastAPI, and frontend will be written in React+TypeScript.

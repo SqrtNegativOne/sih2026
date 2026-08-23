@@ -2,12 +2,12 @@
 from __future__ import annotations
 
 from enum import Enum
-from datetime import date
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from opt.network import PortEnum, RouteFamily
+from opt.network import PortEnum, RouteFamily, RouteEnum
 
 class VesselClass(str, Enum):
     CAPESIZE = "Capesize"
@@ -67,6 +67,32 @@ class CargoParcel(BaseModel):
     route_family: RouteFamily
     revenue_usd: float
 
+class WeatherSeverity(str, Enum):
+    CYCLONE = "CYCLONE"
+    GALE = "GALE"
+    STORM = "STORM"
+    TROPICAL_DEPRESSION = "TROPICAL_DEPRESSION"
+
+class WeatherEvent(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    event_id: str
+    route: RouteEnum
+    start_time: datetime
+    end_time: datetime
+    delay_hours: int  # Additional transit time caused by routing around or slowing down
+    severity: WeatherSeverity
+
+class PortLogisticsStatus(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    status_id: str
+    port: PortEnum
+    start_time: datetime
+    end_time: datetime
+    additional_wait_hours: int      # Added to anchorage/queue time
+    handling_rate_multiplier: float # e.g., 0.8 means 20% slower loading due to rail/truck congestion
+
 class OptimizerInputs(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -77,6 +103,9 @@ class OptimizerInputs(BaseModel):
     contract_term_days: int
     forecasts: list[ForecastFan]
     basis: dict[RouteFamily, BasisEntry]
+    
+    weather_events: list['WeatherEvent'] = []
+    port_events: list['PortLogisticsStatus'] = []
     
     risk_tolerance: float = 0.0
     idle_penalty_usd_per_day: float = 500.0
