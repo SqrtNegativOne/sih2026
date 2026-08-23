@@ -17,6 +17,11 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/sih"]
 
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
 [project.scripts]
 build-master = "sih.build_master:main"
 baselines = "sih.baselines:main"
