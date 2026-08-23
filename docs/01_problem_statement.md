@@ -1,7 +1,7 @@
 Problem statement: build a forecasting model that tells a logistic manager when to charter a ship, what size ship to use, and how to avoid it sitting idle, for bulk cargo (like coal) coming into India's East Coast.
 
-Current state: spot contracts. Hire a ship per single voyage at whatever the market rate is that day, repeated over and over.
-Target state: period contracts: lock a ship into a short/medium-term deal convering multiple voyages, at a rate fixed in advance.
+- Current state: spot contracts. Hire a ship per single voyage at whatever the market rate is that day, repeated over and over.
+- Target state: period contracts: lock a ship into a short/medium-term deal convering multiple voyages, at a rate fixed in advance.
 
 Fixed parameters:
 - Cargo: bulk.
