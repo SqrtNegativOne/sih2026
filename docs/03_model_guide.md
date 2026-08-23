@@ -155,6 +155,7 @@ Training loop essentials:
 
 - Sparse classes: Handysize has ~116 rows total; without pooling the net will
   memorize noise. Pooling + class embedding is mandatory, not optional.
+  - Don't worry too much about this though. I will be adding more data, eventually.
 - Gap-straddling windows silently create lookahead; enforce contiguous runs.
 - Do not shuffle across the train/inner-holdout boundary when carving.
 - If validation loss diverges from train loss immediately, shrink hidden size

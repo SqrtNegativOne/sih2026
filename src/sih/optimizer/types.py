@@ -102,6 +102,7 @@ class CargoParcel:
     laycan_start: date
     laycan_end: date
     route_family: str       # key into BasisEntry table, e.g. "indo_ec_india"
+    revenue_usd: float      # freight revenue (or derived from predicted TCE)
 
 
 @dataclass
@@ -125,6 +126,7 @@ class OptimizerInputs:
 
     # --- static reference ---
     port_specs: dict[str, PortSpec]       # keyed by port_id
+    port_distances: dict[tuple[str, str], float] # nautical miles between (port_a, port_b)
     bunker_price_usd_per_tonne: float     # blended fleet-wide bunker price
 
     # --- risk / penalty hyperparameters ---
