@@ -41,15 +41,15 @@ from opt.types import (
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-def _blend_quantile(p10: float, p50: float, risk_tolerance: float) -> float:
-    """Blend P50 toward P10 by risk_tolerance in [0, 1].
+def _blend_quantile(p50: float, p90: float, risk_tolerance: float) -> float:
+    """Blend P50 toward P90 by risk_tolerance in [0, 1].
 
     risk_tolerance=0 → P50 (risk-neutral expected value).
-    risk_tolerance=1 → P10 (fully pessimistic about spot rate rising).
+    risk_tolerance=1 → P90 (fully pessimistic about spot rate rising).
     """
     if not 0.0 <= risk_tolerance <= 1.0:
         raise ValueError(f"risk_tolerance must be in [0, 1], got {risk_tolerance}.")
-    return (1.0 - risk_tolerance) * p50 + risk_tolerance * p10
+    return (1.0 - risk_tolerance) * p50 + risk_tolerance * p90
 
 
 def _apply_basis(
@@ -186,12 +186,12 @@ def compute_ceiling(
             continue
 
         # Apply route basis (if any) to this horizon's fan
-        rp10, rp50, _ = _apply_basis(fan.p10, fan.p50, fan.p90, basis)
+        rp10, rp50, rp90 = _apply_basis(fan.p10, fan.p50, fan.p90, basis)
 
         normalised_w = w / total_raw_weight
         weighted_p10 += normalised_w * rp10
         weighted_p50 += normalised_w * rp50
-        weighted_blended += normalised_w * _blend_quantile(rp10, rp50, risk_tolerance)
+        weighted_blended += normalised_w * _blend_quantile(rp50, rp90, risk_tolerance)
 
     return {
         "ceiling_usd_per_day": weighted_blended,

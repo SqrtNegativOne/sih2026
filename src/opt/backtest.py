@@ -262,8 +262,8 @@ def simulate(
                 rng=mc_rng,
             )
             spot_p50 = quote_usd + dist.expected_p50_savings
-            spot_p10 = quote_usd + dist.worst_case_p10_savings
-            ceiling = (1.0 - risk_tolerance) * spot_p50 + risk_tolerance * spot_p10
+            spot_p90 = quote_usd + dist.best_case_p90_savings
+            ceiling = (1.0 - risk_tolerance) * spot_p50 + risk_tolerance * spot_p90
             action_opt = "LOCK" if quote_usd <= ceiling else "WAIT"
 
         # Oracle: lock iff it was actually cheaper than realised spot
