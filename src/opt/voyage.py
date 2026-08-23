@@ -23,22 +23,8 @@ from typing import Any
 
 from ortools.sat.python import cp_model
 
-from opt.types import OptimizerInputs, Vessel, CargoParcel
+from opt.types import OptimizerInputs, Vessel, CargoParcel, VoyageAssignment
 from opt.network import PortEnum, RouteEnum, BLENDED_BUNKER_USD_PER_TONNE
-
-
-@dataclass
-class VoyageAssignment:
-    vessel_id: str
-    parcel_id: str
-    dest_port: PortEnum
-    arrival_hours: int
-    wait_hours: int              # anchorage wait before laycan opens
-    start_operation_hours: int
-    finish_hours: int
-    ballast_hours: int           # time spent in ballast to reach this cargo
-    inter_cargo_gap_hours: int   # idle gap after previous cargo discharged
-    profit_usd: float
 
 
 @dataclass

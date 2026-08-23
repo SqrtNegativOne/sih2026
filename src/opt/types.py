@@ -124,3 +124,66 @@ class LockWaitResult(BaseModel):
     savings_p50_usd_per_day: float
     savings_p10_usd_per_day: float
     route_adjusted: bool
+
+class RejectedOption(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    
+    vessel_id: str
+    parcel_id: str
+    reason: str
+
+class VoyageAssignment(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    
+    vessel_id: str
+    parcel_id: str
+    dest_port: PortEnum
+    arrival_hours: int
+    wait_hours: int
+    start_operation_hours: int
+    finish_hours: int
+    ballast_hours: int
+    inter_cargo_gap_hours: int
+    profit_usd: float
+
+class RepositioningAction(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    
+    vessel_id: str
+    current_port: PortEnum
+    recommended_port: PortEnum
+    is_staying: bool
+
+class ReviewTrigger(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    
+    schedule: Literal["WEEKLY", "DAILY", "MONTHLY"]
+    conditions: list[str]
+
+class OptimizerRecommendation(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    # 1. Lock/wait + ceiling
+    target_vessel_class: VesselClass
+    lock_action: Literal["LOCK", "WAIT"]
+    ceiling_usd_per_day: float
+    tc_quote_usd_per_day: float
+    contract_term_days: int
+    optimal_entry_window_start_day: int | None = None
+    optimal_entry_window_end_day: int | None = None
+    optimal_entry_window_p50_usd: float | None = None
+    
+    # 2. Voyage schedule
+    voyage_assignments: list[VoyageAssignment]
+    rejected_options: list[RejectedOption]
+    total_voyage_profit_usd: float
+    
+    # 3. Repositioning
+    repositioning_actions: list[RepositioningAction]
+    
+    # 4. Savings, as a range
+    expected_savings_usd_per_day: float
+    p10_savings_usd_per_day: float
+    
+    # 5. Review trigger
+    review_trigger: ReviewTrigger

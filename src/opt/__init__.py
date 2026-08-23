@@ -10,7 +10,7 @@ network     Registry for ports and routes.
 """
 from __future__ import annotations
 
-from opt.api import OptimizerRecommendation, run_optimizer
+from opt.api import run_optimizer, format_recommendation_text
 from opt.ceiling import compute_ceiling, lock_or_wait
 from opt.types import (
     BasisEntry,
@@ -18,6 +18,7 @@ from opt.types import (
     ForecastFan,
     LockWaitResult,
     OptimizerInputs,
+    OptimizerRecommendation,
     Vessel,
     VesselClass,
 )
@@ -25,6 +26,7 @@ from opt.types import (
 __all__ = [
     # api
     "run_optimizer",
+    "format_recommendation_text",
     "OptimizerRecommendation",
     # ceiling
     "compute_ceiling",
