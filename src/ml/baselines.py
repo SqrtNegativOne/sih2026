@@ -243,9 +243,9 @@ def evaluate(
 
 def main() -> None:
     """Run all baselines, evaluate on valid/test, write metrics csv."""
+    from ml.model_lgbm_tuned import predict as predict_lgbm_tuned
     from ml.model_lstm import predict as predict_lstm
     from ml.model_xgb import predict as predict_xgb
-    from ml.model_lgbm_tuned import predict as predict_lgbm_tuned
 
     _setup_logging()
     splits = {name: load_split(name) for name in ("train", "valid", "test")}

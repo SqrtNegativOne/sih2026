@@ -6,7 +6,7 @@
 ## Folder Layout
 
 - `docs/`: Project documentation.
-- `raw_data/`: Raw source data (not processed) and reference materials.
+- `raw_data/`: Raw source data (not processed) and reference materials. Transformed into the data stored in `src/data/`.
 - `src/config/`: Configuration files (e.g., sample generation settings).
 - `src/data/`: Processed data and model inputs/outputs.
 - `src/data_builders/`: Scripts to build processed data from raw data.

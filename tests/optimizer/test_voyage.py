@@ -1,7 +1,8 @@
-import pytest
 from datetime import date
-from opt.types import Vessel, CargoParcel, VesselClass, OptimizerInputs, PortSpec
+
+from opt.types import CargoParcel, OptimizerInputs, Vessel, VesselClass
 from opt.voyage import schedule_voyages
+
 
 def test_simple_voyage_schedule():
     # 1 Vessel, 2 Cargoes. 

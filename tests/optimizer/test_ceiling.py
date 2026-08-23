@@ -28,10 +28,8 @@ Example used in many tests:
 """
 from __future__ import annotations
 
-import math
 import pytest
 
-from opt.types import BasisEntry, ForecastFan, VesselClass
 from opt.ceiling import (
     _apply_basis,
     _blend_quantile,
@@ -39,7 +37,7 @@ from opt.ceiling import (
     compute_ceiling,
     lock_or_wait,
 )
-
+from opt.types import BasisEntry, ForecastFan, VesselClass
 
 # ---------------------------------------------------------------------------
 # Fixtures

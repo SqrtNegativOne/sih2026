@@ -21,9 +21,16 @@ packages = ["src/ml", "src/opt", "src/data_builders"]
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
+    "ruff>=0.16.4",
 ]
 
 [project.scripts]
 build-master = "data_builders.build_master:main"
 baselines = "ml.baselines:main"
 build-samples = "data_builders.build_samples:main"
+
+
+[tool.ruff.lint]
+# Ignore minor stylistic and scratch-stage warnings
+ignore = ['SIM118', 'PLR0124', 'RUF059']
+

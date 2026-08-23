@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import polars as pl
 
+
 class CongestionFeature:
     """Compute congestion features using origin and destination port calls, exports, and imports."""
 

@@ -28,8 +28,7 @@ Design choices
 """
 from __future__ import annotations
 
-import math
-from typing import Sequence
+from collections.abc import Sequence
 
 from opt.types import (
     BasisEntry,

@@ -12,8 +12,8 @@ Scenario:
 - Quote: TC quote is very high right now.
 """
 from datetime import date
-from pprint import pprint
 
+from opt.api import run_optimizer
 from opt.types import (
     BasisEntry,
     CargoParcel,
@@ -23,7 +23,7 @@ from opt.types import (
     Vessel,
     VesselClass,
 )
-from opt.api import run_optimizer
+
 
 def main():
     print("Setting up Real-Life Scenario...\n")

@@ -9,9 +9,8 @@ not just the expected (mean) savings, but the full risk distribution
 """
 from __future__ import annotations
 
-import statistics
-from dataclasses import dataclass
 import random
+from dataclasses import dataclass
 
 from opt.types import ForecastFan, VesselClass
 

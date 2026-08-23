@@ -9,7 +9,7 @@ Everything is in SI/domain units as documented in docs/02_overview.md:
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date
 from enum import Enum
 from typing import Literal

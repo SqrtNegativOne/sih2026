@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import polars as pl
 
+
 class LagsFeature:
     """Compute lagged features over a target column."""
 

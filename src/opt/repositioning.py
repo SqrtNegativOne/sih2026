@@ -6,11 +6,10 @@ cost and port queue time required to get there.
 """
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 
 from opt.ceiling import compute_ceiling
-from opt.types import BasisEntry, ForecastFan, OptimizerInputs, Vessel, VesselClass
+from opt.types import OptimizerInputs, Vessel
 
 
 @dataclass

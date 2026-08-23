@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
+
 import polars as pl
+
 
 def add_calendar_features(df: pl.DataFrame, cny_dates: list[str]) -> pl.DataFrame:
     """Add calendar based features to the dataframe."""

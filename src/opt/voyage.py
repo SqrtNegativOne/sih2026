@@ -5,14 +5,12 @@ Uses Google OR-Tools CP-SAT solver.
 """
 from __future__ import annotations
 
-import collections
-import math
 from dataclasses import dataclass
-from typing import Any, Sequence
+from typing import Any
 
 from ortools.sat.python import cp_model
 
-from opt.types import CargoParcel, OptimizerInputs, Vessel, VesselClass
+from opt.types import OptimizerInputs
 
 
 @dataclass

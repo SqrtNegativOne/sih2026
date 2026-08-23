@@ -34,13 +34,14 @@ Key outputs (all in $/day relative to always_spot):
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Literal, Sequence
+from typing import Literal
 
 import polars as pl
 
-from opt.ceiling import compute_ceiling, lock_or_wait
-from opt.types import BasisEntry, ForecastFan, LockWaitResult, VesselClass
+from opt.ceiling import lock_or_wait
+from opt.types import BasisEntry, ForecastFan, VesselClass
 
 # ---------------------------------------------------------------------------
 # Types

@@ -8,7 +8,6 @@ import polars as pl
 import pytest
 
 from opt.backtest import (
-    BacktestRow,
     _build_fan,
     simulate,
     summarise,

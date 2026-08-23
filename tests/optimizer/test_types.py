@@ -2,15 +2,12 @@
 from __future__ import annotations
 
 import pytest
-from datetime import date
 
 from opt.types import (
     BasisEntry,
-    CargoParcel,
     ForecastFan,
     LockWaitResult,
     PortSpec,
-    Vessel,
     VesselClass,
 )
 

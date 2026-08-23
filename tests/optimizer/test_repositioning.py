@@ -1,7 +1,15 @@
-import pytest
 from datetime import date
-from opt.types import Vessel, VesselClass, OptimizerInputs, PortSpec, BasisEntry, ForecastFan
+
 from opt.repositioning import recommend_repositioning
+from opt.types import (
+    BasisEntry,
+    ForecastFan,
+    OptimizerInputs,
+    PortSpec,
+    Vessel,
+    VesselClass,
+)
+
 
 def test_repositioning_logic():
     v = Vessel(
