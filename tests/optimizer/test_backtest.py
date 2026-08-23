@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import math
+import random
 from datetime import date
 
 import polars as pl
@@ -13,6 +14,7 @@ from opt.backtest import (
     summarise,
     to_dataframe,
 )
+from opt.monte_carlo import MonteCarloConfig
 from opt.types import VesselClass
 
 
@@ -163,3 +165,91 @@ class TestSummarise:
         assert isinstance(df, pl.DataFrame)
         assert len(df) == 5 # 5 strategies
         assert "decision_value" in df.columns
+
+
+class TestMcInformedDecisions:
+    """When mc_config is provided the optimizer decision comes from the
+    simulated spot-cost distribution instead of the analytic ceiling."""
+
+    def test_mc_config_returns_same_rows(self, mock_test_split, mock_preds):
+        cfg = MonteCarloConfig(theta=0.0, num_simulations=200)
+        rows_mc = simulate(
+            mock_test_split, mock_preds,
+            contract_term_days=30, broker_spread=0.0,
+            mc_config=cfg, mc_rng=random.Random(7),
+        )
+        rows_analytic = simulate(
+            mock_test_split, mock_preds,
+            contract_term_days=30, broker_spread=0.0,
+        )
+        assert len(rows_mc) == len(rows_analytic) == 2
+
+    def test_mc_config_reproducible_with_seeded_rng(self, mock_test_split, mock_preds):
+        kwargs = {
+            "test_split": mock_test_split, "ml_predictions": mock_preds,
+            "contract_term_days": 30, "broker_spread": 0.0,
+            "risk_tolerance": 0.3,
+            "mc_config": MonteCarloConfig(theta=0.2, sigma_long=0.4, num_simulations=300),
+        }
+        rows_1 = simulate(**kwargs, mc_rng=random.Random(7))  # type: ignore[arg-type]
+        rows_2 = simulate(**kwargs, mc_rng=random.Random(7))  # type: ignore[arg-type]
+        assert [r.ceiling_usd for r in rows_1] == pytest.approx([r.ceiling_usd for r in rows_2])
+        assert [r.action_optimizer for r in rows_1] == [r.action_optimizer for r in rows_2]
+
+    def test_sigma_long_affects_threshold(self, mock_test_split, mock_preds):
+        """Higher volatility raises E[exp(path)] (Jensen) → higher LOCK threshold."""
+        low = simulate(
+            mock_test_split, mock_preds,
+            contract_term_days=30, broker_spread=0.0,
+            mc_config=MonteCarloConfig(theta=0.2, sigma_long=0.05, num_simulations=800),
+            mc_rng=random.Random(7),
+        )
+        high = simulate(
+            mock_test_split, mock_preds,
+            contract_term_days=30, broker_spread=0.0,
+            mc_config=MonteCarloConfig(theta=0.2, sigma_long=0.90, num_simulations=800),
+            mc_rng=random.Random(7),
+        )
+        thresholds_low = [r.ceiling_usd for r in low]
+        thresholds_high = [r.ceiling_usd for r in high]
+        assert any(h > l + 1.0 for l, h in zip(thresholds_low, thresholds_high)), (
+            f"Expected higher threshold with higher sigma_long: "
+            f"low={thresholds_low}, high={thresholds_high}"
+        )
+
+    def test_theta_affects_risk_blended_threshold(self, mock_test_split, mock_preds):
+        """Stronger mean reversion compresses tail uncertainty → the P10 side of
+        the blended threshold moves toward P50, changing decisions."""
+        weak = simulate(
+            mock_test_split, mock_preds,
+            contract_term_days=30, broker_spread=0.0, risk_tolerance=0.5,
+            mc_config=MonteCarloConfig(theta=0.02, sigma_long=0.40, num_simulations=800),
+            mc_rng=random.Random(7),
+        )
+        strong = simulate(
+            mock_test_split, mock_preds,
+            contract_term_days=30, broker_spread=0.0, risk_tolerance=0.5,
+            mc_config=MonteCarloConfig(theta=0.95, sigma_long=0.40, num_simulations=800),
+            mc_rng=random.Random(7),
+        )
+        thresholds_weak = [r.ceiling_usd for r in weak]
+        thresholds_strong = [r.ceiling_usd for r in strong]
+        assert thresholds_weak != pytest.approx(thresholds_strong), (
+            "theta must influence the risk-blended LOCK threshold"
+        )
+
+    def test_mc_decisions_can_differ_from_analytic(self, mock_test_split, mock_preds):
+        """The MC-informed rule is a genuinely different decision function."""
+        analytic = simulate(
+            mock_test_split, mock_preds,
+            contract_term_days=30, broker_spread=0.0, risk_tolerance=0.5,
+        )
+        mc = simulate(
+            mock_test_split, mock_preds,
+            contract_term_days=30, broker_spread=0.0, risk_tolerance=0.5,
+            mc_config=MonteCarloConfig(theta=0.1, sigma_long=0.35, num_simulations=800),
+            mc_rng=random.Random(7),
+        )
+        assert [r.action_optimizer for r in analytic] != [r.action_optimizer for r in mc] or (
+            [r.ceiling_usd for r in analytic] != pytest.approx([r.ceiling_usd for r in mc])
+        )

@@ -11,8 +11,12 @@ from datetime import date
 import polars as pl
 import pytest
 
-from opt.calibration import CalibrationBounds, CalibrationResult, calibrate_pso
-
+from opt.calibration import (
+    CalibrationBounds,
+    CalibrationResult,
+    _evaluate,
+    calibrate_pso,
+)
 
 # ---------------------------------------------------------------------------
 # Fixtures — synthetic data mirroring test_backtest.py
@@ -229,15 +233,15 @@ class TestCalibratePSO:
         self, mock_test_split: pl.DataFrame, mock_preds: pl.DataFrame
     ) -> None:
         """Same seed must produce identical results."""
-        kwargs = dict(
-            test_split=mock_test_split,
-            ml_predictions=mock_preds,
-            contract_term_days=30,
-            broker_spread=0.03,
-            n_particles=5,
-            n_iterations=8,
-            seed=123,
-        )
+        kwargs = {
+            "test_split": mock_test_split,
+            "ml_predictions": mock_preds,
+            "contract_term_days": 30,
+            "broker_spread": 0.03,
+            "n_particles": 5,
+            "n_iterations": 8,
+            "seed": 123,
+        }
         r1 = calibrate_pso(**kwargs)  # type: ignore[arg-type]
         r2 = calibrate_pso(**kwargs)  # type: ignore[arg-type]
         assert r1.best_theta == pytest.approx(r2.best_theta)
@@ -245,3 +249,92 @@ class TestCalibratePSO:
         assert r1.best_risk_tolerance == pytest.approx(r2.best_risk_tolerance)
         assert r1.best_decision_value == pytest.approx(r2.best_decision_value)
         assert r1.convergence_history == pytest.approx(r2.convergence_history)
+
+
+class TestObjectiveWiring:
+    """theta and sigma_long must genuinely influence the backtest objective
+    (regression test for the old wiring gap where only risk_tolerance did).
+
+    Fixture: one decision point at spot=10k with quote=9.7k (3% spread) and a
+    flat forecast fan (P50=10k, ±2k). The quote sits inside the band where
+    the MC-informed LOCK threshold crosses it, so parameter changes flip the
+    decision (verified robust across RNG seeds).
+    """
+
+    @pytest.fixture
+    def boundary_split(self) -> pl.DataFrame:
+        """Single decision point whose quote sits near the LOCK threshold."""
+        return pl.DataFrame({
+            "date": [date(2025, 1, 1)],
+            "target_class": ["Supramax"],
+            "log_value": [math.log(10_000)],
+            "y_h30": [math.log(12_000)],
+            "y_h90": [math.log(14_000)],
+        })
+
+    @pytest.fixture
+    def boundary_preds(self) -> pl.DataFrame:
+        """Flat fan: P50 = today's spot, ±2k width, h=7 and h=30."""
+        return pl.DataFrame({
+            "date": [date(2025, 1, 1)] * 2,
+            "target_class": ["Supramax"] * 2,
+            "h": [7, 30],
+            "p_0.1": [math.log(8_000)] * 2,
+            "p_0.5": [math.log(10_000)] * 2,
+            "p_0.9": [math.log(12_000)] * 2,
+        })
+
+    def test_theta_influences_objective(
+        self, boundary_split: pl.DataFrame, boundary_preds: pl.DataFrame
+    ) -> None:
+        common = {
+            "test_split": boundary_split,
+            "ml_predictions": boundary_preds,
+            "contract_term_days": 30,
+            "broker_spread": 0.03,
+            "sigma_long": 0.40,
+            "risk_tolerance": 0.5,
+            "mc_num_simulations": 600,
+            "mc_seed": 2025,
+        }
+        dv_weak = _evaluate(**common, theta=0.01)  # type: ignore[arg-type]
+        dv_strong = _evaluate(**common, theta=0.49)  # type: ignore[arg-type]
+        assert dv_weak != pytest.approx(dv_strong), (
+            f"objective must respond to theta (weak={dv_weak}, strong={dv_strong})"
+        )
+
+    def test_sigma_long_influences_objective(
+        self, boundary_split: pl.DataFrame, boundary_preds: pl.DataFrame
+    ) -> None:
+        common = {
+            "test_split": boundary_split,
+            "ml_predictions": boundary_preds,
+            "contract_term_days": 30,
+            "broker_spread": 0.03,
+            "theta": 0.05,
+            "risk_tolerance": 0.85,
+            "mc_num_simulations": 600,
+            "mc_seed": 2025,
+        }
+        dv_low = _evaluate(**common, sigma_long=0.11)  # type: ignore[arg-type]
+        dv_high = _evaluate(**common, sigma_long=0.45)  # type: ignore[arg-type]
+        assert dv_low != pytest.approx(dv_high), (
+            f"objective must respond to sigma_long (low={dv_low}, high={dv_high})"
+        )
+
+    def test_calibrate_pso_accepts_mc_kwargs(
+        self, mock_test_split: pl.DataFrame, mock_preds: pl.DataFrame
+    ) -> None:
+        result = calibrate_pso(
+            test_split=mock_test_split,
+            ml_predictions=mock_preds,
+            contract_term_days=30,
+            broker_spread=0.03,
+            n_particles=4,
+            n_iterations=3,
+            seed=11,
+            mc_num_simulations=150,
+            mc_seed=777,
+        )
+        assert isinstance(result, CalibrationResult)
+        assert result.best_decision_value > -1e8

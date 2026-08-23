@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import math
 import random
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from opt.types import ForecastFan, VesselClass
 
@@ -100,6 +100,7 @@ def estimate_savings_distribution(
     today_quote_usd_per_day: float,
     num_simulations: int = 5000,
     config: MonteCarloConfig | None = None,
+    rng: random.Random | None = None,
 ) -> SavingsDistribution:
     """Run a Monte Carlo simulation to generate the distribution of savings.
 
@@ -129,6 +130,11 @@ def estimate_savings_distribution(
     config:
         Optional OU / floor configuration.  Defaults to
         ``MonteCarloConfig(theta=0)`` to preserve backward compatibility.
+    rng:
+        Optional seeded ``random.Random`` instance.  When None, the global
+        ``random`` module is used (legacy behaviour).  Callers that need
+        reproducible results (e.g. hyperparameter calibration) should pass
+        their own instance.
     """
     # Resolve config — use theta=0 default to preserve existing behaviour
     if config is None:
@@ -137,6 +143,8 @@ def estimate_savings_distribution(
     else:
         cfg = config
         n_sims = cfg.num_simulations
+
+    _gauss = rng.gauss if rng is not None else random.gauss
 
     class_fans = [f for f in forecasts if f.vessel_class == vessel_class]
     if not class_fans:
@@ -158,7 +166,7 @@ def estimate_savings_distribution(
         # theta == 0 : original single-shock behaviour (backward compat)
         # ----------------------------------------------------------------
         if cfg.theta == 0.0:
-            market_shock_z = random.gauss(0, 1)
+            market_shock_z = _gauss(0, 1)
 
             path_spot_sum = 0.0
             for day in range(1, contract_term_days + 1):
@@ -189,7 +197,7 @@ def estimate_savings_distribution(
                 mu_t = math.log(max(p50_t, cfg.floor_usd))
 
                 # Euler-Maruyama discretisation of dx = θ(μ−x)dt + σ dW
-                x_t = x_t + cfg.theta * (mu_t - x_t) + daily_sigma * random.gauss(0, 1)
+                x_t = x_t + cfg.theta * (mu_t - x_t) + daily_sigma * _gauss(0, 1)
 
                 day_spot = max(cfg.floor_usd, math.exp(x_t))
                 path_spot_sum += day_spot

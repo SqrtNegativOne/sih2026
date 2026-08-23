@@ -1,4 +1,4 @@
-"""PSO Hyperparameter Calibration for the ceiling optimizer.
+"""PSO Hyperparameter Calibration for the optimizer.
 
 Finds the combination of (theta, sigma_long, risk_tolerance) that maximises
 **decision value** — defined as
@@ -8,6 +8,18 @@ Finds the combination of (theta, sigma_long, risk_tolerance) that maximises
 measured by running ``backtest.simulate`` + ``backtest.summarise`` over a
 provided test dataset.
 
+All three parameters are threaded into the backtest objective:
+
+*   ``risk_tolerance`` blends the P50/P10 spot cost inside the LOCK rule.
+*   ``theta`` / ``sigma_long`` parameterise the Monte Carlo spot-path
+    dynamics (``MonteCarloConfig``) that produce the simulated P50/P10 when
+    the backtest runs in MC-informed decision mode
+    (``backtest.simulate(..., mc_config=...)``).
+
+Each candidate is evaluated with a freshly seeded RNG so the objective is a
+deterministic function of the parameters (PSO requires this for stable
+personal/global best tracking).
+
 The optimisation uses Particle Swarm Optimisation (PSO), implemented from
 scratch using only Python stdlib + ``random``.  No external solver or
 numerical library is required.
@@ -15,13 +27,12 @@ numerical library is required.
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import polars as pl
 
 from opt import backtest
 from opt.monte_carlo import MonteCarloConfig
-
 
 # ---------------------------------------------------------------------------
 # Public dataclasses
@@ -66,24 +77,31 @@ def _evaluate(
     theta: float,
     sigma_long: float,
     risk_tolerance: float,
+    mc_num_simulations: int = 300,
+    mc_seed: int = 2025,
 ) -> float:
     """Evaluate one (theta, sigma_long, risk_tolerance) candidate.
+
+    Builds a ``MonteCarloConfig`` from (theta, sigma_long) and runs the
+    backtest in MC-informed decision mode, so every searched parameter
+    influences the LOCK/WAIT decisions and hence the objective.
 
     Returns the decision value for vessel class "ALL", or a very large
     negative sentinel if the backtest produces no usable rows.
     """
-    # NOTE: MonteCarloConfig is threaded through backtest via ceiling.lock_or_wait
-    # which does NOT currently accept a MonteCarloConfig.  The calibration
-    # therefore tunes risk_tolerance (which IS passed through) alongside
-    # theta/sigma_long which govern the savings *distribution* analysis layer.
-    # The backtest itself uses lock_or_wait internally with the risk_tolerance
-    # parameter — so we pass that through directly.
+    cfg = MonteCarloConfig(
+        theta=theta,
+        sigma_long=sigma_long,
+        num_simulations=mc_num_simulations,
+    )
     rows = backtest.simulate(
         test_split=test_split,
         ml_predictions=ml_predictions,
         contract_term_days=contract_term_days,
         broker_spread=broker_spread,
         risk_tolerance=risk_tolerance,
+        mc_config=cfg,
+        mc_rng=random.Random(mc_seed),
     )
     if not rows:
         return -1e9
@@ -118,11 +136,14 @@ def calibrate_pso(
     c1: float = 1.5,
     c2: float = 1.5,
     seed: int = 42,
+    mc_num_simulations: int = 300,
+    mc_seed: int = 2025,
 ) -> CalibrationResult:
     """Run Particle Swarm Optimisation to calibrate (theta, sigma_long, risk_tolerance).
 
     Maximises the decision value reported by :func:`backtest.summarise` for
-    vessel class "ALL".
+    vessel class "ALL".  The backtest runs in MC-informed decision mode, so
+    all three parameters influence the objective.
 
     Parameters
     ----------
@@ -150,7 +171,14 @@ def calibrate_pso(
     c2:
         Social coefficient — pull toward the global best.
     seed:
-        Random seed for reproducibility.
+        Random seed for the PSO swarm itself (initialisation + velocity noise).
+    mc_num_simulations:
+        Monte Carlo paths per backtest row during evaluation.  Runtime scales
+        with n_particles × n_iterations × rows × simulations × contract days,
+        so keep this modest for large test sets.
+    mc_seed:
+        Seed for the per-evaluation Monte Carlo RNG; keeps the objective a
+        deterministic function of the candidate parameters.
 
     Returns
     -------
@@ -196,6 +224,8 @@ def calibrate_pso(
             test_split, ml_predictions,
             contract_term_days, broker_spread,
             theta=pos[0], sigma_long=pos[1], risk_tolerance=pos[2],
+            mc_num_simulations=mc_num_simulations,
+            mc_seed=mc_seed,
         )
         personal_best_val[i] = val
         if val > global_best_val:
@@ -231,6 +261,8 @@ def calibrate_pso(
                 test_split, ml_predictions,
                 contract_term_days, broker_spread,
                 theta=new_pos[0], sigma_long=new_pos[1], risk_tolerance=new_pos[2],
+                mc_num_simulations=mc_num_simulations,
+                mc_seed=mc_seed,
             )
 
             if val > personal_best_val[i]:

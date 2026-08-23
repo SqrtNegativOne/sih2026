@@ -24,6 +24,13 @@ Five strategies are compared for each (date, class) observation:
   optimizer     : lock iff quote ≤ ceiling(fan, risk_tolerance).
   oracle        : hindsight-optimal (locks only when locking was actually cheaper).
 
+By default the optimizer decision is the analytic ceiling rule from
+``ceiling.lock_or_wait``.  Passing ``mc_config`` switches the optimizer to an
+MC-informed decision: the spot-cost distribution over the contract term is
+simulated under the configured dynamics (MonteCarloConfig.theta / sigma_long),
+and the LOCK threshold becomes the risk_tolerance blend of its P50/P10 — so
+the simulation parameters genuinely affect decisions and decision value.
+
 Key outputs (all in $/day relative to always_spot):
   hit_rate      : fraction of LOCK decisions where locking was correct
   savings_mean  : E[savings/day] over the test window
@@ -34,6 +41,7 @@ Key outputs (all in $/day relative to always_spot):
 from __future__ import annotations
 
 import math
+import random
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal
@@ -41,6 +49,7 @@ from typing import Literal
 import polars as pl
 
 from opt.ceiling import lock_or_wait
+from opt.monte_carlo import MonteCarloConfig, estimate_savings_distribution
 from opt.types import BasisEntry, ForecastFan, VesselClass
 
 # ---------------------------------------------------------------------------
@@ -60,7 +69,8 @@ class BacktestRow:
     spot_usd: float       # exp(log_value) — current market rate USD/day
     quote_usd: float      # simulated TC quote = spot × (1 - broker_spread)
     realised_spot: float  # exp(y_h{term}) — actual avg spot over contract term
-    ceiling_usd: float    # optimizer's ceiling rate
+    ceiling_usd: float    # optimizer's LOCK threshold (analytic ceiling, or
+                          # risk-blended simulated spot cost when mc_config is set)
 
     # Decision under each strategy
     action_optimizer: Literal["LOCK", "WAIT"]
@@ -135,6 +145,8 @@ def simulate(
     broker_spread: float = 0.03,
     risk_tolerance: float = 0.0,
     basis: BasisEntry | None = None,
+    mc_config: MonteCarloConfig | None = None,
+    mc_rng: random.Random | None = None,
 ) -> list[BacktestRow]:
     """Run the full backtest simulation and return per-row results.
 
@@ -157,6 +169,17 @@ def simulate(
         Passed to lock_or_wait. 0 = risk-neutral.
     basis:
         Optional route-family basis adjustment.
+    mc_config:
+        When provided, the optimizer's LOCK threshold is derived from a
+        Monte Carlo simulation of spot paths over the contract term
+        (threshold = risk_tolerance blend of simulated P50/P10 spot cost)
+        instead of the analytic ceiling. This makes ``mc_config.theta`` and
+        ``mc_config.sigma_long`` genuinely affect decisions and decision
+        value. Keep ``num_simulations`` modest — runtime scales with
+        rows × simulations × contract days.
+    mc_rng:
+        Seeded ``random.Random`` passed through to the Monte Carlo layer for
+        reproducible results. Ignored when ``mc_config`` is None.
 
     Returns
     -------
@@ -170,6 +193,8 @@ def simulate(
         )
     if not (0.0 <= broker_spread < 1.0):
         raise ValueError(f"broker_spread must be in [0, 1); got {broker_spread}.")
+    if not (0.0 <= risk_tolerance <= 1.0):
+        raise ValueError(f"risk_tolerance must be in [0, 1], got {risk_tolerance}.")
 
     y_col = f"y_h{contract_term_days}"
     if y_col not in test_split.columns:
@@ -205,22 +230,41 @@ def simulate(
         # Skip rows where we have no forecast (e.g. beginning of test set)
         if not fans:
             continue
+        if quote_usd <= 0:
+            continue
 
-        # Compute ceiling and make the optimizer's decision
-        try:
-            result = lock_or_wait(
+        # Compute the optimizer's decision threshold and action.
+        if mc_config is None:
+            # Analytic decision: horizon-weighted ceiling rule (ceiling.py).
+            try:
+                result = lock_or_wait(
+                    forecasts=fans,
+                    vessel_class=cls,
+                    contract_term_days=contract_term_days,
+                    today_quote_usd_per_day=quote_usd,
+                    risk_tolerance=risk_tolerance,
+                    basis=basis,
+                )
+            except ValueError:
+                continue
+            ceiling: float = result.ceiling_usd_per_day
+            action_opt: Literal["LOCK", "WAIT"] = result.action  # type: ignore[assignment]
+        else:
+            # MC-informed decision: simulate spot paths over the contract term
+            # under mc_config dynamics, then use the risk-blended simulated
+            # spot cost as the LOCK threshold.
+            dist = estimate_savings_distribution(
                 forecasts=fans,
                 vessel_class=cls,
                 contract_term_days=contract_term_days,
                 today_quote_usd_per_day=quote_usd,
-                risk_tolerance=risk_tolerance,
-                basis=basis,
+                config=mc_config,
+                rng=mc_rng,
             )
-        except ValueError:
-            continue
-
-        ceiling = result.ceiling_usd_per_day
-        action_opt: Literal["LOCK", "WAIT"] = result.action  # type: ignore[assignment]
+            spot_p50 = quote_usd + dist.expected_p50_savings
+            spot_p10 = quote_usd + dist.worst_case_p10_savings
+            ceiling = (1.0 - risk_tolerance) * spot_p50 + risk_tolerance * spot_p10
+            action_opt = "LOCK" if quote_usd <= ceiling else "WAIT"
 
         # Oracle: lock iff it was actually cheaper than realised spot
         action_oracle: Literal["LOCK", "WAIT"] = (

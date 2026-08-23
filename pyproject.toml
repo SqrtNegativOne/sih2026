@@ -28,6 +28,8 @@ dev = [
 build-master = "data_builders.build_master:main"
 baselines = "ml.baselines:main"
 build-samples = "data_builders.build_samples:main"
+export-models = "ml.export:main"
+
 
 
 [tool.ruff.lint]

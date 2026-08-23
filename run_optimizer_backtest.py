@@ -8,19 +8,21 @@ optimizer backtester.
 import polars as pl
 
 from ml.baselines import load_split
-from ml.model_lgbm_tuned import predict as predict_lgbm
+from ml.inference import FreightPredictor
 from opt.backtest import simulate, summarise, to_dataframe
 
 
 def main():
     print("Loading test split (Jan 2025 - Apr 2026)...")
-    train = load_split("train")
     test = load_split("test")
 
-    print(f"Generating ML predictions for {test.height} rows...")
-    # Get predictions for horizons 7 and 30
-    preds_h7 = predict_lgbm(train, {"test": test}, h=7)["test"]
-    preds_h30 = predict_lgbm(train, {"test": test}, h=30)["test"]
+    print(f"Generating ML predictions for {test.height} rows using exported XGBoost models...")
+    # Load the pre-trained models and get predictions
+    predictor_h7 = FreightPredictor(h=7)
+    predictor_h30 = FreightPredictor(h=30)
+    
+    preds_h7 = predictor_h7.predict(test)
+    preds_h30 = predictor_h30.predict(test)
     
     # Combine predictions vertically
     ml_predictions = pl.concat([preds_h7, preds_h30])
