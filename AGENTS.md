@@ -10,10 +10,11 @@ Welcome to the `sih2026` repository!
 
 ## Folder Layout
 
-- \docs/\: Project documentation.
-- \aw_data/\: Raw source data (not processed).
-- \src/data/\: Processed data and model inputs/outputs.
-- \src/data_builders/\: Scripts to build processed data from raw data.
-- \src/ml/\: Machine learning models and feature engineering.
-- \src/opt/\: Optimizer and operations research models.
-
+- `docs/`: Project documentation.
+- `config/`: Configuration files (e.g., sample generation settings).
+- `reference/`: Reference materials and static project context.
+- `raw_data/`: Raw source data (not processed).
+- `src/data/`: Processed data and model inputs/outputs.
+- `src/data_builders/`: Scripts to build processed data from raw data.
+- `src/ml/`: Machine learning models and feature engineering.
+- `src/opt/`: Optimizer and operations research models.
