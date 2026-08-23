@@ -80,7 +80,7 @@ def main():
     rec = run_optimizer(inputs, target_class=VesselClass.SUPRAMAX)
     
     print("="*80)
-    print("OPTIMIZER OUTPUTS (Matching 02_overview.md spec)")
+    print("OPTIMIZER OUTPUTS")
     print("="*80)
     print(f"1. Lock/wait:    {rec.lock_wait_text}")
     print(f"2. Schedule:     {rec.voyage_schedule_text}")
