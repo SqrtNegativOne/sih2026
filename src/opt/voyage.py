@@ -2,6 +2,19 @@
 
 Assigns vessels to cargo parcels and sequences them to maximize profit (TCE).
 Uses Google OR-Tools CP-SAT solver.
+
+Costs factored into the objective:
+  - Laden fuel (origin -> destination)
+  - Ballast fuel (current port -> first cargo; between cargoes)
+  - Ballast time penalty ($/day for deadheading)
+  - Inter-cargo idle gap penalty ($/day for sitting around between voyages)
+  - Port queue wait penalty ($/day for congestion wait at laycan start)
+
+Constraints enforced:
+  - Each cargo served by exactly one vessel (or dropped if unprofitable)
+  - Vessel DWT and draft compatibility with origin AND destination port
+  - Laycan time windows (arrive before end, can't load before start)
+  - Physical sequencing (finish c1 + ballast time <= arrive c2)
 """
 from __future__ import annotations
 
@@ -10,7 +23,7 @@ from typing import Any
 
 from ortools.sat.python import cp_model
 
-from opt.types import OptimizerInputs
+from opt.types import OptimizerInputs, PortSpec, Vessel, CargoParcel
 
 
 @dataclass
@@ -18,9 +31,11 @@ class VoyageAssignment:
     vessel_id: str
     parcel_id: str
     arrival_hours: int
-    wait_hours: int
+    wait_hours: int              # anchorage wait before laycan opens
     start_operation_hours: int
     finish_hours: int
+    ballast_hours: int           # time spent in ballast to reach this cargo
+    inter_cargo_gap_hours: int   # idle gap after previous cargo discharged
     profit_usd: float
 
 
@@ -29,6 +44,7 @@ class VoyageScheduleResult:
     assignments: list[VoyageAssignment]
     total_profit_usd: float
     solver_status: str
+    infeasible_pairs: list[tuple[str, str]]  # (vessel_id, parcel_id) ruled out by port constraints
 
 
 def _get_distance_nm(
@@ -41,10 +57,24 @@ def _get_distance_nm(
         return distances[(port_a, port_b)]
     if (port_b, port_a) in distances:
         return distances[(port_b, port_a)]
-    
-    # In a real app, missing distances might query Searoute or raise.
-    # For now, warn and assume a large penalty distance.
     return 10_000.0
+
+
+def _vessel_can_call(
+    vessel: Vessel, port_id: str, port_specs: dict[str, PortSpec]
+) -> bool:
+    """Return True if port specs allow this vessel to berth.
+
+    If port is not in port_specs, we assume no restriction (missing data).
+    """
+    spec = port_specs.get(port_id)
+    if spec is None:
+        return True
+    if spec.max_dwt is not None and vessel.dwt > spec.max_dwt:
+        return False
+    if spec.max_draft_m is not None and vessel.draft_m > spec.max_draft_m:
+        return False
+    return True
 
 
 def schedule_voyages(
@@ -53,267 +83,338 @@ def schedule_voyages(
 ) -> VoyageScheduleResult:
     """Solve the Voyage Scheduling (PDPTW) problem using OR-Tools CP-SAT.
 
-    Maximizes total fleet profit = sum(revenue - fuel_cost - port_dues - idle_cost).
+    Maximizes total fleet profit = revenue - fuel - ballast_penalty - idle_penalty.
     """
     model = cp_model.CpModel()
 
-    # Time granularity: 1 integer unit = 1 hour.
-    # We measure time in hours from an arbitrary epoch, say 0 = today.
-    # We assume 'today' is the earliest available_from across all vessels,
-    # or just use dates directly converted to days/hours from epoch.
     if not inputs.vessels or not inputs.parcels:
-        return VoyageScheduleResult([], 0.0, "NO_DATA")
+        return VoyageScheduleResult([], 0.0, "NO_DATA", [])
 
     epoch_date = min(v.available_from for v in inputs.vessels)
 
     def date_to_hours(d: Any) -> int:
         return (d - epoch_date).days * 24
 
-    # 1. Pre-calculate node properties
     C = inputs.parcels
     V = inputs.vessels
-    
-    # We'll use a large horizon time to bound integer variables
-    max_horizon_days = inputs.planning_horizon_days + 60 # cushion for late arrivals
-    max_time_hours = max_horizon_days * 24
 
-    # Cargo valid time windows
-    cargo_windows = {}
-    for c in C:
-        cargo_windows[c.parcel_id] = {
+    max_time_hours = (inputs.planning_horizon_days + 60) * 24
+
+    # Pre-compute windows
+    cargo_windows = {
+        c.parcel_id: {
             "start": date_to_hours(c.laycan_start),
             "end": date_to_hours(c.laycan_end),
         }
+        for c in C
+    }
 
-    # Vessel base properties
-    vessel_props = {}
-    for v in V:
-        vessel_props[v.vessel_id] = {
+    vessel_props = {
+        v.vessel_id: {
             "available": date_to_hours(v.available_from),
             "port": v.current_port,
         }
+        for v in V
+    }
 
-    # 2. Decision Variables
-    # served[c]: true if cargo c is served by ANY vessel
+    # ---------------------------------------------------------------------------
+    # Port compatibility pre-filter
+    # ---------------------------------------------------------------------------
+    # Build a set of (v_id, c_id) pairs that are physically impossible.
+    infeasible_pairs: list[tuple[str, str]] = []
+    feasible: dict[tuple[str, str], bool] = {}
+    for v in V:
+        for c in C:
+            ok = (
+                _vessel_can_call(v, c.origin_port, inputs.port_specs)
+                and _vessel_can_call(v, c.dest_port, inputs.port_specs)
+            )
+            feasible[v.vessel_id, c.parcel_id] = ok
+            if not ok:
+                infeasible_pairs.append((v.vessel_id, c.parcel_id))
+
+    # ---------------------------------------------------------------------------
+    # Decision variables
+    # ---------------------------------------------------------------------------
     served = {c.parcel_id: model.NewBoolVar(f"served_{c.parcel_id}") for c in C}
 
-    # x[v, c]: true if vessel v serves cargo c
-    x = {}
+    x: dict[tuple[str, str], Any] = {}
     for v in V:
         for c in C:
-            # Must match vessel class
-            if c.route_family: # Simplification: assume vessel matches cargo if user provided it
-                pass # You can add strict checks here
             x[v.vessel_id, c.parcel_id] = model.NewBoolVar(f"x_{v.vessel_id}_{c.parcel_id}")
-            
+
+    # Infeasible pairs are permanently 0
+    for v_id, c_id in infeasible_pairs:
+        model.Add(x[v_id, c_id] == 0)
+
     # Each cargo served by at most one vessel
     for c in C:
-        model.AddExactlyOne(x[v.vessel_id, c.parcel_id] for v in V) if False else None # Placeholder
         model.Add(sum(x[v.vessel_id, c.parcel_id] for v in V) == served[c.parcel_id])
 
-    # transition[v, c1, c2]: true if v visits c2 immediately after c1
-    # start_node[v, c]: true if c is the FIRST cargo v visits
-    # end_node[v, c]: true if c is the LAST cargo v visits
-    trans = {}
-    start_node = {}
-    end_node = {}
-    for v in V:
-        for c in C:
-            start_node[v.vessel_id, c.parcel_id] = model.NewBoolVar(f"start_{v.vessel_id}_{c.parcel_id}")
-            end_node[v.vessel_id, c.parcel_id] = model.NewBoolVar(f"end_{v.vessel_id}_{c.parcel_id}")
-            for c2 in C:
-                if c.parcel_id != c2.parcel_id:
-                    trans[v.vessel_id, c.parcel_id, c2.parcel_id] = model.NewBoolVar(f"trans_{v.vessel_id}_{c.parcel_id}_{c2.parcel_id}")
-
-    # Flow conservation for each vessel and cargo
-    for v in V:
-        v_id = v.vessel_id
-        # Vessel has at most one start and at most one end
-        model.Add(sum(start_node[v_id, c.parcel_id] for c in C) <= 1)
-        model.Add(sum(end_node[v_id, c.parcel_id] for c in C) <= 1)
-        
-        for c in C:
-            c_id = c.parcel_id
-            
-            # If x[v, c] is true, it must have exactly one incoming edge (either start or from another c)
-            in_edges = start_node[v_id, c_id] + sum(trans[v_id, prev.parcel_id, c_id] for prev in C if prev.parcel_id != c_id)
-            model.Add(in_edges == x[v_id, c_id])
-            
-            # If x[v, c] is true, it must have exactly one outgoing edge (either end or to another c)
-            out_edges = end_node[v_id, c_id] + sum(trans[v_id, c_id, nxt.parcel_id] for nxt in C if nxt.parcel_id != c_id)
-            model.Add(out_edges == x[v_id, c_id])
-
-    # 3. Time tracking
-    # arrival_time[v, c]: when does v arrive at c.origin_port?
-    # start_time[v, c]: when does v start loading c? (>= arrival_time and >= laycan_start)
-    # finish_time[v, c]: when does v finish discharging c?
-    arrival_time = {}
-    start_time = {}
-    finish_time = {}
-    
-    for v in V:
-        v_id = v.vessel_id
-        for c in C:
-            c_id = c.parcel_id
-            arrival_time[v_id, c_id] = model.NewIntVar(0, max_time_hours, f"arr_{v_id}_{c_id}")
-            start_time[v_id, c_id] = model.NewIntVar(0, max_time_hours, f"start_{v_id}_{c_id}")
-            finish_time[v_id, c_id] = model.NewIntVar(0, max_time_hours, f"fin_{v_id}_{c_id}")
-
+    # Routing flow variables
+    trans: dict[tuple[str, str, str], Any] = {}
+    start_node: dict[tuple[str, str], Any] = {}
+    end_node: dict[tuple[str, str], Any] = {}
     for v in V:
         for c in C:
             v_id = v.vessel_id
             c_id = c.parcel_id
-            
+            start_node[v_id, c_id] = model.NewBoolVar(f"snode_{v_id}_{c_id}")
+            end_node[v_id, c_id] = model.NewBoolVar(f"enode_{v_id}_{c_id}")
+            for c2 in C:
+                if c_id != c2.parcel_id:
+                    trans[v_id, c_id, c2.parcel_id] = model.NewBoolVar(f"tr_{v_id}_{c_id}_{c2.parcel_id}")
+
+    # Flow conservation
+    for v in V:
+        v_id = v.vessel_id
+        model.Add(sum(start_node[v_id, c.parcel_id] for c in C) <= 1)
+        model.Add(sum(end_node[v_id, c.parcel_id] for c in C) <= 1)
+
+        for c in C:
+            c_id = c.parcel_id
+            in_edges = start_node[v_id, c_id] + sum(
+                trans[v_id, p.parcel_id, c_id] for p in C if p.parcel_id != c_id
+            )
+            model.Add(in_edges == x[v_id, c_id])
+
+            out_edges = end_node[v_id, c_id] + sum(
+                trans[v_id, c_id, n.parcel_id] for n in C if n.parcel_id != c_id
+            )
+            model.Add(out_edges == x[v_id, c_id])
+
+    # ---------------------------------------------------------------------------
+    # Time variables — first pass: declare
+    # ---------------------------------------------------------------------------
+    arrival_time: dict[tuple[str, str], Any] = {}
+    start_time: dict[tuple[str, str], Any] = {}
+    finish_time: dict[tuple[str, str], Any] = {}
+
+    for v in V:
+        for c in C:
+            v_id, c_id = v.vessel_id, c.parcel_id
+            arrival_time[v_id, c_id] = model.NewIntVar(0, max_time_hours, f"arr_{v_id}_{c_id}")
+            start_time[v_id, c_id] = model.NewIntVar(0, max_time_hours, f"st_{v_id}_{c_id}")
+            finish_time[v_id, c_id] = model.NewIntVar(0, max_time_hours, f"fin_{v_id}_{c_id}")
+
+    # ---------------------------------------------------------------------------
+    # Time variables — second pass: constrain
+    # ---------------------------------------------------------------------------
+    # Pre-compute durations (hours) — deterministic given vessel + cargo
+    laden_hours_map: dict[tuple[str, str], int] = {}
+    port_hours_map: dict[tuple[str, str], int] = {}
+    for v in V:
+        for c in C:
+            laden_nm = _get_distance_nm(c.origin_port, c.dest_port, inputs.port_distances)
+            laden_h = int(laden_nm / v.speed_kn) if v.speed_kn > 0 else 0
+            laden_hours_map[v.vessel_id, c.parcel_id] = laden_h
+
+            # Port time from handling rate if available, else 4 days default
+            origin_spec = inputs.port_specs.get(c.origin_port)
+            dest_spec = inputs.port_specs.get(c.dest_port)
+            if origin_spec and origin_spec.handling_rate_tph:
+                load_h = int(c.volume_dwt / origin_spec.handling_rate_tph)
+            else:
+                load_h = 48  # 2-day default
+            if dest_spec and dest_spec.handling_rate_tph:
+                disch_h = int(c.volume_dwt / dest_spec.handling_rate_tph)
+            else:
+                disch_h = 48
+            port_hours_map[v.vessel_id, c.parcel_id] = load_h + disch_h
+
+    for v in V:
+        for c in C:
+            v_id, c_id = v.vessel_id, c.parcel_id
             arr = arrival_time[v_id, c_id]
             st = start_time[v_id, c_id]
             fin = finish_time[v_id, c_id]
-            
-            # Start time is max(arrival, laycan_start)
-            # Implemented as: start >= arr, start >= laycan_start
+            not_x = x[v_id, c_id].Not()
+
+            # Pin to 0 when not assigned (prevents vacuous constraint satisfaction)
+            model.Add(arr == 0).OnlyEnforceIf(not_x)
+            model.Add(st == 0).OnlyEnforceIf(not_x)
+            model.Add(fin == 0).OnlyEnforceIf(not_x)
+
+            # Temporal ordering
             model.Add(st >= arr)
             model.Add(st >= cargo_windows[c_id]["start"]).OnlyEnforceIf(x[v_id, c_id])
-            
-            # Must arrive before laycan_end
             model.Add(arr <= cargo_windows[c_id]["end"]).OnlyEnforceIf(x[v_id, c_id])
 
-            # BUG FIX: when a cargo is NOT assigned, pin all time vars to 0.
-            # Without this, finish_time is free to take any value in [0, horizon],
-            # which can vacuously satisfy transition constraints on multi-cargo problems.
-            not_assigned = x[v_id, c_id].Not()
-            model.Add(arr == 0).OnlyEnforceIf(not_assigned)
-            model.Add(st == 0).OnlyEnforceIf(not_assigned)
-            model.Add(fin == 0).OnlyEnforceIf(not_assigned)
-
-            # Duration computation
-            laden_nm = _get_distance_nm(c.origin_port, c.dest_port, inputs.port_distances)
-            laden_hours = int((laden_nm / v.speed_kn) if v.speed_kn > 0 else 0)
-            
-            # Port days (rough assumption: 2 days load + 2 days discharge = 96 hours)
-            # In a real app, use inputs.port_specs[c.origin_port].handling_rate_tph
-            port_hours = 96 
-            
-            duration = laden_hours + port_hours
-            
+            duration = laden_hours_map[v_id, c_id] + port_hours_map[v_id, c_id]
             model.Add(fin == st + duration).OnlyEnforceIf(x[v_id, c_id])
 
-            # Transition time constraints
-            # If start_node[v, c], arr >= v.available_from + ballast_time(v.current_port -> c.origin)
-            ballast_nm_start = _get_distance_nm(v.current_port, c.origin_port, inputs.port_distances)
-            ballast_hrs_start = int((ballast_nm_start / v.speed_kn) if v.speed_kn > 0 else 0)
-            
-            model.Add(arr >= vessel_props[v_id]["available"] + ballast_hrs_start).OnlyEnforceIf(start_node[v_id, c_id])
-            
-            # If trans[v, c1, c2], arr[v, c2] >= fin[v, c1] + ballast_time(c1.dest -> c2.origin)
+            # Ballast from vessel home to first cargo
+            ballast_nm = _get_distance_nm(v.current_port, c.origin_port, inputs.port_distances)
+            ballast_h = int(ballast_nm / v.speed_kn) if v.speed_kn > 0 else 0
+            model.Add(arr >= vessel_props[v_id]["available"] + ballast_h).OnlyEnforceIf(
+                start_node[v_id, c_id]
+            )
+
+            # Ballast between cargoes
             for c2 in C:
-                if c_id == c2.parcel_id: continue
-                
-                ballast_nm = _get_distance_nm(c.dest_port, c2.origin_port, inputs.port_distances)
-                ballast_hrs = int((ballast_nm / v.speed_kn) if v.speed_kn > 0 else 0)
-                
+                if c_id == c2.parcel_id:
+                    continue
+                b_nm = _get_distance_nm(c.dest_port, c2.origin_port, inputs.port_distances)
+                b_h = int(b_nm / v.speed_kn) if v.speed_kn > 0 else 0
                 model.Add(
-                    arrival_time[v_id, c2.parcel_id] >= fin + ballast_hrs
+                    arrival_time[v_id, c2.parcel_id] >= fin + b_h
                 ).OnlyEnforceIf(trans[v_id, c_id, c2.parcel_id])
 
-    # 4. Objective: Maximize Profit
-    # Profit = Revenue - VoyageCosts
-    # VoyageCosts = fuel + idle
-    
-    profit_terms = []
-    
+    # ---------------------------------------------------------------------------
+    # Objective: Maximize Profit
+    # ---------------------------------------------------------------------------
+    # Penalty rates (convert $/day -> $/hour, integer-safe scaling)
+    # We work in integer cents to avoid float precision issues.
+    SCALE = 100  # 1 unit = $0.01
+    idle_penalty_per_hour = int(inputs.idle_penalty_usd_per_day / 24 * SCALE)
+    ballast_penalty_per_hour = int(inputs.ballast_penalty_usd_per_day / 24 * SCALE)
+    bunker_per_tonne = inputs.bunker_price_usd_per_tonne
+
+    profit_terms: list[Any] = []
+
     for v in V:
         v_id = v.vessel_id
         for c in C:
             c_id = c.parcel_id
-            
-            # Revenue if served
-            revenue = int(c.revenue_usd)
-            
-            # Laden cost
-            laden_nm = _get_distance_nm(c.origin_port, c.dest_port, inputs.port_distances)
-            laden_days = laden_nm / (v.speed_kn * 24.0) if v.speed_kn > 0 else 0
-            fuel_cost_laden = int(laden_days * v.fuel_consumption_tpd * inputs.bunker_price_usd_per_tonne)
-            
-            # Start ballast cost
-            ballast_nm_start = _get_distance_nm(v.current_port, c.origin_port, inputs.port_distances)
-            ballast_days_start = ballast_nm_start / (v.speed_kn * 24.0) if v.speed_kn > 0 else 0
-            fuel_cost_start = int(ballast_days_start * v.fuel_consumption_tpd * inputs.bunker_price_usd_per_tonne)
-            
-            # (Revenue - LadenFuel)*x - StartFuel*start_node
-            # We scale by integer 1
-            
-            # Create a variable for this cargo's contribution if served
-            contrib = model.NewIntVar(-10_000_000, 10_000_000, f"contrib_{v_id}_{c_id}")
-            
-            # If x=1, contrib = Revenue - fuel_cost_laden. Else 0.
-            model.Add(contrib == revenue - fuel_cost_laden).OnlyEnforceIf(x[v_id, c_id])
+
+            # --- Revenue ---
+            revenue_scaled = int(c.revenue_usd * SCALE)
+            contrib = model.NewIntVar(-500_000_000, 500_000_000, f"contrib_{v_id}_{c_id}")
+            model.Add(contrib == revenue_scaled).OnlyEnforceIf(x[v_id, c_id])
             model.Add(contrib == 0).OnlyEnforceIf(x[v_id, c_id].Not())
             profit_terms.append(contrib)
-            
-            # Subtract start fuel if this is the start node
-            start_cost_var = model.NewIntVar(0, 10_000_000, f"start_cost_{v_id}_{c_id}")
-            model.Add(start_cost_var == fuel_cost_start).OnlyEnforceIf(start_node[v_id, c_id])
+
+            # --- Laden fuel cost ---
+            laden_nm = _get_distance_nm(c.origin_port, c.dest_port, inputs.port_distances)
+            laden_days = laden_nm / (v.speed_kn * 24.0) if v.speed_kn > 0 else 0
+            laden_fuel_cost_scaled = int(laden_days * v.fuel_consumption_tpd * bunker_per_tonne * SCALE)
+
+            laden_cost_var = model.NewIntVar(0, 500_000_000, f"laden_cost_{v_id}_{c_id}")
+            model.Add(laden_cost_var == laden_fuel_cost_scaled).OnlyEnforceIf(x[v_id, c_id])
+            model.Add(laden_cost_var == 0).OnlyEnforceIf(x[v_id, c_id].Not())
+            profit_terms.append(-laden_cost_var)
+
+            # --- Ballast fuel + penalty from vessel home to first cargo ---
+            b_nm_start = _get_distance_nm(v.current_port, c.origin_port, inputs.port_distances)
+            b_days_start = b_nm_start / (v.speed_kn * 24.0) if v.speed_kn > 0 else 0
+            b_fuel_start_scaled = int(b_days_start * v.fuel_consumption_tpd * bunker_per_tonne * SCALE)
+            b_penalty_start_scaled = int(b_days_start * 24 * ballast_penalty_per_hour)
+
+            start_cost_var = model.NewIntVar(0, 500_000_000, f"start_cost_{v_id}_{c_id}")
+            model.Add(start_cost_var == b_fuel_start_scaled + b_penalty_start_scaled).OnlyEnforceIf(
+                start_node[v_id, c_id]
+            )
             model.Add(start_cost_var == 0).OnlyEnforceIf(start_node[v_id, c_id].Not())
             profit_terms.append(-start_cost_var)
-            
-            # Subtract trans fuel if transitioning
+
+            # --- Port queue wait penalty at this cargo's load port ---
+            origin_spec = inputs.port_specs.get(c.origin_port)
+            wait_h_expected = int((origin_spec.expected_wait_days if origin_spec else 0) * 24)
+            wait_penalty_scaled = wait_h_expected * idle_penalty_per_hour
+
+            wait_cost_var = model.NewIntVar(0, 100_000_000, f"wait_cost_{v_id}_{c_id}")
+            model.Add(wait_cost_var == wait_penalty_scaled).OnlyEnforceIf(x[v_id, c_id])
+            model.Add(wait_cost_var == 0).OnlyEnforceIf(x[v_id, c_id].Not())
+            profit_terms.append(-wait_cost_var)
+
+            # --- Ballast fuel + penalty + inter-cargo idle gap for transitions ---
             for c2 in C:
-                if c_id == c2.parcel_id: continue
-                ballast_nm = _get_distance_nm(c.dest_port, c2.origin_port, inputs.port_distances)
-                ballast_days = ballast_nm / (v.speed_kn * 24.0) if v.speed_kn > 0 else 0
-                fuel_cost_trans = int(ballast_days * v.fuel_consumption_tpd * inputs.bunker_price_usd_per_tonne)
-                
-                trans_cost_var = model.NewIntVar(0, 10_000_000, f"trans_cost_{v_id}_{c_id}_{c2.parcel_id}")
-                model.Add(trans_cost_var == fuel_cost_trans).OnlyEnforceIf(trans[v_id, c_id, c2.parcel_id])
+                if c_id == c2.parcel_id:
+                    continue
+                b_nm = _get_distance_nm(c.dest_port, c2.origin_port, inputs.port_distances)
+                b_days = b_nm / (v.speed_kn * 24.0) if v.speed_kn > 0 else 0
+                b_fuel_scaled = int(b_days * v.fuel_consumption_tpd * bunker_per_tonne * SCALE)
+                b_penalty_scaled = int(b_days * 24 * ballast_penalty_per_hour)
+                b_hours_int = int(b_days * 24)
+
+                trans_cost_var = model.NewIntVar(0, 500_000_000, f"tr_cost_{v_id}_{c_id}_{c2.parcel_id}")
+                model.Add(trans_cost_var == b_fuel_scaled + b_penalty_scaled).OnlyEnforceIf(
+                    trans[v_id, c_id, c2.parcel_id]
+                )
                 model.Add(trans_cost_var == 0).OnlyEnforceIf(trans[v_id, c_id, c2.parcel_id].Not())
                 profit_terms.append(-trans_cost_var)
 
+                # Inter-cargo idle gap: time vessel sits doing nothing between
+                # discharging c1 and departing for c2 = arrival(c2) - finish(c1) - ballast_hours
+                # We create a slack variable for this and penalise it.
+                idle_gap = model.NewIntVar(0, max_time_hours, f"idle_{v_id}_{c_id}_{c2.parcel_id}")
+                # idle_gap = arrival_time[c2] - finish_time[c1] - b_hours (clamped >= 0)
+                # When trans=1: arrival_time[c2] >= finish[c1] + b_hours (from constraint above),
+                # so idle_gap >= 0 always.
+                model.Add(
+                    idle_gap == arrival_time[v_id, c2.parcel_id] - finish_time[v_id, c_id] - b_hours_int
+                ).OnlyEnforceIf(trans[v_id, c_id, c2.parcel_id])
+                model.Add(idle_gap == 0).OnlyEnforceIf(trans[v_id, c_id, c2.parcel_id].Not())
+
+                idle_cost_var = model.NewIntVar(0, 500_000_000, f"idle_cost_{v_id}_{c_id}_{c2.parcel_id}")
+                model.Add(idle_cost_var == idle_gap * idle_penalty_per_hour).OnlyEnforceIf(
+                    trans[v_id, c_id, c2.parcel_id]
+                )
+                model.Add(idle_cost_var == 0).OnlyEnforceIf(trans[v_id, c_id, c2.parcel_id].Not())
+                profit_terms.append(-idle_cost_var)
+
     model.Maximize(sum(profit_terms))
 
-    # 5. Solve
+    # ---------------------------------------------------------------------------
+    # Solve
+    # ---------------------------------------------------------------------------
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = max_solve_seconds
     status = solver.Solve(model)
-
     status_name = solver.StatusName(status)
-    if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-        # Reconstruct the schedule
-        assignments = []
-        for v in V:
-            v_id = v.vessel_id
-            # Find the start node
-            curr_c = None
-            for c in C:
-                if solver.Value(start_node[v_id, c.parcel_id]):
-                    curr_c = c.parcel_id
-                    break
-            
-            while curr_c is not None:
-                arr = solver.Value(arrival_time[v_id, curr_c])
-                st = solver.Value(start_time[v_id, curr_c])
-                fin = solver.Value(finish_time[v_id, curr_c])
-                
-                assignments.append(VoyageAssignment(
-                    vessel_id=v_id,
-                    parcel_id=curr_c,
-                    arrival_hours=arr,
-                    wait_hours=st - arr,
-                    start_operation_hours=st,
-                    finish_hours=fin,
-                    profit_usd=0.0  # Would compute actual contribution here if needed
-                ))
-                
-                # Find next
-                nxt_c = None
-                for c2 in C:
-                    if curr_c != c2.parcel_id and solver.Value(trans[v_id, curr_c, c2.parcel_id]):
-                        nxt_c = c2.parcel_id
-                        break
-                curr_c = nxt_c
-                
-        return VoyageScheduleResult(
-            assignments=assignments,
-            total_profit_usd=float(solver.ObjectiveValue()),
-            solver_status=status_name,
-        )
 
-    return VoyageScheduleResult([], 0.0, status_name)
+    if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        return VoyageScheduleResult([], 0.0, status_name, infeasible_pairs)
+
+    # Reconstruct schedule
+    assignments: list[VoyageAssignment] = []
+    for v in V:
+        v_id = v.vessel_id
+        curr_c_id: str | None = next(
+            (c.parcel_id for c in C if solver.Value(start_node[v_id, c.parcel_id])), None
+        )
+        prev_fin = 0
+        while curr_c_id is not None:
+            arr = solver.Value(arrival_time[v_id, curr_c_id])
+            st = solver.Value(start_time[v_id, curr_c_id])
+            fin = solver.Value(finish_time[v_id, curr_c_id])
+
+            # Ballast hours to get here
+            if not assignments or assignments[-1].vessel_id != v_id:
+                # First cargo for this vessel
+                b_nm = _get_distance_nm(v.current_port, next(c.origin_port for c in C if c.parcel_id == curr_c_id), inputs.port_distances)
+                b_h = int(b_nm / v.speed_kn) if v.speed_kn > 0 else 0
+                inter_gap_h = 0
+            else:
+                prev_fin = assignments[-1].finish_hours
+                b_nm = _get_distance_nm(
+                    next(c.dest_port for c in C if c.parcel_id == assignments[-1].parcel_id),
+                    next(c.origin_port for c in C if c.parcel_id == curr_c_id),
+                    inputs.port_distances
+                )
+                b_h = int(b_nm / v.speed_kn) if v.speed_kn > 0 else 0
+                inter_gap_h = arr - prev_fin - b_h
+
+            assignments.append(VoyageAssignment(
+                vessel_id=v_id,
+                parcel_id=curr_c_id,
+                arrival_hours=arr,
+                wait_hours=max(0, st - arr),
+                start_operation_hours=st,
+                finish_hours=fin,
+                ballast_hours=b_h,
+                inter_cargo_gap_hours=max(0, inter_gap_h),
+                profit_usd=0.0
+            ))
+
+            curr_c_id = next(
+                (c2.parcel_id for c2 in C if c2.parcel_id != curr_c_id and solver.Value(trans[v_id, curr_c_id, c2.parcel_id])),
+                None
+            )
+
+    return VoyageScheduleResult(
+        assignments=assignments,
+        total_profit_usd=float(solver.ObjectiveValue()) / SCALE,
+        solver_status=status_name,
+        infeasible_pairs=infeasible_pairs,
+    )

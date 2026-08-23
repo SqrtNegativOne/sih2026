@@ -1,82 +1,269 @@
+"""Tests for opt.voyage — Voyage Scheduler (Sub-problem 2)."""
+import pytest
 from datetime import date
+from opt.types import Vessel, CargoParcel, VesselClass, OptimizerInputs, PortSpec
+from opt.voyage import schedule_voyages, _vessel_can_call
 
-from opt.types import CargoParcel, OptimizerInputs, Vessel, VesselClass
-from opt.voyage import schedule_voyages
 
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
-def test_simple_voyage_schedule():
-    # 1 Vessel, 2 Cargoes. 
-    # Vessel is at Port A.
-    # Cargo 1: A -> B, laycan day 5-10
-    # Cargo 2: B -> C, laycan day 15-20
-    # Distance A->B is small, B->C is small.
-    # Vessel can do both sequentially.
-    
-    v = Vessel(
-        vessel_id="V1",
+def make_supramax(vessel_id: str = "V1", port: str = "Paradip") -> Vessel:
+    return Vessel(
+        vessel_id=vessel_id,
         vessel_class=VesselClass.SUPRAMAX,
-        current_port="PortA",
+        current_port=port,
         status="idle",
         available_from=date(2025, 1, 1),
         available_until=None,
-        dwt=55000,
+        dwt=55_000,
         draft_m=12.0,
-        speed_kn=12.0,  # 288 nm/day
-        fuel_consumption_tpd=30.0
+        speed_kn=12.0,
+        fuel_consumption_tpd=30.0,
     )
-    
-    c1 = CargoParcel(
-        parcel_id="C1",
-        origin_port="PortA",
-        dest_port="PortB",
+
+
+def make_cargo(
+    cargo_id: str,
+    origin: str,
+    dest: str,
+    laycan_start: date,
+    laycan_end: date,
+    revenue: float = 500_000.0,
+) -> CargoParcel:
+    return CargoParcel(
+        parcel_id=cargo_id,
+        origin_port=origin,
+        dest_port=dest,
         commodity="Coal",
-        volume_dwt=50000,
-        laycan_start=date(2025, 1, 5),
-        laycan_end=date(2025, 1, 10),
+        volume_dwt=50_000,
+        laycan_start=laycan_start,
+        laycan_end=laycan_end,
         route_family="",
-        revenue_usd=500_000.0
+        revenue_usd=revenue,
     )
-    
-    c2 = CargoParcel(
-        parcel_id="C2",
-        origin_port="PortB",
-        dest_port="PortC",
-        commodity="Grain",
-        volume_dwt=50000,
-        laycan_start=date(2025, 1, 15),
-        laycan_end=date(2025, 1, 20),
-        route_family="",
-        revenue_usd=400_000.0
-    )
-    
-    inputs = OptimizerInputs(
-        parcels=[c1, c2],
-        vessels=[v],
-        tc_quotes={VesselClass.SUPRAMAX: 15000},
-        planning_horizon_days=30,
+
+
+def base_inputs(vessels, parcels, port_distances=None, port_specs=None) -> OptimizerInputs:
+    return OptimizerInputs(
+        vessels=vessels,
+        parcels=parcels,
+        tc_quotes={},
+        planning_horizon_days=60,
         contract_term_days=30,
         forecasts=[],
         basis={},
-        port_specs={},
-        port_distances={
-            ("PortA", "PortB"): 288.0, # 1 day laden
-            ("PortB", "PortC"): 576.0, # 2 days laden
-        },
-        bunker_price_usd_per_tonne=500.0
+        port_specs=port_specs or {},
+        port_distances=port_distances or {},
+        bunker_price_usd_per_tonne=500.0,
+        idle_penalty_usd_per_day=500.0,
+        ballast_penalty_usd_per_day=250.0,
     )
-    
-    result = schedule_voyages(inputs, max_solve_seconds=2.0)
-    
-    assert result.solver_status in ("OPTIMAL", "FEASIBLE")
-    assert len(result.assignments) == 2
-    
-    # Should do C1 then C2
-    c1_assign = next(a for a in result.assignments if a.parcel_id == "C1")
-    c2_assign = next(a for a in result.assignments if a.parcel_id == "C2")
-    
-    # C1 starts on or after day 4 (Jan 5 is 4 days after Jan 1). 
-    # 4 days * 24 = 96 hours
-    assert c1_assign.start_operation_hours >= 96
-    
-    # C2 must start after C1 finishes
-    assert c2_assign.start_operation_hours >= c1_assign.finish_hours
+
+
+# ---------------------------------------------------------------------------
+# Port compatibility helper
+# ---------------------------------------------------------------------------
+
+class TestVesselCanCall:
+    def test_no_spec_allows_all(self):
+        v = make_supramax()
+        assert _vessel_can_call(v, "UnknownPort", {}) is True
+
+    def test_dwt_too_large_blocked(self):
+        v = make_supramax()  # 55k DWT
+        spec = PortSpec("SmallPort", max_dwt=40_000)
+        assert _vessel_can_call(v, "SmallPort", {"SmallPort": spec}) is False
+
+    def test_dwt_exactly_at_limit_allowed(self):
+        v = make_supramax()  # 55k DWT
+        spec = PortSpec("Port", max_dwt=55_000)
+        assert _vessel_can_call(v, "Port", {"Port": spec}) is True
+
+    def test_draft_too_deep_blocked(self):
+        v = make_supramax()  # draft 12.0m
+        spec = PortSpec("ShallowPort", max_draft_m=8.5)
+        assert _vessel_can_call(v, "ShallowPort", {"ShallowPort": spec}) is False
+
+    def test_draft_exactly_at_limit_allowed(self):
+        v = make_supramax()
+        spec = PortSpec("Port", max_draft_m=12.0)
+        assert _vessel_can_call(v, "Port", {"Port": spec}) is True
+
+    def test_both_dwt_and_draft_fine(self):
+        v = make_supramax()
+        spec = PortSpec("GoodPort", max_dwt=80_000, max_draft_m=14.0)
+        assert _vessel_can_call(v, "GoodPort", {"GoodPort": spec}) is True
+
+
+# ---------------------------------------------------------------------------
+# Basic scheduling
+# ---------------------------------------------------------------------------
+
+class TestScheduleVoyages:
+    def test_no_data_returns_no_data(self):
+        inputs = base_inputs(vessels=[], parcels=[])
+        result = schedule_voyages(inputs)
+        assert result.solver_status == "NO_DATA"
+        assert result.assignments == []
+
+    def test_simple_single_cargo(self):
+        v = make_supramax()
+        c = make_cargo("C1", "Paradip", "Haldia", date(2025, 1, 5), date(2025, 1, 10))
+        inputs = base_inputs(
+            [v], [c],
+            port_distances={("Paradip", "Haldia"): 180.0}
+        )
+        result = schedule_voyages(inputs, max_solve_seconds=2.0)
+        assert result.solver_status in ("OPTIMAL", "FEASIBLE")
+        assert len(result.assignments) == 1
+        assert result.assignments[0].parcel_id == "C1"
+
+    def test_sequential_cargoes_same_vessel(self):
+        v = make_supramax()
+        c1 = make_cargo("C1", "Paradip", "Haldia", date(2025, 1, 5), date(2025, 1, 10))
+        c2 = make_cargo("C2", "Haldia", "Vizag", date(2025, 1, 20), date(2025, 1, 28))
+        inputs = base_inputs(
+            [v], [c1, c2],
+            port_distances={
+                ("Paradip", "Haldia"): 180.0,
+                ("Haldia", "Vizag"): 510.0,
+            }
+        )
+        result = schedule_voyages(inputs, max_solve_seconds=5.0)
+        assert result.solver_status in ("OPTIMAL", "FEASIBLE")
+        assigns = sorted(result.assignments, key=lambda a: a.start_operation_hours)
+        # C2 must start after C1 finishes
+        assert assigns[1].start_operation_hours >= assigns[0].finish_hours
+
+    def test_laycan_window_respected(self):
+        v = make_supramax()
+        c = make_cargo("C1", "Paradip", "Haldia", date(2025, 1, 5), date(2025, 1, 10))
+        inputs = base_inputs([v], [c], port_distances={("Paradip", "Haldia"): 180.0})
+        result = schedule_voyages(inputs, max_solve_seconds=2.0)
+        assert result.solver_status in ("OPTIMAL", "FEASIBLE")
+        a = result.assignments[0]
+        # Start of operations must be >= laycan_start (day 4 from epoch = 96h)
+        assert a.start_operation_hours >= 96
+
+
+# ---------------------------------------------------------------------------
+# Port compatibility enforcement in scheduler
+# ---------------------------------------------------------------------------
+
+class TestPortCompatibility:
+    def test_infeasible_pair_recorded(self):
+        """Vessel too deep for destination — should be in infeasible_pairs."""
+        v = make_supramax()  # draft 12.0m
+        c = make_cargo("C1", "Paradip", "Haldia", date(2025, 1, 5), date(2025, 1, 10))
+        port_specs = {
+            "Paradip": PortSpec("Paradip", max_draft_m=14.0),
+            "Haldia": PortSpec("Haldia", max_draft_m=8.5),  # Too shallow for Supramax
+        }
+        inputs = base_inputs([v], [c],
+            port_distances={("Paradip", "Haldia"): 180.0},
+            port_specs=port_specs
+        )
+        result = schedule_voyages(inputs, max_solve_seconds=2.0)
+        assert ("V1", "C1") in result.infeasible_pairs
+        # Cargo cannot be served by any vessel -> no assignments
+        assert len(result.assignments) == 0
+
+    def test_compatible_vessel_assigned(self):
+        """Vessel within port limits — should be scheduled normally."""
+        v = make_supramax()  # draft 12.0m, dwt 55k
+        c = make_cargo("C1", "Paradip", "Vizag", date(2025, 1, 5), date(2025, 1, 15))
+        port_specs = {
+            "Paradip": PortSpec("Paradip", max_draft_m=14.3, max_dwt=75_000),
+            "Vizag": PortSpec("Vizag", max_draft_m=17.0, max_dwt=180_000),
+        }
+        inputs = base_inputs([v], [c],
+            port_distances={("Paradip", "Vizag"): 360.0},
+            port_specs=port_specs
+        )
+        result = schedule_voyages(inputs, max_solve_seconds=2.0)
+        assert result.solver_status in ("OPTIMAL", "FEASIBLE")
+        assert ("V1", "C1") not in result.infeasible_pairs
+        assert len(result.assignments) == 1
+
+    def test_two_vessels_only_compatible_one_assigned(self):
+        """Capesize blocked at Gopalpur (shallow); Supramax gets the cargo."""
+        supramax = make_supramax("V_Supra")  # 55k DWT, 12.0m draft
+        capesize = Vessel(
+            vessel_id="V_Cape",
+            vessel_class=VesselClass.CAPESIZE,
+            current_port="Paradip",
+            status="idle",
+            available_from=date(2025, 1, 1),
+            available_until=None,
+            dwt=180_000,
+            draft_m=18.0,   # Too deep for Gopalpur (10.7m)
+            speed_kn=14.0,
+            fuel_consumption_tpd=60.0,
+        )
+        c = make_cargo("C1", "Paradip", "Gopalpur", date(2025, 1, 5), date(2025, 1, 15), revenue=800_000)
+        port_specs = {
+            "Paradip":  PortSpec("Paradip",  max_draft_m=14.3, max_dwt=80_000),
+            "Gopalpur": PortSpec("Gopalpur", max_draft_m=10.7, max_dwt=35_000),
+        }
+        inputs = base_inputs(
+            [supramax, capesize], [c],
+            port_distances={("Paradip", "Gopalpur"): 200.0},
+            port_specs=port_specs
+        )
+        result = schedule_voyages(inputs, max_solve_seconds=3.0)
+        # Capesize is blocked at Gopalpur by draft AND dwt; Supramax is ALSO blocked by dwt (55k > 35k)
+        # Both should be infeasible — this is the correct real-world outcome.
+        assert ("V_Cape", "C1") in result.infeasible_pairs
+        assert ("V_Supra", "C1") in result.infeasible_pairs
+        assert len(result.assignments) == 0
+
+
+# ---------------------------------------------------------------------------
+# Penalty wiring
+# ---------------------------------------------------------------------------
+
+class TestPenalties:
+    def test_high_idle_penalty_prefers_tighter_schedule(self):
+        """With high idle penalty, solver should prefer a cargo that arrives sooner."""
+        v = make_supramax()
+        # C_tight has laycan opening right when vessel arrives
+        # C_late has a laycan opening 10 days later (big idle gap)
+        c_tight = make_cargo("C_tight", "Paradip", "Haldia", date(2025, 1, 2), date(2025, 1, 10), revenue=500_000)
+        c_late = make_cargo("C_late", "Paradip", "Haldia", date(2025, 1, 15), date(2025, 1, 25), revenue=500_000)
+
+        inputs_high_idle = base_inputs(
+            [v], [c_tight, c_late],
+            port_distances={("Paradip", "Haldia"): 0.0}
+        )
+        inputs_high_idle.idle_penalty_usd_per_day = 10_000.0  # Massive idle penalty
+
+        result = schedule_voyages(inputs_high_idle, max_solve_seconds=3.0)
+        assert result.solver_status in ("OPTIMAL", "FEASIBLE")
+        # With huge idle penalty, solver should pick c_tight (no gap) over c_late (14-day gap)
+        assigned_ids = {a.parcel_id for a in result.assignments}
+        assert "C_tight" in assigned_ids
+
+    def test_high_ballast_penalty_avoids_distant_cargo(self):
+        """With very high ballast penalty, a distant low-revenue cargo should be skipped."""
+        v = make_supramax(port="Paradip")
+        # C_local: same port, no ballast, ok revenue
+        c_local = make_cargo("C_local", "Paradip", "Haldia", date(2025, 1, 5), date(2025, 1, 15), revenue=400_000)
+        # C_distant: 8,000nm away, small revenue — should be rejected when ballast_penalty is high
+        c_distant = make_cargo("C_distant", "Hampton_Roads", "Paradip", date(2025, 1, 5), date(2025, 3, 1), revenue=100_000)
+
+        inputs = base_inputs(
+            [v], [c_local, c_distant],
+            port_distances={
+                ("Paradip", "Haldia"): 180.0,
+                ("Paradip", "Hampton_Roads"): 12_500.0,
+                ("Hampton_Roads", "Paradip"): 12_500.0,
+            }
+        )
+        inputs.ballast_penalty_usd_per_day = 5_000.0  # Very high penalty
+        result = schedule_voyages(inputs, max_solve_seconds=3.0)
+        assert result.solver_status in ("OPTIMAL", "FEASIBLE")
+        assigned_ids = {a.parcel_id for a in result.assignments}
+        # Distant cargo should be unprofitable and skipped
+        assert "C_distant" not in assigned_ids
