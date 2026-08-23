@@ -5,7 +5,6 @@ It first gets the ML model's P10/P50/P90 predictions, then feeds them to the
 optimizer backtester.
 """
 
-import math
 import polars as pl
 from ml.baselines import load_split
 from ml.model_lgbm_tuned import predict as predict_lgbm

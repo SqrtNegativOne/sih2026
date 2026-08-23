@@ -41,7 +41,7 @@ def main() -> None:
     """Run the sample generation pipeline."""
     _setup_logging()
     
-    config_path = REPO_ROOT / "config" / "samples.toml"
+    config_path = REPO_ROOT / "src" / "config" / "samples.toml"
     config = load_config(config_path)
     
     master_path = REPO_ROOT / config["paths"]["master_parquet"]

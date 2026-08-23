@@ -1,9 +1,4 @@
-# AI Agents Context
-
-Welcome to the `sih2026` repository! 
-
 ## Current State
-
 - Everything in this repository is currently in an early draft state.
 - Nothing is formalized, and all code, structure, and architecture is subject to change.
 - The project is highly experimental at this phase.
@@ -11,10 +6,15 @@ Welcome to the `sih2026` repository!
 ## Folder Layout
 
 - `docs/`: Project documentation.
-- `config/`: Configuration files (e.g., sample generation settings).
-- `reference/`: Reference materials and static project context.
-- `raw_data/`: Raw source data (not processed).
+- `raw_data/`: Raw source data (not processed) and reference materials.
+- `src/config/`: Configuration files (e.g., sample generation settings).
 - `src/data/`: Processed data and model inputs/outputs.
 - `src/data_builders/`: Scripts to build processed data from raw data.
 - `src/ml/`: Machine learning models and feature engineering.
 - `src/opt/`: Optimizer and operations research models.
+
+## Style Guide
+- Use Polars over Pandas.
+- Use PyTorch over TensorFlow.
+- Use `uv` instead of `pip` as package manager, and runner.
+- Use strict typing and type hints.
