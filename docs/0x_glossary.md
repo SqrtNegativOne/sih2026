@@ -38,4 +38,4 @@
 1. Stock MARKETS (equities): NOT modeled in this project. Equities appear only as optional features in some papers.
 2. INVENTORY stocks: coal piles at power plants / ports. These DO matter: low plant stocks → urgent imports → more vessels → rate pressure + congestion. Enter as demand-pressure features, not as separate prediction targets.
 
-**Bunkers**: ship fuel. Price per tonne is a key voyage cost; VLSFO = Very Low Sulfur Fuel Oil, the IMO 2020 standard.
+**Bunkers**: ship fuel. Price per tonne is a key voyage cost; VLSFO = Very Low Sulfur Fuel Oil is the standard.

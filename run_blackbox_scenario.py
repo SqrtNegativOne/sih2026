@@ -10,38 +10,47 @@ Scenario:
 from datetime import date
 
 from opt import (
-    BLENDED_BUNKER_USD_PER_TONNE,
-    PORT_DISTANCES,
-    PORT_SPECS,
     CargoParcel,
     ForecastFan,
     OptimizerInputs,
     Vessel,
-    VesselClass,
     run_optimizer,
 )
-from opt.types import BasisEntry
+from opt.network import PortEnum, RouteFamily
+from opt.types import BasisEntry, VesselClass
 
 
 def main():
     print("Setting up Real-Life Scenario (EC India ports)...\n")
     
-    v1 = Vessel(vessel_id="Vessel_Alpha", vessel_class=VesselClass.SUPRAMAX, current_port="Paradip",
-                status="idle", available_from=date(2025, 5, 1), available_until=None,
-                dwt=55000, draft_m=12.0, speed_kn=12.0, fuel_consumption_tpd=30.0)
+    v1 = Vessel(
+        vessel_id="Vessel_Alpha", 
+        vessel_class=VesselClass.SUPRAMAX, 
+        current_port=PortEnum.PARADIP,
+        status="idle", available_from=date(2025, 5, 1), available_until=None,
+        dwt=55000, draft_m=12.0, speed_kn=12.0, fuel_consumption_tpd=30.0
+    )
                 
-    v2 = Vessel(vessel_id="Vessel_Bravo", vessel_class=VesselClass.SUPRAMAX, current_port="Richards_Bay",
-                status="idle", available_from=date(2025, 5, 1), available_until=None,
-                dwt=55000, draft_m=12.0, speed_kn=12.0, fuel_consumption_tpd=30.0)
+    v2 = Vessel(
+        vessel_id="Vessel_Bravo", 
+        vessel_class=VesselClass.SUPRAMAX, 
+        current_port=PortEnum.RICHARDS_BAY,
+        status="idle", available_from=date(2025, 5, 1), available_until=None,
+        dwt=55000, draft_m=12.0, speed_kn=12.0, fuel_consumption_tpd=30.0
+    )
                 
-    c1 = CargoParcel(parcel_id="Cargo_1_Coal", origin_port="Muara_Pantai", dest_port="Paradip",
-                     commodity="Coal", volume_dwt=50000, laycan_start=date(2025, 5, 20), laycan_end=date(2025, 5, 27),
-                     route_family="indonesia_ec_india", revenue_usd=800_000.0)
+    c1 = CargoParcel(
+        parcel_id="Cargo_1_Coal", 
+        origin_port=PortEnum.MUARA_PANTAI, 
+        dest_port=PortEnum.PARADIP,
+        commodity="Coal", volume_dwt=50000, laycan_start=date(2025, 5, 20), laycan_end=date(2025, 5, 27),
+        route_family=RouteFamily.INDONESIA_EC_INDIA, revenue_usd=800_000.0
+    )
                      
     fans = [
-        ForecastFan(VesselClass.SUPRAMAX, 7,  p10=6000, p50=8000, p90=10000),
-        ForecastFan(VesselClass.SUPRAMAX, 30, p10=5000, p50=7000, p90=9000),
-        ForecastFan(VesselClass.SUPRAMAX, 90, p10=4000, p50=6000, p90=8000),
+        ForecastFan(vessel_class=VesselClass.SUPRAMAX, horizon_days=7,  p10=6000, p50=8000, p90=10000),
+        ForecastFan(vessel_class=VesselClass.SUPRAMAX, horizon_days=30, p10=5000, p50=7000, p90=9000),
+        ForecastFan(vessel_class=VesselClass.SUPRAMAX, horizon_days=90, p10=4000, p50=6000, p90=8000),
     ]
     
     inputs = OptimizerInputs(
@@ -52,13 +61,11 @@ def main():
         contract_term_days=30,
         forecasts=fans,
         basis={
-            "Paradip":      BasisEntry("Paradip",      -0.10, 0.1),
-            "Richards_Bay": BasisEntry("Richards_Bay",  0.00, 0.1),
-            "Singapore":    BasisEntry("Singapore",     0.20, 0.1),
+            RouteFamily.INTRA_EC_INDIA:        BasisEntry(route_family=RouteFamily.INTRA_EC_INDIA,      basis_mean=-0.10, basis_std=0.1),
+            RouteFamily.SOUTH_AFRICA_EC_INDIA: BasisEntry(route_family=RouteFamily.SOUTH_AFRICA_EC_INDIA,  basis_mean=0.00, basis_std=0.1),
+            RouteFamily.SINGAPORE_EC_INDIA:    BasisEntry(route_family=RouteFamily.SINGAPORE_EC_INDIA,     basis_mean=0.20, basis_std=0.1),
+            RouteFamily.INDONESIA_EC_INDIA:    BasisEntry(route_family=RouteFamily.INDONESIA_EC_INDIA,     basis_mean=-0.05, basis_std=0.1),
         },
-        port_specs=PORT_SPECS,
-        port_distances=PORT_DISTANCES,
-        bunker_price_usd_per_tonne=BLENDED_BUNKER_USD_PER_TONNE,
         risk_tolerance=0.0
     )
     

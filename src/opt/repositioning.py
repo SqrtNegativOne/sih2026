@@ -10,11 +10,12 @@ from dataclasses import dataclass
 
 from opt.ceiling import compute_ceiling
 from opt.types import OptimizerInputs, Vessel
+from opt.network import PortEnum, RouteEnum, BLENDED_BUNKER_USD_PER_TONNE
 
 
 @dataclass
 class RepositionOption:
-    port_id: str
+    port: PortEnum
     ballast_distance_nm: float
     ballast_days: float
     wait_days: float
@@ -28,27 +29,26 @@ class RepositionOption:
 @dataclass
 class RepositionRecommendation:
     vessel_id: str
-    current_port: str
-    recommended_port: str
+    current_port: PortEnum
+    recommended_port: PortEnum
     options: list[RepositionOption]
 
 
 def _get_distance_nm(
-    port_a: str, port_b: str, distances: dict[tuple[str, str], float]
+    port_a: PortEnum, port_b: PortEnum
 ) -> float:
-    """Safely get distance between ports (symmetric). Defaults to 0 if same."""
     if port_a == port_b:
         return 0.0
-    if (port_a, port_b) in distances:
-        return distances[(port_a, port_b)]
-    if (port_b, port_a) in distances:
-        return distances[(port_b, port_a)]
-    return 5_000.0  # Safe pessimistic fallback
+    for r in RouteEnum:
+        if (r.value.origin.id == port_a.value.id and r.value.destination.id == port_b.value.id) or \
+           (r.value.origin.id == port_b.value.id and r.value.destination.id == port_a.value.id):
+            return r.value.distance_nm
+    return 5_000.0
 
 
 def recommend_repositioning(
     vessel: Vessel,
-    candidate_ports: list[str],
+    candidate_ports: list[PortEnum],
     inputs: OptimizerInputs,
     assumed_voyage_days: int = 30,
 ) -> RepositionRecommendation:
@@ -76,29 +76,25 @@ def recommend_repositioning(
 
     for port in candidate_ports:
         # Distance and Time
-        dist_nm = _get_distance_nm(vessel.current_port, port, inputs.port_distances)
+        dist_nm = _get_distance_nm(vessel.current_port, port)
         speed = vessel.speed_kn if vessel.speed_kn > 0 else 12.0
         ballast_days = dist_nm / (speed * 24.0)
         
         # Queue / Wait Time
         wait_days = 0.0
-        if port in inputs.port_specs:
-            wait_days = inputs.port_specs[port].expected_wait_days
+        wait_days = port.value.expected_wait_days
 
         # Costs
-        fuel_cost = ballast_days * vessel.fuel_consumption_tpd * inputs.bunker_price_usd_per_tonne
+        fuel_cost = ballast_days * vessel.fuel_consumption_tpd * BLENDED_BUNKER_USD_PER_TONNE
         ballast_penalty = ballast_days * inputs.ballast_penalty_usd_per_day
         ballast_cost_usd = fuel_cost + ballast_penalty
         
         wait_cost_usd = wait_days * inputs.idle_penalty_usd_per_day
 
-        # Revenue (Expected TCE adjusted by route basis)
-        # We assume the route_family is roughly named after the origin port for this heuristic,
-        # or we check if there's a specific basis entry mapping for this port.
-        # In a real app, you'd map port -> average route basis.
+        # Revenue (Expected TCE)
+        # Without a specific cargo, we don't know the exact route family to apply.
+        # We assume the base P50 TCE.
         basis_mean = 0.0
-        if port in inputs.basis:
-            basis_mean = inputs.basis[port].basis_mean
             
         port_tce = base_tce * (1.0 + basis_mean)
         
@@ -107,7 +103,7 @@ def recommend_repositioning(
         score = expected_voyage_profit - ballast_cost_usd - wait_cost_usd
 
         options.append(RepositionOption(
-            port_id=port,
+            port=port,
             ballast_distance_nm=dist_nm,
             ballast_days=ballast_days,
             wait_days=wait_days,
@@ -121,7 +117,7 @@ def recommend_repositioning(
     # Sort options by score (descending)
     options.sort(key=lambda o: o.score_usd, reverse=True)
     
-    best_port = options[0].port_id if options else vessel.current_port
+    best_port = options[0].port if options else vessel.current_port
 
     return RepositionRecommendation(
         vessel_id=vessel.vessel_id,

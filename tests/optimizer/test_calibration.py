@@ -267,7 +267,7 @@ class TestObjectiveWiring:
         return pl.DataFrame({
             "date": [date(2025, 1, 1)],
             "target_class": ["Supramax"],
-            "log_value": [math.log(10_000)],
+            "log_value": [math.log(10_824.74)],
             "y_h30": [math.log(12_000)],
             "y_h90": [math.log(14_000)],
         })

@@ -12,6 +12,7 @@ from opt.ceiling import lock_or_wait
 from opt.monte_carlo import estimate_savings_distribution
 from opt.repositioning import recommend_repositioning
 from opt.types import OptimizerInputs, VesselClass
+from opt.network import PortEnum
 from opt.voyage import schedule_voyages
 
 
@@ -43,13 +44,18 @@ def run_optimizer(inputs: OptimizerInputs, target_class: VesselClass) -> Optimiz
     
     # --- 1. Lock/Wait & Ceiling ---
     tc_quote = inputs.tc_quotes.get(target_class, 0.0)
+    # Use the route family of the first parcel if available to inform the TC vs Spot decision
+    route_basis = None
+    if inputs.parcels and inputs.parcels[0].route_family in inputs.basis:
+        route_basis = inputs.basis[inputs.parcels[0].route_family]
+        
     lw_result = lock_or_wait(
         forecasts=inputs.forecasts,
         vessel_class=target_class,
         contract_term_days=inputs.contract_term_days,
         today_quote_usd_per_day=tc_quote,
         risk_tolerance=inputs.risk_tolerance,
-        basis=None # Assume global for this simple wrapper
+        basis=route_basis
     )
     
     if lw_result.action == "LOCK":
@@ -85,7 +91,7 @@ def run_optimizer(inputs: OptimizerInputs, target_class: VesselClass) -> Optimiz
     
     repo_lines = []
     # Arbitrary candidate ports for the heuristic
-    candidates = list(inputs.port_specs.keys()) if inputs.port_specs else ["Singapore", "Rotterdam", "Houston"]
+    candidates = list(PortEnum)
     
     for v in idle_vessels:
         repo_rec = recommend_repositioning(v, candidates, inputs)

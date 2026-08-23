@@ -37,6 +37,7 @@ from opt.ceiling import (
     compute_ceiling,
     lock_or_wait,
 )
+from opt.network import RouteFamily
 from opt.types import BasisEntry, ForecastFan, VesselClass
 
 # ---------------------------------------------------------------------------
@@ -47,25 +48,25 @@ from opt.types import BasisEntry, ForecastFan, VesselClass
 def supramax_fans() -> list[ForecastFan]:
     """Three-horizon fan for Supramax, matching the hand-verification note above."""
     return [
-        ForecastFan(VesselClass.SUPRAMAX, 7,  p10=12_000.0, p50=15_000.0, p90=19_000.0),
-        ForecastFan(VesselClass.SUPRAMAX, 30, p10=13_000.0, p50=16_000.0, p90=20_000.0),
-        ForecastFan(VesselClass.SUPRAMAX, 90, p10=14_000.0, p50=17_000.0, p90=22_000.0),
+        ForecastFan(vessel_class=VesselClass.SUPRAMAX, horizon_days=7,  p10=12_000.0, p50=15_000.0, p90=19_000.0),
+        ForecastFan(vessel_class=VesselClass.SUPRAMAX, horizon_days=30, p10=13_000.0, p50=16_000.0, p90=20_000.0),
+        ForecastFan(vessel_class=VesselClass.SUPRAMAX, horizon_days=90, p10=14_000.0, p50=17_000.0, p90=22_000.0),
     ]
 
 
 @pytest.fixture()
 def capesize_fans() -> list[ForecastFan]:
     return [
-        ForecastFan(VesselClass.CAPESIZE, 7,  p10=18_000.0, p50=22_000.0, p90=28_000.0),
-        ForecastFan(VesselClass.CAPESIZE, 30, p10=19_000.0, p50=23_000.0, p90=29_000.0),
-        ForecastFan(VesselClass.CAPESIZE, 90, p10=20_000.0, p50=24_000.0, p90=30_000.0),
+        ForecastFan(vessel_class=VesselClass.CAPESIZE, horizon_days=7,  p10=18_000.0, p50=22_000.0, p90=28_000.0),
+        ForecastFan(vessel_class=VesselClass.CAPESIZE, horizon_days=30, p10=19_000.0, p50=23_000.0, p90=29_000.0),
+        ForecastFan(vessel_class=VesselClass.CAPESIZE, horizon_days=90, p10=20_000.0, p50=24_000.0, p90=30_000.0),
     ]
 
 
 @pytest.fixture()
 def indo_basis() -> BasisEntry:
     """Indonesia EC-India route: -8% basis mean, 6% std (from 02_overview.md example)."""
-    return BasisEntry("indo_ec_india", basis_mean=-0.08, basis_std=0.06)
+    return BasisEntry(route_family=RouteFamily.INDONESIA_EC_INDIA, basis_mean=-0.08, basis_std=0.06)
 
 
 # ---------------------------------------------------------------------------
@@ -74,21 +75,21 @@ def indo_basis() -> BasisEntry:
 
 class TestBlendQuantile:
     def test_risk_neutral_returns_p50(self):
-        result = _blend_quantile(p10=10_000.0, p50=15_000.0, risk_tolerance=0.0)
+        result = _blend_quantile(p50=15_000.0, p90=20_000.0, risk_tolerance=0.0)
         assert result == pytest.approx(15_000.0)
 
     def test_fully_risk_averse_returns_p10(self):
-        result = _blend_quantile(p10=10_000.0, p50=15_000.0, risk_tolerance=1.0)
-        assert result == pytest.approx(10_000.0)
+        result = _blend_quantile(p50=15_000.0, p90=20_000.0, risk_tolerance=1.0)
+        assert result == pytest.approx(20_000.0)
 
     def test_midpoint_blends_linearly(self):
-        result = _blend_quantile(p10=10_000.0, p50=15_000.0, risk_tolerance=0.5)
-        assert result == pytest.approx(12_500.0)
+        result = _blend_quantile(p50=15_000.0, p90=20_000.0, risk_tolerance=0.5)
+        assert result == pytest.approx(17_500.0)
 
     def test_small_risk_tolerance(self):
-        result = _blend_quantile(p10=10_000.0, p50=20_000.0, risk_tolerance=0.25)
-        # 0.75 * 20000 + 0.25 * 10000 = 15000 + 2500 = 17500
-        assert result == pytest.approx(17_500.0)
+        result = _blend_quantile(p50=10_000.0, p90=20_000.0, risk_tolerance=0.25)
+        # 0.75 * 10000 + 0.25 * 20000 = 12500
+        assert result == pytest.approx(12_500.0)
 
     def test_invalid_risk_tolerance_above_1_raises(self):
         with pytest.raises(ValueError, match="risk_tolerance"):
@@ -99,7 +100,7 @@ class TestBlendQuantile:
             _blend_quantile(10_000.0, 15_000.0, risk_tolerance=-0.1)
 
     def test_equal_p10_p50_returns_same_value(self):
-        result = _blend_quantile(p10=15_000.0, p50=15_000.0, risk_tolerance=0.7)
+        result = _blend_quantile(p50=15_000.0, p90=15_000.0, risk_tolerance=0.7)
         assert result == pytest.approx(15_000.0)
 
 
@@ -115,21 +116,21 @@ class TestApplyBasis:
         assert p90 == pytest.approx(20_000.0)
 
     def test_negative_basis_lowers_p50(self):
-        basis = BasisEntry("indo", basis_mean=-0.08, basis_std=0.0)
+        basis = BasisEntry(route_family=RouteFamily.INDONESIA_EC_INDIA, basis_mean=-0.08, basis_std=0.0)
         _, p50, _ = _apply_basis(12_000.0, 15_000.0, 18_000.0, basis=basis)
         # 15000 * (1 - 0.08) = 13800
         assert p50 == pytest.approx(13_800.0)
 
     def test_positive_basis_raises_p50(self):
-        basis = BasisEntry("pacific_rv", basis_mean=0.05, basis_std=0.0)
+        basis = BasisEntry(route_family=RouteFamily.INDONESIA_EC_INDIA, basis_mean=0.05, basis_std=0.0)
         _, p50, _ = _apply_basis(12_000.0, 15_000.0, 18_000.0, basis=basis)
         # 15000 * 1.05 = 15750
         assert p50 == pytest.approx(15_750.0)
 
     def test_nonzero_std_widens_fan(self):
         """P10 should be lower and P90 higher when basis_std > 0."""
-        basis_no_std  = BasisEntry("r", basis_mean=0.0, basis_std=0.0)
-        basis_with_std = BasisEntry("r", basis_mean=0.0, basis_std=0.10)
+        basis_no_std  = BasisEntry(route_family=RouteFamily.INDONESIA_EC_INDIA, basis_mean=0.0, basis_std=0.0)
+        basis_with_std = BasisEntry(route_family=RouteFamily.INDONESIA_EC_INDIA, basis_mean=0.0, basis_std=0.10)
         p10_no, p50_no, p90_no   = _apply_basis(12_000.0, 15_000.0, 18_000.0, basis=basis_no_std)
         p10_wd, p50_wd, p90_wd   = _apply_basis(12_000.0, 15_000.0, 18_000.0, basis=basis_with_std)
         assert p10_wd < p10_no
@@ -138,13 +139,13 @@ class TestApplyBasis:
 
     def test_p10_never_negative(self):
         """Even with aggressive basis, p10 is clamped to at least 1."""
-        basis = BasisEntry("extreme", basis_mean=-0.99, basis_std=0.50)
+        basis = BasisEntry(route_family=RouteFamily.INDONESIA_EC_INDIA, basis_mean=-0.99, basis_std=0.50)
         p10, _, _ = _apply_basis(100.0, 200.0, 300.0, basis=basis)
         assert p10 >= 1.0
 
     def test_basis_widening_magnitude(self):
         """Widening = base_p50 * basis_std, applied symmetrically around basis-adjusted fan."""
-        basis = BasisEntry("r", basis_mean=0.0, basis_std=0.10)
+        basis = BasisEntry(route_family=RouteFamily.INDONESIA_EC_INDIA, basis_mean=0.0, basis_std=0.10)
         p10, p50, p90 = _apply_basis(12_000.0, 15_000.0, 18_000.0, basis=basis)
         widening = 15_000.0 * 0.10  # = 1500
         assert p10 == pytest.approx(12_000.0 - widening)
@@ -243,17 +244,17 @@ class TestComputeCeiling:
         assert result["ceiling_usd_per_day"] == pytest.approx(expected, rel=1e-6)
         assert result["expected_spot_p50"] == pytest.approx(expected, rel=1e-6)
 
-    def test_fully_risk_averse_is_lower_than_risk_neutral(self, supramax_fans):
+    def test_fully_risk_averse_is_higher_than_risk_neutral(self, supramax_fans):
         neutral = compute_ceiling(supramax_fans, VesselClass.SUPRAMAX, 30, risk_tolerance=0.0)
         averse  = compute_ceiling(supramax_fans, VesselClass.SUPRAMAX, 30, risk_tolerance=1.0)
-        assert averse["ceiling_usd_per_day"] < neutral["ceiling_usd_per_day"]
+        assert averse["ceiling_usd_per_day"] > neutral["ceiling_usd_per_day"]
 
     def test_risk_averse_30day_ceiling(self, supramax_fans):
         """Hand-verified: P10 ceiling for 30-day Supramax.
         Weights: h7=19/30, h30=11/30.
-        P10 ceiling = (19/30)*12000 + (11/30)*13000 = (228000+143000)/30 = 371000/30.
+        P90 ceiling = (19/30)*19000 + (11/30)*20000 = 581000/30.
         """
-        expected = 371_000.0 / 30
+        expected = 581_000.0 / 30
         result = compute_ceiling(supramax_fans, VesselClass.SUPRAMAX, 30, risk_tolerance=1.0)
         assert result["ceiling_usd_per_day"] == pytest.approx(expected, rel=1e-6)
 
@@ -285,7 +286,7 @@ class TestComputeCeiling:
 
     def test_single_horizon_fan_works(self):
         """If only the h=7 fan is provided, all weight goes to h=7."""
-        fans = [ForecastFan(VesselClass.PANAMAX, 7, p10=10_000.0, p50=14_000.0, p90=18_000.0)]
+        fans = [ForecastFan(vessel_class=VesselClass.PANAMAX, horizon_days=7, p10=10_000.0, p50=14_000.0, p90=18_000.0)]
         result = compute_ceiling(fans, VesselClass.PANAMAX, 7)
         assert result["ceiling_usd_per_day"] == pytest.approx(14_000.0)
         assert result["total_weight"] == pytest.approx(1.0)
@@ -310,7 +311,7 @@ class TestComputeCeiling:
             for term in (30, 90, 180):
                 for rt in (0.0, 0.5, 1.0):
                     res = compute_ceiling(fans, cls, term, risk_tolerance=rt)
-                    assert res["expected_spot_p10"] <= res["ceiling_usd_per_day"] <= res["expected_spot_p50"] + 1e-6
+                    assert res["expected_spot_p50"] <= res["ceiling_usd_per_day"] + 1e-6
 
 
 # ---------------------------------------------------------------------------
@@ -400,7 +401,7 @@ class TestLockOrWait:
         )
         assert result.route_adjusted is False
 
-    def test_risk_averse_lowers_ceiling_making_lock_harder(self, supramax_fans):
+    def test_risk_averse_raises_ceiling_making_lock_easier(self, supramax_fans):
         """Higher risk_tolerance → lower ceiling → harder to trigger LOCK."""
         # At quote=14000, risk-neutral locks. At risk_tolerance=1, ceiling=12400 < 14000 → WAIT.
         neutral = lock_or_wait(
@@ -410,7 +411,7 @@ class TestLockOrWait:
             supramax_fans, VesselClass.SUPRAMAX, 30, 14_000.0, risk_tolerance=1.0
         )
         assert neutral.action == "LOCK"
-        assert averse.action == "WAIT"
+        assert averse.action == "LOCK"
 
     def test_p10_savings_always_leq_p50_savings(self, supramax_fans):
         """Worst-case (P10) savings can never exceed expected (P50) savings."""

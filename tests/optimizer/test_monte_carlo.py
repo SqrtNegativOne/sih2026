@@ -19,9 +19,9 @@ from opt.types import ForecastFan, VesselClass
 def fans_supramax() -> list[ForecastFan]:
     """Standard 3-horizon fan used across multiple tests."""
     return [
-        ForecastFan(VesselClass.SUPRAMAX, 7,  p10=8000,  p50=10000, p90=12000),
-        ForecastFan(VesselClass.SUPRAMAX, 30, p10=9000,  p50=12000, p90=15000),
-        ForecastFan(VesselClass.SUPRAMAX, 90, p10=10000, p50=14000, p90=18000),
+        ForecastFan(vessel_class=VesselClass.SUPRAMAX, horizon_days=7,  p10=8000,  p50=10000, p90=12000),
+        ForecastFan(vessel_class=VesselClass.SUPRAMAX, horizon_days=30, p10=9000,  p50=12000, p90=15000),
+        ForecastFan(vessel_class=VesselClass.SUPRAMAX, horizon_days=90, p10=10000, p50=14000, p90=18000),
     ]
 
 
@@ -160,9 +160,9 @@ class TestPriceFloor:
     def _run_with_very_low_fans(self, theta: float, floor: float = 4000.0) -> SavingsDistribution:
         """Create fans well below the floor to stress-test the floor logic."""
         fans = [
-            ForecastFan(VesselClass.SUPRAMAX, 7,  p10=100,  p50=500,  p90=1000),
-            ForecastFan(VesselClass.SUPRAMAX, 30, p10=200,  p50=600,  p90=1200),
-            ForecastFan(VesselClass.SUPRAMAX, 90, p10=300,  p50=700,  p90=1400),
+            ForecastFan(vessel_class=VesselClass.SUPRAMAX, horizon_days=7,  p10=100,  p50=500,  p90=1000),
+            ForecastFan(vessel_class=VesselClass.SUPRAMAX, horizon_days=30, p10=200,  p50=600,  p90=1200),
+            ForecastFan(vessel_class=VesselClass.SUPRAMAX, horizon_days=90, p10=300,  p50=700,  p90=1400),
         ]
         cfg = MonteCarloConfig(theta=theta, sigma_long=0.30, floor_usd=floor, num_simulations=500)
         return estimate_savings_distribution(
@@ -193,8 +193,8 @@ class TestPriceFloor:
     def test_floor_custom_value(self) -> None:
         """Custom floor_usd is respected for both theta modes."""
         fans = [
-            ForecastFan(VesselClass.SUPRAMAX, 7,  p10=1000, p50=3000, p90=5000),
-            ForecastFan(VesselClass.SUPRAMAX, 30, p10=1000, p50=3000, p90=5000),
+            ForecastFan(vessel_class=VesselClass.SUPRAMAX, horizon_days=7,  p10=1000, p50=3000, p90=5000),
+            ForecastFan(vessel_class=VesselClass.SUPRAMAX, horizon_days=30, p10=1000, p50=3000, p90=5000),
         ]
         custom_floor = 6000.0
         cfg = MonteCarloConfig(theta=0.0, floor_usd=custom_floor, num_simulations=500)

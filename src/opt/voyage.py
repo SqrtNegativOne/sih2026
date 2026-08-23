@@ -23,7 +23,8 @@ from typing import Any
 
 from ortools.sat.python import cp_model
 
-from opt.types import OptimizerInputs, PortSpec, Vessel, CargoParcel
+from opt.types import OptimizerInputs, Vessel, CargoParcel
+from opt.network import PortEnum, RouteEnum, BLENDED_BUNKER_USD_PER_TONNE
 
 
 @dataclass
@@ -48,28 +49,26 @@ class VoyageScheduleResult:
 
 
 def _get_distance_nm(
-    port_a: str, port_b: str, distances: dict[tuple[str, str], float]
+    port_a: PortEnum, port_b: PortEnum
 ) -> float:
-    """Safely get distance between ports (symmetric). Defaults to 0 if same port."""
     if port_a == port_b:
         return 0.0
-    if (port_a, port_b) in distances:
-        return distances[(port_a, port_b)]
-    if (port_b, port_a) in distances:
-        return distances[(port_b, port_a)]
+    for r in RouteEnum:
+        if (r.value.origin.id == port_a.value.id and r.value.destination.id == port_b.value.id) or \
+           (r.value.origin.id == port_b.value.id and r.value.destination.id == port_a.value.id):
+            return r.value.distance_nm
     return 10_000.0
 
 
 def _vessel_can_call(
-    vessel: Vessel, port_id: str, port_specs: dict[str, PortSpec]
+    vessel: Vessel, port: PortEnum
 ) -> bool:
-    """Return True if port specs allow this vessel to berth.
-
-    If port is not in port_specs, we assume no restriction (missing data).
-    """
-    spec = port_specs.get(port_id)
-    if spec is None:
-        return True
+    spec = port.value
+    if spec.max_dwt is not None and vessel.dwt > spec.max_dwt:
+        return False
+    if spec.max_draft_m is not None and vessel.draft_m > spec.max_draft_m:
+        return False
+    return True
     if spec.max_dwt is not None and vessel.dwt > spec.max_dwt:
         return False
     if spec.max_draft_m is not None and vessel.draft_m > spec.max_draft_m:
@@ -126,8 +125,8 @@ def schedule_voyages(
     for v in V:
         for c in C:
             ok = (
-                _vessel_can_call(v, c.origin_port, inputs.port_specs)
-                and _vessel_can_call(v, c.dest_port, inputs.port_specs)
+                _vessel_can_call(v, c.origin_port)
+                and _vessel_can_call(v, c.dest_port)
             )
             feasible[v.vessel_id, c.parcel_id] = ok
             if not ok:
@@ -205,13 +204,13 @@ def schedule_voyages(
     port_hours_map: dict[tuple[str, str], int] = {}
     for v in V:
         for c in C:
-            laden_nm = _get_distance_nm(c.origin_port, c.dest_port, inputs.port_distances)
+            laden_nm = _get_distance_nm(c.origin_port, c.dest_port)
             laden_h = int(laden_nm / v.speed_kn) if v.speed_kn > 0 else 0
             laden_hours_map[v.vessel_id, c.parcel_id] = laden_h
 
             # Port time from handling rate if available, else 4 days default
-            origin_spec = inputs.port_specs.get(c.origin_port)
-            dest_spec = inputs.port_specs.get(c.dest_port)
+            origin_spec = c.origin_port.value
+            dest_spec = c.dest_port.value
             if origin_spec and origin_spec.handling_rate_tph:
                 load_h = int(c.volume_dwt / origin_spec.handling_rate_tph)
             else:
@@ -244,7 +243,7 @@ def schedule_voyages(
             model.Add(fin == st + duration).OnlyEnforceIf(x[v_id, c_id])
 
             # Ballast from vessel home to first cargo
-            ballast_nm = _get_distance_nm(v.current_port, c.origin_port, inputs.port_distances)
+            ballast_nm = _get_distance_nm(v.current_port, c.origin_port)
             ballast_h = int(ballast_nm / v.speed_kn) if v.speed_kn > 0 else 0
             model.Add(arr >= vessel_props[v_id]["available"] + ballast_h).OnlyEnforceIf(
                 start_node[v_id, c_id]
@@ -254,7 +253,7 @@ def schedule_voyages(
             for c2 in C:
                 if c_id == c2.parcel_id:
                     continue
-                b_nm = _get_distance_nm(c.dest_port, c2.origin_port, inputs.port_distances)
+                b_nm = _get_distance_nm(c.dest_port, c2.origin_port)
                 b_h = int(b_nm / v.speed_kn) if v.speed_kn > 0 else 0
                 model.Add(
                     arrival_time[v_id, c2.parcel_id] >= fin + b_h
@@ -268,7 +267,7 @@ def schedule_voyages(
     SCALE = 100  # 1 unit = $0.01
     idle_penalty_per_hour = int(inputs.idle_penalty_usd_per_day / 24 * SCALE)
     ballast_penalty_per_hour = int(inputs.ballast_penalty_usd_per_day / 24 * SCALE)
-    bunker_per_tonne = inputs.bunker_price_usd_per_tonne
+    bunker_per_tonne = BLENDED_BUNKER_USD_PER_TONNE
 
     profit_terms: list[Any] = []
 
@@ -285,7 +284,7 @@ def schedule_voyages(
             profit_terms.append(contrib)
 
             # --- Laden fuel cost ---
-            laden_nm = _get_distance_nm(c.origin_port, c.dest_port, inputs.port_distances)
+            laden_nm = _get_distance_nm(c.origin_port, c.dest_port)
             laden_days = laden_nm / (v.speed_kn * 24.0) if v.speed_kn > 0 else 0
             laden_fuel_cost_scaled = int(laden_days * v.fuel_consumption_tpd * bunker_per_tonne * SCALE)
 
@@ -295,7 +294,7 @@ def schedule_voyages(
             profit_terms.append(-laden_cost_var)
 
             # --- Ballast fuel + penalty from vessel home to first cargo ---
-            b_nm_start = _get_distance_nm(v.current_port, c.origin_port, inputs.port_distances)
+            b_nm_start = _get_distance_nm(v.current_port, c.origin_port)
             b_days_start = b_nm_start / (v.speed_kn * 24.0) if v.speed_kn > 0 else 0
             b_fuel_start_scaled = int(b_days_start * v.fuel_consumption_tpd * bunker_per_tonne * SCALE)
             b_penalty_start_scaled = int(b_days_start * 24 * ballast_penalty_per_hour)
@@ -308,7 +307,7 @@ def schedule_voyages(
             profit_terms.append(-start_cost_var)
 
             # --- Port queue wait penalty at this cargo's load port ---
-            origin_spec = inputs.port_specs.get(c.origin_port)
+            origin_spec = c.origin_port.value
             wait_h_expected = int((origin_spec.expected_wait_days if origin_spec else 0) * 24)
             wait_penalty_scaled = wait_h_expected * idle_penalty_per_hour
 
@@ -317,11 +316,20 @@ def schedule_voyages(
             model.Add(wait_cost_var == 0).OnlyEnforceIf(x[v_id, c_id].Not())
             profit_terms.append(-wait_cost_var)
 
+            # --- Early arrival wait penalty (arriving before laycan) ---
+            early_arr_gap = model.NewIntVar(0, max_time_hours, f"early_arr_{v_id}_{c_id}")
+            model.Add(early_arr_gap == st - arr).OnlyEnforceIf(x[v_id, c_id])
+            model.Add(early_arr_gap == 0).OnlyEnforceIf(x[v_id, c_id].Not())
+            early_arr_cost = model.NewIntVar(0, 500_000_000, f"early_arr_cost_{v_id}_{c_id}")
+            model.Add(early_arr_cost == early_arr_gap * idle_penalty_per_hour).OnlyEnforceIf(x[v_id, c_id])
+            model.Add(early_arr_cost == 0).OnlyEnforceIf(x[v_id, c_id].Not())
+            profit_terms.append(-early_arr_cost)
+
             # --- Ballast fuel + penalty + inter-cargo idle gap for transitions ---
             for c2 in C:
                 if c_id == c2.parcel_id:
                     continue
-                b_nm = _get_distance_nm(c.dest_port, c2.origin_port, inputs.port_distances)
+                b_nm = _get_distance_nm(c.dest_port, c2.origin_port)
                 b_days = b_nm / (v.speed_kn * 24.0) if v.speed_kn > 0 else 0
                 b_fuel_scaled = int(b_days * v.fuel_consumption_tpd * bunker_per_tonne * SCALE)
                 b_penalty_scaled = int(b_days * 24 * ballast_penalty_per_hour)
@@ -382,15 +390,14 @@ def schedule_voyages(
             # Ballast hours to get here
             if not assignments or assignments[-1].vessel_id != v_id:
                 # First cargo for this vessel
-                b_nm = _get_distance_nm(v.current_port, next(c.origin_port for c in C if c.parcel_id == curr_c_id), inputs.port_distances)
+                b_nm = _get_distance_nm(v.current_port, next(c.origin_port for c in C if c.parcel_id == curr_c_id))
                 b_h = int(b_nm / v.speed_kn) if v.speed_kn > 0 else 0
                 inter_gap_h = 0
             else:
                 prev_fin = assignments[-1].finish_hours
                 b_nm = _get_distance_nm(
                     next(c.dest_port for c in C if c.parcel_id == assignments[-1].parcel_id),
-                    next(c.origin_port for c in C if c.parcel_id == curr_c_id),
-                    inputs.port_distances
+                    next(c.origin_port for c in C if c.parcel_id == curr_c_id)
                 )
                 b_h = int(b_nm / v.speed_kn) if v.speed_kn > 0 else 0
                 inter_gap_h = arr - prev_fin - b_h

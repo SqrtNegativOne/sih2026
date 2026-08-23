@@ -135,7 +135,7 @@ def _build_fan(
     # Guard against miscalibrated quantile crossings from the model
     if not (p10 <= p50 <= p90) or p10 <= 0:
         return None
-    return ForecastFan(cls, horizon, p10=p10, p50=p50, p90=p90)
+    return ForecastFan(vessel_class=cls, horizon_days=horizon, p10=p10, p50=p50, p90=p90)
 
 
 def simulate(
