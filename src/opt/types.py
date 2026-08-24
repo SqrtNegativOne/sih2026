@@ -51,7 +51,8 @@ class Vessel(BaseModel):
     dwt: float
     draft_m: float
     speed_kn: float
-    fuel_consumption_tpd: float
+    laden_fuel_consumption_tpd: float
+    ballast_fuel_consumption_tpd: float
 
 class CargoParcel(BaseModel):
     model_config = ConfigDict(frozen=True)

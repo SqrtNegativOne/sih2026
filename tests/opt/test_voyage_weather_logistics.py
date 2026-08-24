@@ -18,7 +18,8 @@ def test_voyage_with_weather_and_port_delays():
             dwt=35000,
             draft_m=8.0,
             speed_kn=10.0,
-            fuel_consumption_tpd=20.0,
+            laden_fuel_consumption_tpd=20.0,
+            ballast_fuel_consumption_tpd=18.0,
         )
     ]
     

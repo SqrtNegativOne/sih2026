@@ -375,7 +375,7 @@ def schedule_voyages(
             # --- Laden fuel cost ---
             laden_nm = _get_distance_nm(c.origin_port, c.dest_port)
             laden_days = laden_nm / (v.speed_kn * 24.0) if v.speed_kn > 0 else 0
-            laden_fuel_cost_scaled = int(laden_days * v.fuel_consumption_tpd * bunker_per_tonne * SCALE)
+            laden_fuel_cost_scaled = int(laden_days * v.laden_fuel_consumption_tpd * bunker_per_tonne * SCALE)
 
             laden_cost_var = model.NewIntVar(0, 500_000_000, f"laden_cost_{v_id}_{c_id}")
             model.Add(laden_cost_var == laden_fuel_cost_scaled).OnlyEnforceIf(x[v_id, c_id])
@@ -385,7 +385,7 @@ def schedule_voyages(
             # --- Ballast fuel from vessel home to first cargo ---
             b_nm_start = _get_distance_nm(v.current_port, c.origin_port)
             b_days_start = b_nm_start / (v.speed_kn * 24.0) if v.speed_kn > 0 else 0
-            b_fuel_start_scaled = int(b_days_start * v.fuel_consumption_tpd * bunker_per_tonne * SCALE)
+            b_fuel_start_scaled = int(b_days_start * v.ballast_fuel_consumption_tpd * bunker_per_tonne * SCALE)
 
             start_cost_var = model.NewIntVar(0, 500_000_000, f"start_cost_{v_id}_{c_id}")
             model.Add(start_cost_var == b_fuel_start_scaled).OnlyEnforceIf(
@@ -419,7 +419,7 @@ def schedule_voyages(
                     continue
                 b_nm = _get_distance_nm(c.dest_port, c2.origin_port)
                 b_days = b_nm / (v.speed_kn * 24.0) if v.speed_kn > 0 else 0
-                b_fuel_scaled = int(b_days * v.fuel_consumption_tpd * bunker_per_tonne * SCALE)
+                b_fuel_scaled = int(b_days * v.ballast_fuel_consumption_tpd * bunker_per_tonne * SCALE)
                 b_hours_int = int(b_days * 24)
 
                 trans_cost_var = model.NewIntVar(0, 500_000_000, f"tr_cost_{v_id}_{c_id}_{c2.parcel_id}")

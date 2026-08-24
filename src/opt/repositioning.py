@@ -85,7 +85,7 @@ def recommend_repositioning(
         wait_days = port.value.expected_wait_days
 
         # Costs
-        fuel_cost = ballast_days * vessel.fuel_consumption_tpd * BLENDED_BUNKER_USD_PER_TONNE
+        fuel_cost = ballast_days * vessel.ballast_fuel_consumption_tpd * BLENDED_BUNKER_USD_PER_TONNE
         ballast_cost_usd = fuel_cost
         
         wait_cost_usd = wait_days * inputs.opex_usd_per_day

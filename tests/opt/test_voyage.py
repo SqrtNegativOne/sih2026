@@ -22,7 +22,8 @@ def make_supramax(vessel_id: str = "V1", port: PortEnum = PortEnum.PARADIP) -> V
         dwt=55_000,
         draft_m=12.0,
         speed_kn=12.0,
-        fuel_consumption_tpd=30.0,
+        laden_fuel_consumption_tpd=30.0,
+        ballast_fuel_consumption_tpd=25.0,
     )
 
 
@@ -184,7 +185,8 @@ class TestPortCompatibility:
             dwt=180_000,
             draft_m=18.0,   # Too deep for Gopalpur (10.7m)
             speed_kn=14.0,
-            fuel_consumption_tpd=60.0,
+            laden_fuel_consumption_tpd=60.0,
+            ballast_fuel_consumption_tpd=50.0,
         )
         c = make_cargo("C1", PortEnum.PARADIP, PortEnum.GOPALPUR, date(2025, 1, 5), date(2025, 1, 15), revenue=800_000)
         

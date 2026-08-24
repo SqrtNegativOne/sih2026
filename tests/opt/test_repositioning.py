@@ -22,7 +22,8 @@ def test_repositioning_logic():
         dwt=55000,
         draft_m=12.0,
         speed_kn=12.0,  # 288 nm/day
-        fuel_consumption_tpd=30.0
+        laden_fuel_consumption_tpd=30.0,
+        ballast_fuel_consumption_tpd=25.0
     )
     
     # Base forecast for Supramax = 10,000 USD/day

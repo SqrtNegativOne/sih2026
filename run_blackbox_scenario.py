@@ -29,7 +29,7 @@ def main():
         vessel_class=VesselClass.SUPRAMAX, 
         current_port=PortEnum.PARADIP,
         status="idle", available_from=date(2025, 5, 1), available_until=None,
-        dwt=55000, draft_m=12.0, speed_kn=12.0, fuel_consumption_tpd=30.0
+        dwt=55000, draft_m=12.0, speed_kn=12.0, laden_fuel_consumption_tpd=30.0, ballast_fuel_consumption_tpd=25.0
     )
                 
     v2 = Vessel(
@@ -37,7 +37,7 @@ def main():
         vessel_class=VesselClass.SUPRAMAX, 
         current_port=PortEnum.RICHARDS_BAY,
         status="idle", available_from=date(2025, 5, 1), available_until=None,
-        dwt=55000, draft_m=12.0, speed_kn=12.0, fuel_consumption_tpd=30.0
+        dwt=55000, draft_m=12.0, speed_kn=12.0, laden_fuel_consumption_tpd=30.0, ballast_fuel_consumption_tpd=25.0
     )
                 
     c1 = CargoParcel(
