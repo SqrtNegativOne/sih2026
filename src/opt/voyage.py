@@ -355,8 +355,7 @@ def schedule_voyages(
     # Penalty rates (convert $/day -> $/hour, integer-safe scaling)
     # We work in integer cents to avoid float precision issues.
     SCALE = 100  # 1 unit = $0.01
-    idle_penalty_per_hour = int(inputs.idle_penalty_usd_per_day / 24 * SCALE)
-    ballast_penalty_per_hour = int(inputs.ballast_penalty_usd_per_day / 24 * SCALE)
+    opex_per_hour = int(inputs.opex_usd_per_day / 24 * SCALE)
     bunker_per_tonne = BLENDED_BUNKER_USD_PER_TONNE
 
     profit_terms: list[Any] = []
@@ -383,14 +382,13 @@ def schedule_voyages(
             model.Add(laden_cost_var == 0).OnlyEnforceIf(x[v_id, c_id].Not())
             profit_terms.append(-laden_cost_var)
 
-            # --- Ballast fuel + penalty from vessel home to first cargo ---
+            # --- Ballast fuel from vessel home to first cargo ---
             b_nm_start = _get_distance_nm(v.current_port, c.origin_port)
             b_days_start = b_nm_start / (v.speed_kn * 24.0) if v.speed_kn > 0 else 0
             b_fuel_start_scaled = int(b_days_start * v.fuel_consumption_tpd * bunker_per_tonne * SCALE)
-            b_penalty_start_scaled = int(b_days_start * 24 * ballast_penalty_per_hour)
 
             start_cost_var = model.NewIntVar(0, 500_000_000, f"start_cost_{v_id}_{c_id}")
-            model.Add(start_cost_var == b_fuel_start_scaled + b_penalty_start_scaled).OnlyEnforceIf(
+            model.Add(start_cost_var == b_fuel_start_scaled).OnlyEnforceIf(
                 start_node[v_id, c_id]
             )
             model.Add(start_cost_var == 0).OnlyEnforceIf(start_node[v_id, c_id].Not())
@@ -399,7 +397,7 @@ def schedule_voyages(
             # --- Port queue wait penalty at this cargo's load port ---
             origin_spec = c.origin_port.value
             wait_h_expected = int((origin_spec.expected_wait_days if origin_spec else 0) * 24)
-            wait_penalty_scaled = wait_h_expected * idle_penalty_per_hour
+            wait_penalty_scaled = wait_h_expected * opex_per_hour
 
             wait_cost_var = model.NewIntVar(0, 100_000_000, f"wait_cost_{v_id}_{c_id}")
             model.Add(wait_cost_var == wait_penalty_scaled).OnlyEnforceIf(x[v_id, c_id])
@@ -411,22 +409,21 @@ def schedule_voyages(
             model.Add(early_arr_gap == st - arr).OnlyEnforceIf(x[v_id, c_id])
             model.Add(early_arr_gap == 0).OnlyEnforceIf(x[v_id, c_id].Not())
             early_arr_cost = model.NewIntVar(0, 500_000_000, f"early_arr_cost_{v_id}_{c_id}")
-            model.Add(early_arr_cost == early_arr_gap * idle_penalty_per_hour).OnlyEnforceIf(x[v_id, c_id])
+            model.Add(early_arr_cost == early_arr_gap * opex_per_hour).OnlyEnforceIf(x[v_id, c_id])
             model.Add(early_arr_cost == 0).OnlyEnforceIf(x[v_id, c_id].Not())
             profit_terms.append(-early_arr_cost)
 
-            # --- Ballast fuel + penalty + inter-cargo idle gap for transitions ---
+            # --- Ballast fuel + inter-cargo idle gap for transitions ---
             for c2 in C:
                 if parent_map[c_id] == parent_map[c2.parcel_id]:
                     continue
                 b_nm = _get_distance_nm(c.dest_port, c2.origin_port)
                 b_days = b_nm / (v.speed_kn * 24.0) if v.speed_kn > 0 else 0
                 b_fuel_scaled = int(b_days * v.fuel_consumption_tpd * bunker_per_tonne * SCALE)
-                b_penalty_scaled = int(b_days * 24 * ballast_penalty_per_hour)
                 b_hours_int = int(b_days * 24)
 
                 trans_cost_var = model.NewIntVar(0, 500_000_000, f"tr_cost_{v_id}_{c_id}_{c2.parcel_id}")
-                model.Add(trans_cost_var == b_fuel_scaled + b_penalty_scaled).OnlyEnforceIf(
+                model.Add(trans_cost_var == b_fuel_scaled).OnlyEnforceIf(
                     trans[v_id, c_id, c2.parcel_id]
                 )
                 model.Add(trans_cost_var == 0).OnlyEnforceIf(trans[v_id, c_id, c2.parcel_id].Not())
@@ -445,7 +442,7 @@ def schedule_voyages(
                 model.Add(idle_gap == 0).OnlyEnforceIf(trans[v_id, c_id, c2.parcel_id].Not())
 
                 idle_cost_var = model.NewIntVar(0, 500_000_000, f"idle_cost_{v_id}_{c_id}_{c2.parcel_id}")
-                model.Add(idle_cost_var == idle_gap * idle_penalty_per_hour).OnlyEnforceIf(
+                model.Add(idle_cost_var == idle_gap * opex_per_hour).OnlyEnforceIf(
                     trans[v_id, c_id, c2.parcel_id]
                 )
                 model.Add(idle_cost_var == 0).OnlyEnforceIf(trans[v_id, c_id, c2.parcel_id].Not())

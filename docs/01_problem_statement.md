@@ -25,4 +25,6 @@ Required outputs: given cargo parcels/volumne (provide parcel-level specificity?
 	- recommended vessel type
 	- early alerts for market volatility, port congestions, or other disruptions
 	- forecast slow periods, suggest repositioning, alternate cargo, or alternate employment opportunities to cut deadheading
-cool UI dashboard, "high degree of accuracy"
+
+- cool UI dashboard, "high degree of accuracy"
+- deadboat/demise charters outside the scope?

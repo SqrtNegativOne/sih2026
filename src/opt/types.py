@@ -66,6 +66,7 @@ class CargoParcel(BaseModel):
     laycan_end: date
     route_family: RouteFamily
     revenue_usd: float
+    demurrage_usd_per_day: float = 0.0
 
 class WeatherSeverity(str, Enum):
     CYCLONE = "CYCLONE"
@@ -108,9 +109,7 @@ class OptimizerInputs(BaseModel):
     port_events: list['PortLogisticsStatus'] = []
     
     risk_tolerance: float = 0.0
-    idle_penalty_usd_per_day: float = 500.0
-    ballast_penalty_usd_per_day: float = 250.0
-    late_delivery_penalty_usd_per_day: float = 2000.0
+    opex_usd_per_day: float = 500.0
 
 class LockWaitResult(BaseModel):
     model_config = ConfigDict(frozen=True)

@@ -58,8 +58,7 @@ def base_inputs(vessels, parcels) -> OptimizerInputs:
         basis={RouteFamily.INDONESIA_EC_INDIA: BasisEntry(route_family=RouteFamily.INDONESIA_EC_INDIA, basis_mean=-0.2, basis_std=0.1)},
         
         
-        idle_penalty_usd_per_day=500.0,
-        ballast_penalty_usd_per_day=250.0,
+        opex_usd_per_day=500.0,
     )
 
 
@@ -205,8 +204,8 @@ class TestPortCompatibility:
 # ---------------------------------------------------------------------------
 
 class TestPenalties:
-    def test_high_idle_penalty_prefers_tighter_schedule(self):
-        """With high idle penalty, solver should prefer a cargo that arrives sooner."""
+    def test_high_opex_prefers_tighter_schedule(self):
+        """With high opex, solver should prefer a cargo that arrives sooner."""
         v = make_supramax()
         # C_tight has laycan opening right when vessel arrives
         # C_late has a laycan opening 10 days later (big idle gap)
@@ -216,31 +215,13 @@ class TestPenalties:
         inputs_high_idle = base_inputs(
             [v], [c_tight, c_late]
         )
-        inputs_high_idle = inputs_high_idle.model_copy(update={"idle_penalty_usd_per_day": 10_000.0})  # Massive idle penalty
+        inputs_high_idle = inputs_high_idle.model_copy(update={"opex_usd_per_day": 10_000.0})  # Massive opex penalty
 
         result = schedule_voyages(inputs_high_idle, max_solve_seconds=3.0)
         assert result.solver_status in ("OPTIMAL", "FEASIBLE")
-        # With huge idle penalty, solver should pick c_tight (no gap) over c_late (14-day gap)
+        # With huge opex penalty, solver should pick c_tight (no gap) over c_late (14-day gap)
         assigned_ids = {a.parcel_id for a in result.assignments}
         assert "C_tight" in assigned_ids
-
-    def test_high_ballast_penalty_avoids_distant_cargo(self):
-        """With very high ballast penalty, a distant low-revenue cargo should be skipped."""
-        v = make_supramax(port=PortEnum.PARADIP)
-        # C_local: same port, no ballast, ok revenue
-        c_local = make_cargo("C_local", PortEnum.PARADIP, PortEnum.VIZAG, date(2025, 1, 5), date(2025, 1, 15), revenue=400_000)
-        # C_distant: 8,000nm away, small revenue — should be rejected when ballast_penalty is high
-        c_distant = make_cargo("C_distant", PortEnum.HAMPTON_ROADS, PortEnum.PARADIP, date(2025, 1, 5), date(2025, 3, 1), revenue=100_000)
-
-        inputs = base_inputs(
-            [v], [c_local, c_distant]
-        )
-        inputs = inputs.model_copy(update={"ballast_penalty_usd_per_day": 5_000.0})  # Very high penalty
-        result = schedule_voyages(inputs, max_solve_seconds=3.0)
-        assert result.solver_status in ("OPTIMAL", "FEASIBLE")
-        assigned_ids = {a.parcel_id for a in result.assignments}
-        # Distant cargo should be unprofitable and skipped
-        assert "C_distant" not in assigned_ids
 
 
 # ---------------------------------------------------------------------------

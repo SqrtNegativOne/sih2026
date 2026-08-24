@@ -86,10 +86,9 @@ def recommend_repositioning(
 
         # Costs
         fuel_cost = ballast_days * vessel.fuel_consumption_tpd * BLENDED_BUNKER_USD_PER_TONNE
-        ballast_penalty = ballast_days * inputs.ballast_penalty_usd_per_day
-        ballast_cost_usd = fuel_cost + ballast_penalty
+        ballast_cost_usd = fuel_cost
         
-        wait_cost_usd = wait_days * inputs.idle_penalty_usd_per_day
+        wait_cost_usd = wait_days * inputs.opex_usd_per_day
 
         # Revenue (Expected TCE)
         # Without a specific cargo, we don't know the exact route family to apply.

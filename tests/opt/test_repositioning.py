@@ -33,8 +33,7 @@ def test_repositioning_logic():
         forecasts=fans,
         basis={RouteFamily.INDONESIA_EC_INDIA: BasisEntry(route_family=RouteFamily.INDONESIA_EC_INDIA, basis_mean=-0.2, basis_std=0.1)}, # 5 days ballast
         
-        idle_penalty_usd_per_day=500.0,
-        ballast_penalty_usd_per_day=250.0
+        opex_usd_per_day=500.0,
     )
     
     candidates = [PortEnum.PARADIP, PortEnum.SINGAPORE]
