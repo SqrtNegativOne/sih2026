@@ -15,6 +15,7 @@ from opt import (
     OptimizerInputs,
     Vessel,
     run_optimizer,
+    format_recommendation_text
 )
 from opt.network import PortEnum, RouteFamily
 from opt.types import BasisEntry, VesselClass
@@ -72,15 +73,7 @@ def main():
     print("Running Black Box Optimizer...\n")
     rec = run_optimizer(inputs, target_class=VesselClass.SUPRAMAX)
     
-    print("="*80)
-    print("OPTIMIZER OUTPUTS")
-    print("="*80)
-    print(f"1. Lock/wait:   {rec.lock_wait_text}")
-    print(f"2. Schedule:    {rec.voyage_schedule_text}")
-    print(f"3. Reposition:  {rec.repositioning_text}")
-    print(f"4. Savings:     {rec.savings_text}")
-    print(f"5. Review:      {rec.review_trigger_text}")
-    print("="*80)
+    print(format_recommendation_text(rec))
 
 if __name__ == "__main__":
     main()
