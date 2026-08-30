@@ -1,0 +1,55 @@
+[paths]
+master_parquet = "src/data/master_long.parquet"
+samples_train = "src/data/samples_train.parquet"
+samples_valid = "src/data/samples_valid.parquet"
+samples_test = "src/data/samples_test.parquet"
+samples_manifest = "src/data/samples_manifest.csv"
+
+[targets.classes]
+BC_INDEX = "Capesize"
+BPI_INDEX = "Panamax"
+BSI_INDEX = "Supramax"
+BHSI_INDEX = "Handysize"
+
+[targets.horizons]
+days = [7, 30, 90]
+
+[features]
+lags = [1, 2, 3, 5, 10, 21, 63]
+windows = [30, 90]
+returns = [1, 7, 30]
+bdi_col = "BD_INDEX"
+
+[features.ports]
+origin = [
+    "NEWCASTLE_AU", "HAY_POINT_AU", "RICHARDS_BAY_ZA",
+    "BEIRA_MZ", "MAPUTO_MZ", "NACALA_MZ",
+    "BALIKPAPAN_ID", "SAMARINDA_ID"
+]
+dest = [
+    "PARADIP", "VISAKHAPATNAM", "GOPALPUR",
+    "DHAMRA", "HALDIA", "KOLKATA"
+]
+
+[calendar]
+cny_dates = [
+    "2020-01-25",
+    "2021-02-12",
+    "2022-02-01",
+    "2023-01-22",
+    "2024-02-10",
+    "2025-01-29",
+    "2026-02-17",
+    "2027-02-06",
+    "2028-01-26",
+    "2029-02-13",
+    "2030-02-03"
+]
+
+[splits]
+valid_start = "2023-01-01"
+test_start = "2025-01-01"
+# 63 lag rows span ~91 calendar days; longest horizon is 90 calendar days.
+# See ml.targets.required_embargo_days -- the previous 160 let information
+# cross the split boundary.
+embargo_days = 200

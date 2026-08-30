@@ -1,0 +1,130 @@
+label,portid,portname,country,iso3,lat,lon,role,basin,resolved
+Abbot_Point_AU,port0,Abbot Point,Australia,AUS,-19.89375525,148.0776204,coal,pacific,yes
+Port_Kembla_AU,port959,Port Kembla,Australia,AUS,-34.46209936,150.8844854,coal,pacific,yes
+Port_Hedland_AU,port955,Port Hedland,Australia,AUS,-20.33066003,118.5643416,iron_ore,pacific,yes
+Dampier_AU,port276,Dampier,Australia,AUS,-20.6266866,116.7424761,iron_ore,pacific,yes
+Geraldton_AU,port391,Geraldton,Australia,AUS,-28.77609449,114.5941933,iron_ore,pacific,yes
+Esperance_AU,port331,Esperance,Australia,AUS,-33.87217366,121.9007373,grain,pacific,yes
+Kwinana_AU,port361,Fremantle,Australia,AUS,-32.15203252,115.7705242,grain,pacific,yes
+Gove_AU,port411,Gove,Australia,AUS,-12.19695558,136.7166954,bauxite,pacific,yes
+Weipa_AU,port1387,Weipa,Australia,AUS,-12.6538801,141.8764767,bauxite,pacific,yes
+Tarahan_ID,port881,Panjang,Indonesia,IDN,-5.493013574,105.3301717,coal,pacific,yes
+Vostochny_RU,port1374,Vostochnyy,Russian Federation,RUS,42.73190378,133.0528358,coal,pacific,yes
+Murmansk_RU,port779,Murmansk,Russian Federation,RUS,68.98887419,33.0490027,coal,atlantic,yes
+Ust_Luga_RU,port1095,Ust-Luga,Russian Federation,RUS,59.68266556,28.40566475,coal,atlantic,yes
+Vanino_RU,port187,Vanino,Russian Federation,RUS,49.09019681,140.3006312,coal,pacific,yes
+Novorossiysk_RU,port833,Novorossiysk,Russian Federation,RUS,44.72345598,37.8087215,grain,atlantic,yes
+Saldanha_Bay_ZA,port1133,Saldanha Bay,South Africa,ZAF,-32.99778093,18.00771256,iron_ore,indian_ocean,yes
+Tubarao_BR,port1328,Tubarao,Brazil,BRA,-20.25882714,-40.2378754,iron_ore,atlantic,yes
+Ponta_da_Madeira_BR,port506,Itaqui,Brazil,BRA,-2.627113568,-44.35349287,iron_ore,atlantic,yes
+Itaguai_BR,port2045,Porto de Itaguai,Brazil,BRA,-22.9363023408376,-43.8183637077484,iron_ore,atlantic,yes
+Santos_BR,port1160,Santos,Brazil,BRA,-23.91706787,-46.33656353,grain,atlantic,yes
+Rio_Grande_BR,port1104,Rio Grande,Brazil,BRA,-32.08860546,-52.10246586,grain,atlantic,yes
+Rosario_AR,port1108,Rosario,Argentina,ARG,-33.04856538,-60.57348089,grain,atlantic,yes
+Bahia_Blanca_AR,port1048,Bahia Blanca,Argentina,ARG,-38.78214152,-62.28346451,grain,atlantic,yes
+Puerto_Bolivar_CO,port1027,Puerto Bolivar,Colombia,COL,12.25028035,-71.96257031,coal,atlantic,yes
+Santa_Marta_CO,port1154,Santa Marta,Colombia,COL,11.25145763,-74.21500894,coal,atlantic,yes
+Baltimore_US,port103,Baltimore,United States,USA,39.25976037,-76.5569733,coal,atlantic,yes
+New_Orleans_US,port812,New Orleans,United States,USA,29.93003343,-90.13086772,grain,atlantic,yes
+Mobile_US,port754,Mobile,United States,USA,30.66503638,-88.06673452,coal,atlantic,yes
+Houston_US,port481,Houston (US-TX),United States,USA,29.72023114,-95.13978774,grain,atlantic,yes
+Duluth_US,port1236,Duluth,United States,USA,46.71928735,-92.09100101,iron_ore,atlantic,yes
+Portland_US,port993,"Portland, OR",United States,USA,45.59523874,-122.7355059,grain,pacific,yes
+Longview_US,port2267,Longview,United States,USA,46.11077309520158,-122.9442444313803,grain,pacific,yes
+Vancouver_CA,port1350,Vancouver,Canada,CAN,49.28996399,-123.0289044,grain,pacific,yes
+Prince_Rupert_CA,port1021,Prince Rupert,Canada,CAN,54.26668285,-130.3377598,coal,pacific,yes
+Thunder_Bay_CA,port1295,Thunder Bay,Canada,CAN,48.3841793,-89.24340302,grain,atlantic,yes
+Sept_Iles_CA,port1181,Sept Iles,Canada,CAN,50.17802481,-66.41080854,iron_ore,atlantic,yes
+Kamsar_GN,port536,Kamsar,Guinea,GIN,10.64818175,-14.60681317,bauxite,atlantic,yes
+Conakry_GN,port258,Conakry,Guinea,GIN,9.51414336,-13.71524095,bauxite,atlantic,yes
+Odesa_UA,port843,Odessa,Ukraine,UKR,46.50128328,30.73807121,grain,atlantic,yes
+Chornomorsk_UA,port489,Chornomorsk,Ukraine,UKR,46.33159947,30.65656622,grain,atlantic,yes
+Yuzhne_UA,port1419,Pivdennyi,Ukraine,UKR,46.63334721,31.01805742,grain,atlantic,yes
+Qingdao_CN,port1069,Qingdao Port,China,CHN,36.02677905,120.2226181,import_hub,pacific,yes
+Rizhao_CN,port1105,Rizhao,China,CHN,35.34890965,119.5325575,import_hub,pacific,yes
+Tianjin_CN,port1297,Tianjin Xin Gang,China,CHN,38.9397259,117.7336149,import_hub,pacific,yes
+Dalian_CN,port273,Dalian,China,CHN,38.9870355,121.770301,import_hub,pacific,yes
+Lianyungang_CN,port644,Lianyungang,China,CHN,34.74133017,119.4359663,import_hub,pacific,yes
+Ningbo_Zhoushan_CN,port824,Ningbo,China,CHN,29.92076897,121.8818408,import_hub,pacific,yes
+Yingkou_CN,port1415,Yingkou,China,CHN,40.72688954,122.0429706,import_hub,pacific,yes
+Guangzhou_CN,port425,Guangzhou (Nansha),China,CHN,23.02754052,113.4836,import_hub,pacific,yes
+Zhanjiang_CN,port1426,Zhanjiang,China,CHN,21.21212795,110.4084103,import_hub,pacific,yes
+Fangcheng_CN,port339,Fangcheng,China,CHN,21.61420534,108.3643393,import_hub,pacific,yes
+Jingtang_CN,port1195,Shougang Jingtang,China,CHN,39.00686524,118.4754927,import_hub,pacific,yes
+Yantai_CN,port1410,Yantai,China,CHN,37.55733184,121.4106202,import_hub,pacific,yes
+Shanghai_CN,port1188,Shanghai,China,CHN,31.19179536,121.6441968,import_hub,pacific,yes
+Chiba_JP,port239,Chiba,Japan,JPN,35.52513992,140.0523392,import_hub,pacific,yes
+Kashima_JP,port548,Kashima-Ibaraki,Japan,JPN,35.91656249,140.6899198,import_hub,pacific,yes
+Fukuyama_JP,port364,Fukuyama,Japan,JPN,34.46287853,133.4385467,import_hub,pacific,yes
+Mizushima_JP,port752,Mizushima,Japan,JPN,34.50033451,133.7242924,import_hub,pacific,yes
+Oita_JP,port846,Oita,Japan,JPN,33.25922967,131.6858125,import_hub,pacific,yes
+Gwangyang_KR,port432,Gwangyang (Kwangyang),Korea,KOR,34.87669716,127.7165533,import_hub,pacific,yes
+Pohang_KR,port915,Pohang,Korea,KOR,36.03523852,129.4087348,import_hub,pacific,yes
+Incheon_KR,port494,Incheon,Korea,KOR,37.44435778,126.6200824,import_hub,pacific,yes
+Kaohsiung_TW,port541,Kaohsiung,Taiwan Province of China,TWN,22.5615278,120.3226847,import_hub,pacific,yes
+Taichung_TW,port1252,Taichung,Taiwan Province of China,TWN,24.25457118,120.5049668,import_hub,pacific,yes
+Manila_PH,port694,Manila,Philippines,PHL,14.59160879,120.8723998,import_hub,pacific,yes
+Cebu_PH,port224,Cebu,Philippines,PHL,10.31413032,123.9369534,import_hub,pacific,yes
+Ho_Chi_Minh_VN,port1291,Saigon,Vietnam,VNM,10.73624058,106.766152,import_hub,pacific,yes
+Hai_Phong_VN,port434,Hai Phong,Vietnam,VNM,20.84406939,106.7474848,import_hub,pacific,yes
+Port_Klang_MY,port960,Port Klang,Malaysia,MYS,2.972594826,101.3403063,import_hub,pacific,yes
+Kuantan_MY,port603,Kuantan,Malaysia,MYS,3.981726241,103.3931808,import_hub,pacific,yes
+Rotterdam_NL,port1114,Rotterdam,The Netherlands,NLD,51.92228121,4.215144967,import_hub,atlantic,yes
+Amsterdam_NL,port45,Amsterdam,The Netherlands,NLD,52.41036165,4.819634112,import_hub,atlantic,yes
+Immingham_GB,port493,Immingham,United Kingdom,GBR,53.64188521,-0.226276065,import_hub,atlantic,yes
+Hamburg_DE,port446,Hamburg,Germany,DEU,53.51640056,9.964294338,import_hub,atlantic,yes
+Iskenderun_TR,port503,Iskenderun,Türkiye,TUR,36.60077591,36.19312026,import_hub,atlantic,yes
+Izmir_TR,port510,Izmir,Türkiye,TUR,38.4431577,27.15610909,import_hub,atlantic,yes
+Karachi_PK,port543,Karachi,Pakistan,PAK,24.82327471,66.98321718,import_hub,indian_ocean,yes
+Chittagong_BD,port241,Chittagong,Bangladesh,BGD,22.2812458,91.81385427,import_hub,indian_ocean,yes
+Colombo_LK,port254,Colombo,Sri Lanka,LKA,6.949982173,79.8397869,import_hub,indian_ocean,yes
+Jebel_Ali_AE,port744,Jebel Ali,United Arab Emirates,ARE,24.99941947,55.07781687,import_hub,indian_ocean,yes
+Mundra_IN,port777,Mundra,India,IND,22.76296998,69.6220188,import_hub,indian_ocean,yes
+Kandla_IN,port540,Kandla,India,IND,23.0091192,70.21565487,import_hub,indian_ocean,yes
+JNPT_IN,port776,Mumbai-Jawaharlal Nehru (Nhava Sheva),India,IND,18.91732276,72.93965039,import_hub,indian_ocean,yes
+Krishnapatnam_IN,port599,Krishnapatnam Port,India,IND,14.26065023,80.11792197,import_hub,indian_ocean,yes
+Chennai_IN,port235,Chennai (Madras),India,IND,13.10046724,80.29425074,import_hub,indian_ocean,yes
+Ennore_IN,port534,Kamarajar Port,India,IND,13.27933099,80.33854581,import_hub,indian_ocean,yes
+Tuticorin_IN,port1331,Tuticorin,India,IND,8.765928225,78.18889725,import_hub,indian_ocean,yes
+Goa_IN,port709,Mormugao,India,IND,15.40731887,73.80153102,iron_ore,indian_ocean,yes
+New_Mangalore_IN,port811,New Mangalore,India,IND,12.93776393,74.81887955,import_hub,indian_ocean,yes
+Nouadhibou_MR,port830,Nouadhibou,Mauritania,MRT,20.84893872,-17.04643501,iron_ore,atlantic,yes
+Buchanan_LR,port181,Buchanan,Liberia,LBR,5.865644367,-10.04409801,iron_ore,atlantic,yes
+Mombasa_KE,port757,Mombasa,Kenya,KEN,-4.048091983,39.6344671,import_hub,indian_ocean,yes
+Dar_es_Salaam_TZ,port278,Dar Es Salaam,Tanzania,TZA,-6.843548595,39.29619624,import_hub,indian_ocean,yes
+Djibouti_DJ,port294,Djibouti,Djibouti,DJI,11.59746443,43.10371866,import_hub,indian_ocean,yes
+Bandar_Abbas_IR,port107,Bandar Abbas,Iran,IRN,27.14750008,56.20294512,import_hub,indian_ocean,yes
+Salalah_OM,port746,Salalah,Oman,OMN,16.94229498,54.0083198,import_hub,indian_ocean,yes
+Palembang_ID,port875,Palembang,Indonesia,IDN,-2.986159534,104.8251794,coal,indian_ocean,yes
+Belawan_ID,port139,Belawan,Indonesia,IDN,3.78854271,98.70736598,import_hub,indian_ocean,yes
+Map_Ta_Phut_TH,port701,Map Ta Phut,Thailand,THA,12.68571375,101.1421513,import_hub,pacific,yes
+Laem_Chabang_TH,port1197,Laem Chabang,Thailand,THA,13.0887337,100.8999916,import_hub,pacific,yes
+Nantong_CN,port792,Nantong,China,CHN,31.9862854,120.8374438,import_hub,pacific,yes
+Jinzhou_CN,port521,Jinzhou,China,CHN,40.77754887,121.0180678,import_hub,pacific,yes
+Beihai_CN,port136,Beihai,China,CHN,21.47255148,109.0671522,import_hub,pacific,yes
+Weifang_CN,port1385,Weifang Port,China,CHN,37.26008605,119.0414526,import_hub,pacific,yes
+Port_Lincoln_AU,port964,Port Lincoln,Australia,AUS,-34.72199883,135.8701998,grain,pacific,yes
+Port_Adelaide_AU,port929,Port Adelaide,Australia,AUS,-34.81039638,138.5057187,grain,pacific,yes
+Portland_AU,port992,Portland,Australia,AUS,-38.35404187,141.6171851,grain,pacific,yes
+Albany_AU,port28,Albany,Australia,AUS,-35.03402477,117.8971538,grain,pacific,yes
+Beaumont_US,port134,Beaumont,United States,USA,30.02582322,-94.03028275,grain,atlantic,yes
+Lake_Charles_US,port629,Lake Charles,United States,USA,30.19064745,-93.31148796,grain,atlantic,yes
+Corpus_Christi_US,port264,Corpus Christi,United States,USA,27.84122725,-97.37990791,grain,atlantic,yes
+Antwerp_BE,port57,Antwerp,Belgium,BEL,51.27935494,4.317802311,import_hub,atlantic,yes
+Bremen_DE,port167,Bremen,Germany,DEU,53.09476546,8.777095691,import_hub,atlantic,yes
+Gdansk_PL,port380,Gdansk,Poland,POL,54.37579704,18.69364423,import_hub,atlantic,yes
+Dalrymple_Bay_AU,,,,,,,coal,pacific,no
+Cape_Lambert_AU,,,,,,,iron_ore,pacific,no
+Taboneo_ID,,,,,,,coal,pacific,no
+Tanjung_Bara_ID,,,,,,,coal,pacific,no
+Muara_Berau_ID,,,,,,,coal,pacific,no
+Kotabaru_ID,,,,,,,coal,pacific,no
+Adang_Bay_ID,,,,,,,coal,pacific,no
+Paranagua_BR,,,,,,,grain,atlantic,no
+Necochea_AR,,,,,,,grain,atlantic,no
+San_Lorenzo_AR,,,,,,,grain,atlantic,no
+Cienaga_CO,,,,,,,coal,atlantic,no
+Constanta_RO,,,,,,,grain,atlantic,no
+Caofeidian_CN,,,,,,,import_hub,pacific,no
+Kimitsu_JP,,,,,,,import_hub,pacific,no
+Pepel_SL,,,,,,,iron_ore,atlantic,no

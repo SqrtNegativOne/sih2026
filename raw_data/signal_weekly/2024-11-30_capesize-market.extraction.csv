@@ -1,0 +1,12 @@
+week_end_date,route_code,index_name,value,unit,notes
+2024-11-30,C3,Capesize Brazil-North China freight rate,22,USD/ton,-8% from previous week; -18% YoY; found a floor at $22 per ton
+2024-11-30,Panamax Continent-Far East,Panamax Continent to Far East freight rate,30,USD/ton,-10% month-on-month; -33% YoY
+2024-11-30,Supramax Indonesia-ECI,Supramax Indo-ECI freight rate,9,USD/ton,below $9 per ton; -12% monthly
+2024-11-30,Handysize NOPAC-FE,Handysize NOPAC Far East freight rate,32,USD/ton,text states "dropped $32 per ton" reflecting -6% month-over-month; phrasing ambiguous between level and decline
+2024-11-30,,Ballaster count Capesize SE Africa,104,vessels,7 lower than annual average; 40 lower than three weeks ago
+2024-11-30,,Ballaster count Panamax SE Africa,76,vessels,55 lower than annual average
+2024-11-30,,Ballaster count Handysize NOPAC,90,vessels,around 90
+2024-11-30,,Congestion China Capesize,131,vessels,-8 vs week 46
+2024-11-30,,Congestion China Panamax,230,vessels,fell below 230 mark; -10 vs two weeks ago
+2024-11-30,,Congestion China Supramax,290,vessels,dropped below 290; -20 vs two weeks ago
+2024-11-30,,Congestion China Handysize,190,vessels,below 190; -7 vs week 46

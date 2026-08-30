@@ -1,0 +1,6 @@
+port,n,date_from,date_to,spearman_r,pearson_r,mean_abs_diff,finding
+PARADIP,0,,,,,,n=0: no census's real acquired_at date matched a real PortWatch date for this port. No correlation or difference can be reported.
+VISAKHAPATNAM,0,,,,,,n=0: no census's real acquired_at date matched a real PortWatch date for this port. No correlation or difference can be reported.
+NEWCASTLE_AU,0,,,,,,n=0: no census's real acquired_at date matched a real PortWatch date for this port. No correlation or difference can be reported.
+HAY_POINT_AU,0,,,,,,n=0: no census's real acquired_at date matched a real PortWatch date for this port. No correlation or difference can be reported.
+RICHARDS_BAY_ZA,0,,,,,,n=0: no census's real acquired_at date matched a real PortWatch date for this port. No correlation or difference can be reported.

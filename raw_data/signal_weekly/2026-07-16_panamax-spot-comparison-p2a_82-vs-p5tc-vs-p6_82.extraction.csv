@@ -1,0 +1,32 @@
+week_end_date,route_code,index_name,value,unit,notes
+2026-07-10,C3,C3 (Tubarao-Qingdao),33.00,USD/mt,recovering strongly month-on-month
+2026-07-10,C5,C5 (West Australia-Qingdao),13.32,USD/mt,recovering strongly month-on-month
+2026-07-10,P2A_82,Panamax Skaw-Gibraltar trip Taiwan-Japan,32005,USD/day,Pacific round voyage; approx $32,000/day; Jan 2026 low 17486
+2026-07-10,P5TC,Panamax TC average,20273,USD/day,early 14-Jul assessment 20260
+2026-07-10,P6_82,Panamax Singapore round via Atlantic,19990,USD/day,early 14-Jul assessment 20283
+2026-07-10,P1A_82,Panamax transatlantic round voyage,23073,USD/day,eased on the day
+2026-07-10,P5_82,Panamax South China Indonesia round voyage,15761,USD/day,assessment as of 14 July
+2026-07-10,,BCI,4655,index,+86 day-on-day; +555 week-on-week; 52-wk high 5517 / low 2104; 5-yr avg 2728
+2026-07-10,,C5TC,38711,USD/day,+780 day-on-day
+2026-07-10,,BDI,2944,index,+227 WoW
+2026-07-10,,BPI,2253,index,0 day-on-day; +50 WoW; 52-wk high 2521; 2025 low 748
+2026-07-10,,S10TC,19536,USD/day,+80 day-on-day
+2026-07-10,,BSI,1706,index,+6 day-on-day; +33 WoW; 52-wk high 1718; low 952; 5-yr avg 1503
+2026-07-10,S1C,Supramax US Gulf,,USD/day,+50% YoY (level not stated)
+2026-07-10,S4A,Supramax US Gulf,,USD/day,+31% YoY (level not stated)
+2026-07-10,S5,Supramax ECSA,,USD/day,+68% YoY (level not stated)
+2026-07-10,,BHSI,915,index,-2 day-on-day; -27 WoW; 52-wk high 947; low 588
+2026-07-10,,HS7TC,16466,USD/day,-40 day-on-day
+2026-07-10,HS6_38,Handysize NOPAC round voyage,,USD/day,+53% YoY (level not stated)
+2026-07-10,HS7_38,Handysize North China trip SE Asia,,USD/day,+53% YoY (level not stated)
+2026-07-10,,Tonne-mile index Capesize,93.7,%,"low-90% range"
+2026-07-10,,Tonne-mile index VLOC,93.0,%,
+2026-07-10,,Tonne-mile index Panamax,100.8,%,
+2026-07-10,,Tonne-mile index Post-Panamax,101.9,%,
+2026-07-10,,Tonne-mile index Supramax,105.1,%,
+2026-07-10,,Tonne-mile index Handymax,120.5,%,
+2026-07-10,,Tonne-mile index Handysize,90.5,%,
+2026-07-10,,Ballaster count Capesize global,615,vessels,down from 624 prior week
+2026-07-10,,Ballaster count Panamax global,753,vessels,down from 784 prior week; FEAST/NOPAC 211
+2026-07-10,,Ballaster count Supramax global,705,vessels,up from 691 prior week
+2026-07-10,,Ballaster count Handysize global,659,vessels,down from 682 prior week

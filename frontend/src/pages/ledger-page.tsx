@@ -1,0 +1,281 @@
+import { useEffect, useState } from 'react'
+import { Panel } from '@/components/desk/panel'
+import { StatRow } from '@/components/desk/stat'
+import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { fetchLedgerLive, fetchLedgerPerformance, fetchLedgerReplay, postLedgerOutcome, resetLedgerLive } from '@/lib/api'
+import { formatNumber, prettyPort } from '@/lib/format'
+import type { LedgerLiveEntry, LedgerLiveResponse, LedgerPerformanceResponse, LedgerReplayResponse } from '@/lib/types'
+import { cn } from '@/lib/utils'
+
+// ---------------------------------------------------------------------------
+// LIVE_DECISION_LEDGER -- real recommendations, forward-only.
+// ---------------------------------------------------------------------------
+
+function OutcomeForm({ entry, onRecorded }: { entry: LedgerLiveEntry; onRecorded: () => void }) {
+  const [rate, setRate] = useState('')
+  const [atDate, setAtDate] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  function submit() {
+    const rateNum = Number(rate)
+    if (!rateNum || rateNum <= 0 || !atDate) return
+    setSubmitting(true)
+    setErr(null)
+    postLedgerOutcome({ entryId: entry.entry_id, realizedRateUsdPerDay: rateNum, realizedAtDate: atDate })
+      .then(onRecorded)
+      .catch((e: unknown) => setErr(e instanceof Error ? e.message : 'Failed to record outcome.'))
+      .finally(() => setSubmitting(false))
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <Input placeholder="realised $/day" className="h-6 w-28 text-[10px]" value={rate} onChange={(e) => setRate(e.target.value)} />
+      <Input type="date" className="h-6 w-32 text-[10px]" value={atDate} onChange={(e) => setAtDate(e.target.value)} />
+      <button
+        type="button"
+        onClick={submit}
+        disabled={submitting || !rate || !atDate}
+        className="h-6 rounded-[3px] border border-market bg-market/10 px-2 text-[10px] font-semibold text-market disabled:opacity-40"
+      >
+        Record
+      </button>
+      {err && <span className="text-[9px] text-risk">{err}</span>}
+    </div>
+  )
+}
+
+function LiveLedgerSection() {
+  const [live, setLive] = useState<LedgerLiveResponse | null>(null)
+  const [perf, setPerf] = useState<LedgerPerformanceResponse | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [resetting, setResetting] = useState(false)
+
+  function reload() {
+    Promise.all([fetchLedgerLive(), fetchLedgerPerformance()])
+      .then(([l, p]) => {
+        setLive(l)
+        setPerf(p)
+      })
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : 'Failed to load the live ledger.'))
+  }
+
+  useEffect(reload, [])
+
+  // F-38: every real quote auto-records here by design, so ordinary use or
+  // testing had no way to start clean before a demo -- this clears the
+  // whole log at once (never a selective per-entry deletion, see the
+  // backend's own DELETE /ledger/live docstring for why that stays safe).
+  function handleReset() {
+    if (!window.confirm(`Clear all ${live?.total ?? 0} ledger entries? This cannot be undone.`)) return
+    setResetting(true)
+    setError(null)
+    resetLedgerLive()
+      .then(reload)
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : 'Failed to reset the ledger.'))
+      .finally(() => setResetting(false))
+  }
+
+  return (
+    <Panel
+      title="Live Decision Ledger"
+      meta="Real recommendations this system made, forward-only — never seeded or historical"
+      hint="Every real /quote call appends an entry here automatically. Starts empty and fills forward -- nothing here is seeded or historical."
+      actions={
+        <>
+          <Badge variant="secondary" className="text-[9px]">real, forward-only</Badge>
+          {live && live.total > 0 && (
+            <button
+              type="button"
+              onClick={handleReset}
+              disabled={resetting}
+              title="Clear every entry -- for starting a clean demo, not for hiding unfavourable results (it's all-or-nothing)"
+              className="h-5 rounded-[3px] border border-risk/40 bg-risk-soft px-2 text-[10px] font-semibold text-risk disabled:opacity-40"
+            >
+              {resetting ? 'Clearing…' : 'Clear ledger'}
+            </button>
+          )}
+        </>
+      }
+    >
+      {error && <p className="p-2 text-[11px] text-risk">{error}</p>}
+      {perf && (
+        <div className="grid grid-cols-2 gap-x-4 border-b border-border p-1.5 md:grid-cols-4">
+          <StatRow label="Entries" value={perf.n_entries_total} />
+          <StatRow label="Pending" value={perf.n_pending} tone={perf.n_pending > 0 ? 'wait' : 'plain'} />
+          <StatRow label="Scored" value={perf.n_scored} />
+          <StatRow
+            label="Mean regret $/day"
+            value={perf.mean_realized_regret_usd_per_day != null ? formatNumber(perf.mean_realized_regret_usd_per_day, 2) : '—'}
+            tone={perf.mean_realized_regret_usd_per_day != null && perf.mean_realized_regret_usd_per_day > 0 ? 'risk' : 'go'}
+          />
+          <StatRow label="Lock accuracy" value={perf.lock_accuracy != null ? `${formatNumber(perf.lock_accuracy * 100, 0)}%` : '—'} />
+          <StatRow
+            label="vs always-lock $/day"
+            value={perf.mean_savings_vs_always_lock_usd_per_day != null ? formatNumber(perf.mean_savings_vs_always_lock_usd_per_day, 2) : '—'}
+          />
+          <StatRow
+            label="vs always-wait $/day"
+            value={perf.mean_savings_vs_always_wait_usd_per_day != null ? formatNumber(perf.mean_savings_vs_always_wait_usd_per_day, 2) : '—'}
+          />
+        </div>
+      )}
+      {live && live.total === 0 && (
+        <p className="p-3 text-[11px] text-muted-foreground">
+          No real recommendations recorded yet. This ledger fills forward as the system is used — it is never
+          seeded with historical or example entries.
+        </p>
+      )}
+      {live && live.total > 0 && (
+        <table className="desk-table w-full">
+          <thead>
+            <tr>
+              <th>When</th>
+              <th>Route</th>
+              <th>Class</th>
+              <th className="text-right">Quote $/day</th>
+              <th className="text-right">Risk tol.</th>
+              <th>Action</th>
+              <th>Status</th>
+              <th>Outcome</th>
+            </tr>
+          </thead>
+          <tbody>
+            {live.entries.map((e) => (
+              <tr key={e.entry_id}>
+                <td className="text-[10px] text-muted-foreground">{e.decision_timestamp.slice(0, 16)}</td>
+                <td className="text-[10px]">
+                  {prettyPort(e.origin_port)} → {prettyPort(e.dest_port)}
+                </td>
+                <td>{e.target_vessel_class}</td>
+                <td className="desk-num text-right">{formatNumber(e.today_quote_usd_per_day)}</td>
+                <td className="desk-num text-right text-muted-foreground">{formatNumber(e.risk_tolerance, 2)}</td>
+                <td>
+                  <Badge variant={e.lock_action === 'LOCK' ? 'secondary' : 'outline'} className="text-[9px]">
+                    {e.lock_action}
+                  </Badge>
+                </td>
+                <td>
+                  <span className={cn('text-[10px]', e.status === 'pending' ? 'text-wait' : 'text-go')}>{e.status}</span>
+                </td>
+                <td>
+                  {e.outcome ? (
+                    <span className="desk-num text-[10px]">
+                      {formatNumber(e.outcome.realized_rate_usd_per_day)} @ {e.outcome.realized_at_date}
+                    </span>
+                  ) : (
+                    <OutcomeForm entry={e} onRecorded={reload} />
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </Panel>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// HISTORICAL_MODEL_REPLAY -- retrospective, clearly separate.
+// ---------------------------------------------------------------------------
+
+function ReplaySection() {
+  const [replay, setReplay] = useState<LedgerReplayResponse | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [requested, setRequested] = useState(false)
+
+  function load() {
+    setRequested(true)
+    setLoading(true)
+    setError(null)
+    fetchLedgerReplay()
+      .then(setReplay)
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : 'Failed to load the replay.'))
+      .finally(() => setLoading(false))
+  }
+
+  const pooled = replay?.summaries.filter((s) => s.vessel_class === 'ALL') ?? []
+
+  return (
+    <Panel
+      title="Historical Model Replay"
+      meta="A retrospective backtest — not real decisions this system made"
+      actions={<Badge variant="destructive" className="text-[9px]">retrospective simulation</Badge>}
+    >
+      <div className="border-b-2 border-wait bg-wait-soft p-2 text-[11px] text-wait">
+        <span className="font-bold uppercase tracking-wide">{replay?.label ?? 'retrospective model simulation — not decisions this system actually made'}</span>
+        <p className="mt-0.5 text-foreground">
+          A real backtest over a frozen historical period, calibrated on a separate slice of data
+          it was never scored against — never merged with the Live Decision Ledger's own
+          statistics above.
+        </p>
+      </div>
+      {!requested && (
+        <div className="flex flex-col items-start gap-2 p-2">
+          <p className="text-[11px] text-muted-foreground">
+            Runs a real PSO calibration + backtest on the first load (real minutes-scale cost). Cached after that.
+          </p>
+          <button
+            type="button"
+            onClick={load}
+            className="rounded-[3px] border border-market bg-market/10 px-2 py-1 text-[11px] font-semibold text-market"
+          >
+            Run replay
+          </button>
+        </div>
+      )}
+      {loading && <p className="p-2 text-[11px] text-muted-foreground animate-pulse">calibrating on valid and scoring the real frozen test split…</p>}
+      {error && <p className="p-2 text-[11px] text-risk">{error}</p>}
+      {replay && (
+        <div className="flex flex-col gap-2 p-1">
+          <div className="grid grid-cols-2 gap-x-4 md:grid-cols-4">
+            <StatRow label="Test rows" value={replay.n_test_rows} />
+            <StatRow label="Calibrated risk tolerance" value={formatNumber(replay.calibration.best_risk_tolerance, 3)} />
+            <StatRow label="Compute time" value={`${formatNumber(replay.compute_seconds, 1)}s`} />
+            {replay.stale && <StatRow label="Status" value="STALE (last-good)" tone="risk" />}
+          </div>
+          <table className="desk-table w-full">
+            <thead>
+              <tr>
+                <th>Strategy</th>
+                <th className="text-right">n</th>
+                <th className="text-right">Mean savings $/day</th>
+                <th className="text-right">P10</th>
+                <th className="text-right">Decision value</th>
+                <th className="text-right">Regret</th>
+                <th className="text-right">Hit rate</th>
+                <th className="text-right">Lock rate</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pooled.map((s) => (
+                <tr key={s.strategy}>
+                  <td className="font-semibold">{s.strategy}</td>
+                  <td className="desk-num text-right">{s.n_decisions}</td>
+                  <td className="desk-num text-right">{formatNumber(s.savings_mean, 2)}</td>
+                  <td className="desk-num text-right text-muted-foreground">{formatNumber(s.savings_p10, 2)}</td>
+                  <td className="desk-num text-right">{s.decision_value != null ? formatNumber(s.decision_value, 2) : '—'}</td>
+                  <td className="desk-num text-right">{s.regret != null ? formatNumber(s.regret, 2) : '—'}</td>
+                  <td className="desk-num text-right">{s.hit_rate != null ? `${formatNumber(s.hit_rate * 100, 0)}%` : '—'}</td>
+                  <td className="desk-num text-right">{formatNumber(s.lock_rate * 100, 0)}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Panel>
+  )
+}
+
+export function LedgerPage() {
+  return (
+    <div className="flex h-full flex-col gap-1.5 overflow-auto p-1.5" id="ledger">
+      <LiveLedgerSection />
+      <ReplaySection />
+    </div>
+  )
+}

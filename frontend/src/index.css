@@ -1,0 +1,202 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+@import '@fontsource-variable/ibm-plex-sans';
+@import '@fontsource-variable/jetbrains-mono';
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Voyage Decision Desk. Function before finish: the LOCK / WAIT verdict is the
+ * loudest thing on screen, every number carries a visible label and unit, and
+ * colour is semantic (go / caution / risk / market / structure), never
+ * decoration. Flat surfaces, hairline borders, no hover elevation anywhere.
+ * IBM Plex Sans for everything read as words; JetBrains Mono for numerics only.
+ * Light mode only.
+ */
+@theme inline {
+    --font-heading: 'IBM Plex Sans Variable', 'IBM Plex Sans', system-ui, sans-serif;
+    --font-sans: 'IBM Plex Sans Variable', 'IBM Plex Sans', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace;
+
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --color-surface: var(--surface);
+    --color-surface-2: var(--surface-2);
+    --color-card: var(--card);
+    --color-card-foreground: var(--card-foreground);
+    --color-popover: var(--popover);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-primary: var(--primary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-secondary: var(--secondary);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-muted: var(--muted);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-accent: var(--accent);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-destructive: var(--destructive);
+    --color-destructive-foreground: var(--destructive-foreground);
+    --color-border: var(--border);
+    --color-input: var(--input);
+    --color-ring: var(--ring);
+
+    --color-navbar: var(--navbar);
+    --color-navbar-foreground: var(--navbar-foreground);
+    --color-navbar-muted: var(--navbar-muted);
+
+    /* Semantic scale -- the only colours the desk uses. */
+    --color-go: var(--go);
+    --color-go-soft: var(--go-soft);
+    --color-wait: var(--wait);
+    --color-wait-soft: var(--wait-soft);
+    --color-risk: var(--risk);
+    --color-risk-soft: var(--risk-soft);
+    --color-market: var(--market);
+    --color-market-soft: var(--market-soft);
+    --color-structure: var(--structure);
+
+    --color-grade-a: var(--grade-a);
+    --color-grade-b: var(--grade-b);
+    --color-grade-c: var(--grade-c);
+    --color-grade-d: var(--grade-d);
+    --color-grade-e: var(--grade-e);
+
+    --color-sidebar: var(--sidebar);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-ring: var(--sidebar-ring);
+
+    --radius-sm: calc(var(--radius) * 0.5);
+    --radius-md: var(--radius);
+    --radius-lg: calc(var(--radius) * 1.5);
+}
+
+:root {
+    --navbar: #00294d;
+    --navbar-foreground: #eef4fc;
+    --navbar-muted: #93b4d6;
+
+    --background: #e9edf2;
+    --foreground: #12202e;
+    --surface: #ffffff;
+    --surface-2: #eef2f7;
+    --card: #ffffff;
+    --card-foreground: #12202e;
+    --popover: #ffffff;
+    --popover-foreground: #12202e;
+    --primary: #0b5cad;
+    --primary-foreground: #ffffff;
+    --secondary: #e2eaf4;
+    --secondary-foreground: #1c2b3a;
+    --muted: #eef2f7;
+    --muted-foreground: #566575;
+    --accent: #e2eaf4;
+    --accent-foreground: #0b5cad;
+    --destructive: #c02826;
+    --destructive-foreground: #ffffff;
+    --border: #ccd5df;
+    --input: #b9c4d0;
+    --ring: #0b5cad;
+    --radius: 0.25rem;
+
+    --structure: #0b5cad;
+    --go: #1c7c3c;
+    --go-soft: #e3f2e6;
+    --wait: #a85a00;
+    --wait-soft: #fbecd9;
+    --risk: #c02826;
+    --risk-soft: #fbe4e2;
+    --market: #6a3fa0;
+    --market-soft: #efe7f8;
+
+    --grade-a: #1c7c3c;
+    --grade-b: #6faa3f;
+    --grade-c: #d9a218;
+    --grade-d: #d9741f;
+    --grade-e: #c02826;
+
+    --sidebar: #eef2f7;
+    --sidebar-foreground: #12202e;
+    --sidebar-primary: #0b5cad;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: #e2eaf4;
+    --sidebar-accent-foreground: #0b5cad;
+    --sidebar-border: #ccd5df;
+    --sidebar-ring: #0b5cad;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-size: 12px;
+    line-height: 1.35;
+  }
+}
+
+@layer components {
+  /*
+   * The one value-presentation pattern on the desk: a label on the left, its
+   * value (mono, tabular) hard right on the same baseline. Used everywhere a
+   * single figure is shown, so nothing gets the "big number floating in space"
+   * treatment except the verdict and its cost comparison.
+   */
+  .stat-row {
+    @apply flex items-baseline justify-between gap-3 py-[2px];
+  }
+  .stat-label {
+    @apply text-[9.5px] font-semibold uppercase tracking-wide text-muted-foreground;
+  }
+  .stat-value {
+    @apply font-mono text-[11px] tabular-nums text-foreground;
+  }
+
+  .desk-table {
+    @apply w-full border-collapse text-left;
+  }
+  .desk-table thead th {
+    @apply bg-surface-2 px-1.5 py-[3px] text-[9.5px] font-semibold uppercase tracking-wide
+           text-muted-foreground border-b border-border whitespace-nowrap;
+  }
+  .desk-table tbody td {
+    @apply px-1.5 py-[2.5px] border-b border-border/50 align-middle;
+  }
+  .desk-table tbody tr:last-child td {
+    @apply border-b-0;
+  }
+  /* Row hover is a flat tint for tracking the eye across a wide row -- not a
+     lift, not a shadow. */
+  .desk-table tbody tr:hover td {
+    @apply bg-surface-2;
+  }
+  .desk-num {
+    @apply font-mono text-[11px] tabular-nums;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--surface-2);
+}
+::-webkit-scrollbar-thumb {
+  background: #b7c1cd;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #8b95a3;
+}

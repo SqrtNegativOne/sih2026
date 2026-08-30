@@ -1,0 +1,153 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "S1D_IW_GRDH_1SDV_20260828T121932_20260828T122001_004326_007FA4_331A_COG",
+      "bbox": [
+        85.472878,
+        19.784695,
+        88.252861,
+        21.984388
+      ],
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              85.472878,
+              21.55549
+            ],
+            [
+              85.83625,
+              19.784695
+            ],
+            [
+              88.252861,
+              20.217684
+            ],
+            [
+              87.918549,
+              21.984388
+            ],
+            [
+              85.472878,
+              21.55549
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "datetime": "2026-08-28T12:19:32.472253Z",
+        "start_datetime": "2026-08-28T12:19:32.472253Z",
+        "end_datetime": "2026-08-28T12:20:01.760465Z",
+        "platform": "sentinel-1d",
+        "constellation": "sentinel-1",
+        "sat:orbit_state": "ascending",
+        "product:type": "IW_GRDH_1S",
+        "sar:polarizations": [
+          "VV",
+          "VH"
+        ],
+        "_private": {
+          "visible": true,
+          "product_name": "S1D_IW_GRDH_1SDV_20260828T121932_20260828T122001_004326_007FA4_331A_COG.SAFE",
+          "product_size": 1243019002,
+          "product_uuid": "9c037de8-5540-45d7-b461-c147c8c6170f"
+        }
+      },
+      "assets": {
+        "Product": {
+          "href": "https://download.dataspace.copernicus.eu/odata/v1/Products(9c037de8-5540-45d7-b461-c147c8c6170f)/$value",
+          "roles": [
+            "data",
+            "metadata",
+            "archive"
+          ],
+          "auth:refs": [
+            "oidc"
+          ],
+          "file:size": 1243028258,
+          "file:checksum": "d501104774a4cf01adcfe9fa98fa77c9a5872b",
+          "file:local_path": "S1D_IW_GRDH_1SDV_20260828T121932_20260828T122001_004326_007FA4_331A_COG.SAFE.zip",
+          "type": "application/zip",
+          "title": "Zipped product"
+        }
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "S1D_IW_GRDH_1SDV_20260816T121931_20260816T122001_004151_007980_7902_COG",
+      "bbox": [
+        85.47274,
+        19.784561,
+        88.25267,
+        21.984364
+      ],
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              85.47274,
+              21.555443
+            ],
+            [
+              85.836166,
+              19.784561
+            ],
+            [
+              88.25267,
+              20.217571
+            ],
+            [
+              87.918312,
+              21.984364
+            ],
+            [
+              85.47274,
+              21.555443
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "datetime": "2026-08-16T12:19:31.766725Z",
+        "start_datetime": "2026-08-16T12:19:31.766725Z",
+        "end_datetime": "2026-08-16T12:20:01.056499Z",
+        "platform": "sentinel-1d",
+        "constellation": "sentinel-1",
+        "sat:orbit_state": "ascending",
+        "product:type": "IW_GRDH_1S",
+        "sar:polarizations": [
+          "VV",
+          "VH"
+        ],
+        "_private": {
+          "visible": true,
+          "product_name": "S1D_IW_GRDH_1SDV_20260816T121931_20260816T122001_004151_007980_7902_COG.SAFE",
+          "product_size": 1266173706,
+          "product_uuid": "ca11503a-0fac-4669-9b61-ec6d259bb01f"
+        }
+      },
+      "assets": {
+        "Product": {
+          "href": "https://download.dataspace.copernicus.eu/odata/v1/Products(ca11503a-0fac-4669-9b61-ec6d259bb01f)/$value",
+          "roles": [
+            "data",
+            "metadata",
+            "archive"
+          ],
+          "auth:refs": [
+            "oidc"
+          ],
+          "file:size": 1266182962,
+          "file:checksum": "d5011070cf6ce4e9081a5c857fc94629a729a6",
+          "file:local_path": "S1D_IW_GRDH_1SDV_20260816T121931_20260816T122001_004151_007980_7902_COG.SAFE.zip",
+          "type": "application/zip",
+          "title": "Zipped product"
+        }
+      }
+    }
+  ]
+}

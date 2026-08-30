@@ -1,0 +1,103 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+venv/
+env/
+ENV/
+build/
+develop-eggs/
+.eggs/
+dist/
+.downloads/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Text editors
+*.swp
+*.swo
+*~
+
+# IDE
+.vscode/
+.idea/
+.claude/
+*.code-workspace
+
+# Environments
+.venv
+venv
+env
+ENV
+
+# Frontend
+node_modules/
+frontend/dist/
+*.local
+
+# Test / lint artifacts
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Runtime-generated data, not source data: fills up from real usage on each
+# teammate's machine (the live decision ledger, the point-in-time archive) --
+# committing it would create constant merge conflicts and grow the repo with
+# data that's either empty on a fresh clone or regeneratable
+# (data_builders.pit_archive.archive_all_sources()), not something teammates
+# need to share via git. raw_data/ itself (the real harvested source data
+# the whole system depends on) is intentionally NOT ignored -- that's real,
+# hard-won input data, not a build artifact.
+raw_data/ledger/
+raw_data/pit_archive/
+# opt.weather_window's disk cache for live Open-Meteo marine forecasts --
+# 12-hour TTL, re-fetched constantly, keyed by rounded lat/lon and today's
+# date. Regenerated on demand (falls back to None, never breaks a quote, if
+# absent); not source data any teammate needs to share via git.
+raw_data/open_meteo/
+
+# IBTrACS is the one exception to "raw_data/ is intentionally tracked" above:
+# the ALL-list CSV is hundreds of MB, too large to commit sensibly. Only
+# PULL_NOTES.md (source/licence/citation) and the derived
+# src/data/cyclone_climatology.parquet are committed -- see
+# data_builders.harvest_ibtracs and data_builders.build_cyclone_climatology.
+raw_data/ibtracs/*.csv
+
+# Sentinel-1 SAR scenes -- real GRD products are ~1.2-2.0 GB each (measured
+# live, see data_builders.harvest_sentinel1's own module docstring). Only
+# PULL_NOTES.md is committed. The detection-overlay PNGs anchorage renders
+# from a real scene are also large (~8 MB each, full-resolution crops) and
+# regenerable from the scene, so they are ignored here too -- a small,
+# presentation-ready copy of the one worth keeping lives in
+# docs/screenshots/ instead, which IS committed.
+raw_data/sentinel1/*.zip
+raw_data/sentinel1/*.SAFE
+raw_data/sentinel1/*.tiff
+raw_data/sentinel1/*.png
+
+# anchorage.render's per-(port, scene_id) overlay PNGs (served live by
+# GET /anchorage/{port}/overlay.png) -- ~0.5-1 MB each, same "regenerable
+# from the real scene + census, not source data" reasoning as the
+# sentinel1/*.png entry above. census.jsonl itself (the real persisted
+# vessel-count record, anchorage.store's append-only log) is NOT ignored --
+# that IS the real observation, kept the same way opt/ledger's log is.
+raw_data/anchorage/overlays/
