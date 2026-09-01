@@ -81,6 +81,7 @@ export function BackhaulPanel({
 
   return (
     <Panel
+      className="h-full"
       title="Backhaul Opportunity"
       meta="informational -- never moves the recommendation"
       hint="Score = P(class-appropriate cargo within the window) x today's real TC quote x window - real ballast fuel cost, after this vessel discharges here. The TC quote is class-level, identical at every port shown (no route-level rate geography yet) -- so this ranks by real cargo likelihood and real ballast cost, not by 'rates are better here'. credit_usd_per_mt is always null -- no rate field exists in the data to validate one against."

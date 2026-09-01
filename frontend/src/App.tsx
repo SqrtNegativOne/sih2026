@@ -48,7 +48,17 @@ function App() {
   const [stages, setStages] = useState<ProgressStage[]>([])
   const [solving, setSolving] = useState(false)
   const [quoteError, setQuoteError] = useState<string | null>(null)
-  const [drawerOpen, setDrawerOpen] = useState(true)
+  // F-53: this used to default to `true` -- the drawer, and its
+  // full-viewport backdrop, auto-opened on every fresh load. That backdrop
+  // is exactly what F-48/F-52 had to chase down and patch with z-index
+  // fixes on the nav rail, top bar, and <main> in turn -- three separate
+  // fixes for the same root cause, and still the first thing a user hits
+  // on load. Defaulting closed removes the bug class at its source instead
+  // of relying on every future page/panel remembering to out-z-index a
+  // backdrop it may not even know exists: the empty desk state already has
+  // its own explicit "New Charter Quote" button for a user who wants to
+  // open it.
+  const [drawerOpen, setDrawerOpen] = useState(false)
   const runId = useRef(0)
 
   useEffect(() => {
@@ -96,7 +106,21 @@ function App() {
       <TopBar onNewQuote={() => setDrawerOpen(true)} />
       <div className="flex min-h-0 flex-1">
         <IconRail active={VIEW_LABEL[view]} onSelectView={setView} />
-        <main className="min-w-0 flex-1 overflow-y-auto p-1.5">
+        {/* F-52: the icon-rail/top-bar z-50 fix (F-48) only restored the
+            NAV controls' own clickability through the drawer's backdrop --
+            it never fixed the actual PAGE CONTENT here, which had no
+            z-index either. drawerOpen defaults to true on first load, so a
+            user who navigated straight to Portfolio/Fragility/Tonnage
+            Field/Port Twin via the (now-clickable) rail still landed on a
+            page whose own controls -- Run analysis, Run sweep, any button
+            in here -- were silently covered by the same backdrop and did
+            nothing when clicked. Confirmed live via elementFromPoint at the
+            real Portfolio "Run analysis" button's screen coordinates: it
+            resolved to the backdrop div, not the button. Same z-50 fix,
+            same reasoning: DOM order (the drawer renders after this <main>)
+            keeps the drawer panel itself on top where it actually overlaps
+            this element's right edge. */}
+        <main className="relative z-50 min-w-0 flex-1 overflow-y-auto p-1.5">
           {view === 'port-twin' ? (
             <PortTwinPage ports={ports} />
           ) : view === 'tonnage-field' ? (

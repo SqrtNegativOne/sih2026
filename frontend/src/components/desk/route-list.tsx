@@ -30,6 +30,7 @@ export function RouteList({
 
   return (
     <Panel
+      className="h-full"
       title="Routes"
       hint="Every routing the solver evaluated. Click one to zoom the map to it."
       meta={`${routes.length}`}

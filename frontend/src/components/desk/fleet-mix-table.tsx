@@ -59,6 +59,7 @@ function Row({
 export function FleetMixTable({ frontier }: { frontier: FleetMixFrontier }) {
   return (
     <Panel
+      className="h-full"
       id="fleet"
       title="Fleet Mix Frontier"
       hint="Cheapest feasible vessel-class configurations for this cargo and route, priced under the real forecast. Rel. is a reliability grade (fewer ships, no transshipment = higher). T/S marks a transshipment leg. Greyed rows were ruled out; reasons below."

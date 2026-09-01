@@ -60,6 +60,7 @@ export function PortChecksTable({
 
   return (
     <Panel
+      className="h-full"
       id="ports"
       title="Port Constraints"
       hint="Berth limits and current queue at the load and discharge ports, shown side by side. Wait marked * is an estimate, not live data. Congestion buckets the live wait against the port's own normal."

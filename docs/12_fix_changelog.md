@@ -64,6 +64,10 @@ the number/behaviour changed, not just that code was edited.
 | F-48 | Moderate | Nav rail / top bar unreachable behind the New Quote drawer's backdrop on first load | ✅ done |
 | F-49 | Moderate | Click-to-focus map zoom pans to the wrong point instead of panel centre | ✅ done |
 | F-50 | Minor | Great-circle-fallback route legs rendered identically to real waterway routes | ✅ done |
+| F-51 | Moderate | Anchorage panel silently fell back to origin-port congestion, no zoom on the SAR image | ✅ done |
+| F-52 | Blocker | Drawer backdrop still covered every secondary page's own controls (Run analysis/Run sweep did nothing) | ✅ done |
+| F-53 | Blocker | Root cause of F-48/F-52: the New Quote drawer auto-opened on every fresh load | ✅ done |
+| F-54 | Blocker | The REAL cause of "Run analysis does nothing": `Panel`'s own `h-full` squashed every secondary-page results panel to ~2px | ✅ done |
 
 Legend: ⬜ not started · 🔶 in progress · ✅ done · ⏸️ deferred (with reason) · ➖ no action needed
 
@@ -1991,3 +1995,148 @@ Ledger cleaned of this pass's own verification quotes (`opt.ledger.reset_ledger(
 entries from live browser-driven checks) before handing back — none of it is real user data.
 `cd frontend && npx tsc --noEmit` and `npx oxlint` on every changed file: clean. Full
 `uv run python -m pytest -q`: see this date's final entry below for the confirmed count.
+
+### 2026-09-01 — F-51: anchorage panel keys on destination only, real zoom/pan added
+
+User report: "it should show the congestion using satellite image which we can zoom in or zoom out
+and show us the congestion at the destination port because for some routes it's showing the origin
+port." Real bug confirmed: `voyage-desk-page.tsx` computed the anchorage panel's port as
+`anchoragePortForQuotePort(quote.dest_port) ?? anchoragePortForQuotePort(quote.origin_port)` — a
+silent fallback to the ORIGIN port's census whenever the destination wasn't one of Sentinel-1's five
+covered ports (common for any backhaul-style route running the network's usual direction in reverse),
+with no label anywhere saying which end of the route was actually being shown. Fixed to key on
+`dest_port` only — real destination congestion, or the panel doesn't render at all. Verified with two
+real quotes: Paradip → Hampton Roads (uncovered destination) now correctly shows no panel;
+Hampton Roads → Paradip shows the panel explicitly labelled "PARADIP · destination".
+
+Also built the requested zoom: `ZoomableImage` (new component in `anchorage-panel.tsx`) adds real
+cursor-centred wheel zoom (same mechanics as `route-map.tsx`'s own free zoom), on-screen +/− buttons,
+drag-to-pan once zoomed (via Pointer Events + `setPointerCapture`, so a drag started on the image
+tracks correctly even if the cursor leaves it), and double-click to reset. Switched the image's base
+fit from `object-cover` (silently cropped part of the real scene to fill the panel) to `object-contain`
+(the whole crop is visible before zooming in). Live-verified via screenshot: zooming in reveals
+individual detections at a scale the fixed-size crop couldn't show, and panning shifts the visible
+region correctly.
+
+`cd frontend && npx tsc --noEmit` and `npx oxlint`: clean (only pre-existing warning patterns).
+
+### 2026-09-01 — F-52: the drawer-backdrop bug from F-48 was only half fixed; Run analysis/Run sweep did nothing
+
+User report, after F-48 had supposedly fixed "Portfolio/Fragility/Tonnage Field don't work": all three,
+plus Port Twin, were STILL broken — clicking "Run analysis" or "Run sweep" visibly did nothing.
+F-48's fix (giving `IconRail`/`TopBar` `z-50` so nav clicks reach them through the New Quote drawer's
+`fixed inset-0 z-40` backdrop) was real but incomplete: it only restored the NAV RAIL's own
+clickability. The actual page content — `<main>`, where Portfolio's "Run analysis", Fragility's
+"Run sweep", and every other secondary-page control lives — had no z-index of its own and was still
+sitting behind the same backdrop. A user who navigated to Portfolio via the (now-clickable) rail
+without ever explicitly closing the drawer landed on a page that visually looked fine but whose own
+buttons were still covered.
+
+Confirmed directly, not assumed: `document.elementFromPoint()` at the real, on-screen coordinates of
+Portfolio's "Run analysis" button resolved to the backdrop `<div class="fixed inset-0 z-40 bg-black/30">`,
+not the button. Fixed with the same pattern as F-48 — `relative z-50` on `<main>` in `App.tsx` — and
+re-confirmed with the same `elementFromPoint` check: it now resolves to the real button. Live-verified
+end to end, not just the click landing: Portfolio's "Run analysis" now produces a real recommended
+mix, Fragility's "Run sweep" produces real findings (59 evaluations, 4.1s), Tonnage Field and Port
+Twin both render real data — all from a truly fresh page load with the drawer never explicitly closed,
+the exact scenario that was broken.
+
+**Separate, real finding surfaced while chasing this down:** the long-running dev `uvicorn --reload`
+process (up 6h22m) had accumulated 195 minutes of CPU time — sustained ~50% average utilization —
+because plain `--reload` with no `--reload-dir` watches the entire working directory recursively,
+including `.venv` (26,376 files, 1.2 GB) and `raw_data` (6.8 GB, thousands of files from this
+session's own Sentinel-1 work). A `/fragility` sweep that should take ~4s was taking 10s+. Restarted
+scoped to the directories that actually change: `uv run uvicorn backend.main:app --reload --reload-dir
+backend --reload-dir src`. Not a code bug and not changed in the documented `CLAUDE.md` command (the
+plain command still works, just watches more than it needs to over a long session) — noted here as an
+operational fix worth applying whenever a dev server has been running for many hours.
+
+`cd frontend && npx tsc --noEmit`: clean. No backend/Python source changed this pass, so the full
+`pytest` suite was not re-run.
+
+### 2026-09-01 — F-53: fixed the root cause behind F-48 and F-52, not just their symptoms
+
+User report persisted ("i see when i click run analysis it shows nothing") even after F-52's fix was
+verified working by every method available: ref-based clicks, a raw mouse click at the button's real
+on-screen pixel coordinates, `document.elementFromPoint()` at those exact coordinates, the full click
+→ result flow, computed CSS confirming a real `z-index: 50` on `<main>`, no competing server process,
+clean HMR propagation of the fix. Every check passed. Rather than re-assert the same fix a third time,
+built and served a completely fresh, HMR-free production bundle (`npm run build` + `vite preview` on
+a clean port) to rule out any possibility of stale dev-server/HMR state in a way a "please hard-refresh"
+request never fully can — and re-ran the full verification against it. Still worked, on a build the
+browser could not possibly have any prior cached state for.
+
+That result made the real, underlying issue clear: F-48 and F-52 were both real, correctly-diagnosed
+bugs, but both were *symptom* patches — each one gave a specific bit of page chrome (`IconRail`,
+`TopBar`, then `<main>`) enough `z-index` to escape the New Quote drawer's `fixed inset-0 z-40`
+backdrop, one surface at a time, as each was discovered broken. That is a fragile pattern: any future
+panel, modal, or piece of page content added without remembering to out-z-index this specific backdrop
+reintroduces the exact same bug. The actual root cause was never the missing z-index patches
+individually — it was `drawerOpen` defaulting to `true` on every fresh page load in the first place,
+which is *why* a full-viewport backdrop is sitting over the whole app from the moment anyone opens it.
+
+Fixed at the source: `drawerOpen` in `App.tsx` now defaults to `false`. The empty desk state already
+has its own explicit "New Charter Quote" button (`voyage-desk-page.tsx`'s own empty state) for a user
+who wants to open the drawer, so nothing is lost — a fresh load now shows the ordinary empty state
+with no backdrop anywhere, and every page's own controls are reachable with zero z-index gymnastics
+needed, now or for anything built on top of this later. Re-verified end to end against a freshly
+rebuilt production bundle from a genuinely fresh load (confirmed via `document.body.innerText.length`
+dropping from ~508-584 chars, the drawer's own form content, to 210, the plain empty-state text):
+Portfolio's Run analysis produces a real recommended mix, Fragility's Run sweep produces real
+findings, Tonnage Field and Port Twin both render real data, and a real Hampton Roads → Paradip quote
+prices correctly with its destination anchorage census showing — all five, with zero clicks needed to
+dismiss anything first.
+
+`cd frontend && npm run build`: clean (2741 modules, zero TypeScript errors). `npx oxlint src/App.tsx`:
+clean. No backend/Python source changed this pass.
+
+### 2026-09-01 — F-54: the real bug behind every "Run analysis does nothing" report, found via a user-supplied diagnosis
+
+User provided a written diagnosis (`panel_height_fix.md`) after F-48/F-52/F-53 all failed to resolve
+the report. It named a completely different mechanism from anything chased so far: `Panel`
+(`components/desk/panel.tsx`) carried `h-full` in its own base class list, intended for the Voyage
+Desk where every `Panel` sits inside an explicitly sized wrapper `<div>` (the desk's own `h-[Npx]` row
+divs). On the five secondary pages -- Portfolio, Fragility, Port Twin, Tonnage Field, Ledger -- panels
+instead sit in plain top-to-bottom `flex-col` flow with no fixed-height ancestor. In that layout, a
+flex item's `height: 100%` resolves against the *containing flex block's* real height, so the FIRST
+panel in each page (the input form) stretched to swallow the page's entire real height, leaving every
+panel stacked after it -- the actual results -- with no space: rendered, fully populated with real
+data, at effectively zero height. Invisible, not absent.
+
+**Verified directly before touching anything**, rather than trusting the document outright: measured
+real `getBoundingClientRect()` heights on Portfolio after a real "Run analysis" click. Confirmed
+exactly as described -- "Portfolio Mix" (the form) at **930px**, and "Recommended Mix" /
+"Scenario Context" / "Efficient Frontier" (the real, populated results) all at **2px**. This is why
+every previous verification pass in this thread reported success: every check up to this point tested
+`document.body.innerText.includes(...)`, which is still true for a 2px-tall element -- the text is
+genuinely in the DOM, just visually squashed to nothing. That was the real blind spot, not the app.
+
+The document's fix (remove `h-full` from `Panel`'s base class; add `className="h-full"` back
+explicitly on every caller that lives inside a Voyage-Desk fixed-height box) was correct, but its list
+of callers needing that explicit opt-in was incomplete -- it named 9 files
+(`rate-forecast-table.tsx`, `risk-feed.tsx`, `fleet-mix-table.tsx`, `port-checks-table.tsx`,
+`voyage-assignments-table.tsx`, `landed-cost-panel.tsx` x2, `backhaul-panel.tsx`, `route-map.tsx`,
+`route-list.tsx`) but missed three more that also render inside the desk's Exposure row and also use
+`Panel`: `cii-panel.tsx` (2 call sites: empty state + populated), `fracture-panel.tsx` (3: two empty
+states + populated), and `anchorage-panel.tsx` (4: loading + error + empty + populated) -- found by
+grepping every `<Panel` call site across the whole frontend rather than trusting the given list, since
+missing even one of these would have silently reintroduced a squashed panel on the desk itself.
+Applied `className="h-full"` to all 18 call sites across all 11 files.
+
+**Re-verified with real measurements, not just re-reading the diff:** rebuilt (`npm run build`, clean)
+and re-measured the same Portfolio panels after a real "Run analysis" click -- "Recommended Mix" and
+"Scenario Context" now **293px**, "Efficient Frontier" **498px**, the form itself down to a sane
+**133px** (was 930px). Screenshotted both Portfolio and Fragility in full: every panel visible,
+correctly proportioned, real data. Cross-checked the Voyage Desk itself for regressions from the
+explicit `h-full` re-additions: every one of its 11 `Panel`-based components measured at exactly its
+intended wrapper height (380/380/440/440/200/200/400/400/210/210/210px) -- zero regression.
+Tonnage Field spot-checked the same way (six real, non-zero panel heights, 79-370px).
+
+This is very likely the actual root cause of every "it doesn't work" report on these five pages across
+this entire session, including reports that survived F-48/F-52/F-53 -- those were real, correctly
+fixed bugs (the drawer backdrop genuinely did block clicks at one point), but this squashed-panel bug
+existed independently and would have kept the results invisible regardless of whether the click ever
+landed.
+
+`cd frontend && npx tsc --noEmit`: clean. `npx oxlint` on all 11 changed files: clean (only
+pre-existing warning patterns). No backend/Python source changed this pass.

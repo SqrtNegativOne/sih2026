@@ -135,7 +135,7 @@ export function LandedCostPanel({
 
   if (!shown) {
     return (
-      <Panel title="Landed Cost" meta="$/MT">
+      <Panel className="h-full" title="Landed Cost" meta="$/MT">
         <div className="flex h-full items-center justify-center text-center text-[11px] text-muted-foreground">
           No real transit-day estimate for this route -- freight can't be converted to $/MT yet.
         </div>
@@ -147,6 +147,7 @@ export function LandedCostPanel({
 
   return (
     <Panel
+      className="h-full"
       title="Landed Cost"
       meta={`${shown.components_included.length}/5 components real`}
       hint="freight + wait/delay + handling + demurrage + commodity price, each with its own provenance. Unavailable components show a reason, never a silent $0. Enter your own handling/demurrage/laytime/commodity assumptions below to fill the gaps -- POST /landed-cost, never a repo-invented default."

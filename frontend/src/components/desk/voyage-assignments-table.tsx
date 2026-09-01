@@ -17,6 +17,7 @@ export function VoyageAssignmentsTable({
 
   return (
     <Panel
+      className="h-full"
       id="assignments"
       title="Voyage Assignments"
       hint="CP-SAT profit-maximising assignment of your supplied vessels to this cargo, plus repositioning advice for any idle vessel. Times are days from now; profit needs a cargo revenue figure in the quote form."

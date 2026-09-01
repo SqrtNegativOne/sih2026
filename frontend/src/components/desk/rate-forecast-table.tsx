@@ -123,6 +123,7 @@ export function RateForecastTable({
   const routeEvidence = rows[0]?.route_evidence ?? 'ROUTE_RATE_BASIS_UNAVAILABLE'
   return (
     <Panel
+      className="h-full"
       id="forecast"
       title="Rate Forecast"
       hint="Model-forecast time-charter rate by horizon. Shaded band is the p10–p90 range, line is p50, dashed line is today's quote. Dir compares p50 to today; Conf is model agreement."

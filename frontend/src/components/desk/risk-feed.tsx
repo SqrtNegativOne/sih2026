@@ -39,6 +39,7 @@ export function RiskFeed({ assessment }: { assessment: RiskAssessment }) {
   const alerts = assessment.alerts
   return (
     <Panel
+      className="h-full"
       id="risk"
       title="Risk Feed"
       hint="Real-data early warnings: unusual rate-regime shifts, port congestion spikes, chokepoint traffic drops (Suez, Hormuz, Malacca, Bab-el-Mandeb, Cape), and real per-basin, per-week cyclone strike climatology for the ports on this quote. Each alert shows its metric vs threshold."

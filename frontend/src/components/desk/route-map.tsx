@@ -302,6 +302,7 @@ export function RouteMap({
 
   return (
     <Panel
+      className="h-full"
       id="map"
       title="Route Exploration"
       hint="Every routing the solver evaluated. Solid = chosen, dashed = considered, dotted red = rejected (toggle on), fine dots = no real waterway route resolved for that hop (straight-line estimate). Routes sharing a leg are fanned apart. Hover to isolate a route; click one to zoom to it, click empty water to reset."

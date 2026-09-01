@@ -277,7 +277,15 @@ export function VoyageDeskPage({
           even columns when it's present, 2 when it isn't, rather than
           leaving a half-width gap or a separate half-empty row. */}
       {(() => {
-        const anchoragePort = anchoragePortForQuotePort(quote.dest_port) ?? anchoragePortForQuotePort(quote.origin_port)
+        // F-51 fix: this used to fall back to the ORIGIN port's census when
+        // the destination wasn't one of Sentinel-1's five covered ports --
+        // silently showing a different port's congestion under a panel that
+        // gives no origin/destination label, which read as "the wrong port"
+        // (a real user report). Discharge-side congestion is what actually
+        // matters for a chartering decision (how fast the vessel gets off
+        // demurrage at the far end), so this now keys on dest_port only --
+        // real destination congestion, or the panel doesn't render at all.
+        const anchoragePort = anchoragePortForQuotePort(quote.dest_port)
         const span = anchoragePort ? 'xl:col-span-4' : 'xl:col-span-6'
         return (
           <div className="grid grid-cols-1 gap-1 xl:grid-cols-12">

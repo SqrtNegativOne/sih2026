@@ -26,17 +26,20 @@ export function Panel({ title, meta, hint, actions, className, flush, children, 
     <section
       id={id}
       className={cn(
-        // h-full: every caller wraps Panel in a sized box (h-[Npx] or a grid/
-        // flex track) expecting it to fill that height -- but a plain sized
-        // *block* wrapper (the common case, e.g. VoyageDeskPage's row divs)
-        // does not stretch a block child to fill it the way a flex/grid
-        // parent would, so without this Panel silently shrank to its own
-        // content height instead. Usually invisible because a table/chart's
-        // content happens to be close to the intended height anyway; on
-        // RouteMap (whose only content is an SVG with a 260px floor, deep
-        // below its 424px wrapper) the gap was large enough to make the map
-        // look broken -- "suddenly so small" was this bug, not a map change.
-        'flex h-full min-h-0 flex-col overflow-hidden rounded-[3px] border border-border bg-surface',
+        // No h-full here on purpose (see the F-54 note in docs/12_fix_changelog.md):
+        // it used to live in this base class, so every Panel greedily filled
+        // 100% of its containing block's height. That's correct ONLY when a
+        // caller wraps Panel in an explicitly sized box (VoyageDeskPage's own
+        // h-[Npx] row divs) -- on the five secondary pages, panels sit in
+        // plain top-to-bottom flex-col flow instead, where the FIRST panel's
+        // height:100% resolved against the whole page's real height and
+        // swallowed it, squashing every panel stacked after it (a real
+        // results panel, fully rendered with real data) to ~2px -- invisible,
+        // not absent. Panel now sizes to its own content by default; callers
+        // that genuinely need it to fill a fixed-height box opt in with
+        // `className="h-full"` explicitly (see the nine desk/* components
+        // that do).
+        'flex min-h-0 flex-col overflow-hidden rounded-[3px] border border-border bg-surface',
         className,
       )}
     >

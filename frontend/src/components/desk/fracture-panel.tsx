@@ -73,6 +73,7 @@ export function FracturePanel({ fracture }: { fracture: QuoteFractureSummary | n
   if (!fracture) {
     return (
       <Panel
+        className="h-full"
         id="fracture"
         title="Chokepoint Fracture Index"
         hint="A combined 0-100 disruption score per chokepoint on this route -- real PortWatch transit anomaly, real GDELT conflict-coverage anomaly, and real Joint War Committee Listed Area membership, fused. A score built from fewer than the full signal set is capped at 'Watch', however high its raw index -- see opt.fracture's own module docstring."
@@ -87,6 +88,7 @@ export function FracturePanel({ fracture }: { fracture: QuoteFractureSummary | n
   if (fracture.chokepoints.length === 0) {
     return (
       <Panel
+        className="h-full"
         id="fracture"
         title="Chokepoint Fracture Index"
         hint="A combined 0-100 disruption score per chokepoint on this route -- real PortWatch transit anomaly, real GDELT conflict-coverage anomaly, and real Joint War Committee Listed Area membership, fused."
@@ -100,6 +102,7 @@ export function FracturePanel({ fracture }: { fracture: QuoteFractureSummary | n
 
   return (
     <Panel
+      className="h-full"
       id="fracture"
       title="Chokepoint Fracture Index"
       hint="A combined 0-100 disruption score per chokepoint on this route -- real PortWatch transit anomaly, real GDELT conflict-coverage anomaly, and real Joint War Committee Listed Area membership, fused. A score built from fewer than the full signal set is capped at 'Watch', however high its raw index -- see opt.fracture's own module docstring. 'Inputs' says exactly which signals fed each row, so a one-signal score is never mistaken for a four-signal one."

@@ -58,6 +58,7 @@ export function CIIPanel({ emissions }: { emissions: VoyageEmissions | null }) {
   if (!emissions) {
     return (
       <Panel
+        className="h-full"
         id="cii"
         title="Carbon Intensity (CII)"
         hint="IMO Carbon Intensity Indicator projection for each real vessel on this quote's route: attained vs required CII (gCO2/dwt·nm) and the A-E rating those two numbers imply."
@@ -71,6 +72,7 @@ export function CIIPanel({ emissions }: { emissions: VoyageEmissions | null }) {
 
   return (
     <Panel
+      className="h-full"
       id="cii"
       title="Carbon Intensity (CII)"
       hint="IMO Carbon Intensity Indicator projection for each real vessel on this quote's route: attained vs required CII (gCO2/dwt·nm) and the A-E rating those two numbers imply. Ballast fuel to reach the load port is charged against the laden leg's transport work -- the conservative reading; see emissions.projection's docstring."
