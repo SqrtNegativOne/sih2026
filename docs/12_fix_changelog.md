@@ -2326,3 +2326,43 @@ than tz-aware-and-wrong"). Left unchanged, and left unsuppressed, on purpose.
 Runtime re-swept across every page and every compute action after the frontend change: zero console
 errors, zero page exceptions, zero failed requests. `tsc` clean; `oxlint` 5 warnings, all pre-existing;
 `npm run build` clean; synthetic-data tripwire green.
+
+#### 2026-09-02 (follow-up 2) — lint clean across the whole repo; F-61 ledger clipping
+
+**`ruff check .` now passes on the entire repository** (it was 4 errors under the documented
+`ruff check src backend`, 28 across everything). Nothing about how any timestamp is parsed changed:
+the four DTZ findings in `src/` were, and remain, correct as written, and the earlier entry above
+still explains why. What changed is only how they are recorded.
+
+They had been left deliberately unsuppressed so a reader would meet the tension. In practice that
+kept `ruff check` permanently red, which trains everyone to skim past a failing lint run — and a lint
+run nobody reads is how a real finding eventually gets missed. Each now carries a per-line
+`# noqa: DTZ0xx` with its reasoning kept in place beside it (the `adani_schedule.parse_timestamp`
+docstring, which is the canonical statement of the IST argument, is unchanged and is what the other
+three sites point at). Behaviour is byte-identical: 1297 passed, 3 skipped, same as before.
+
+The 27 findings in `tests/` were 25 × DTZ001 plus one `zip()`-over-pairs and one unsorted import
+block. The two real ones are fixed properly (`itertools.pairwise` in `test_portfolio_api.py`, imports
+sorted in `test_baselines.py`). The DTZ family is switched off for `tests/**` via `per-file-ignores`
+rather than suppressed line by line: inside the suite a naive datetime is the point — fixtures are
+fixed literals chosen to make an assertion readable, never compared against a real clock — and forcing
+`tz=UTC` on 25 of them would add noise without making one test stricter. Scoped to `tests/` only, so
+the rule keeps its teeth everywhere it can catch a real shift.
+
+**F-61 — Ledger panels clipped once the log grew.** The Ledger page was the one secondary screen not
+converted in F-57, because its two panels sit in `flex h-full flex-col` rather than a grid. A flex
+item defaults to `flex-shrink: 1`, so as soon as the live ledger held enough real entries to exceed
+the viewport, both panels were compressed below their own content instead of the page scrolling —
+measured at +53px and +12px of unreachable overflow, hiding the oldest entries and the replay panel's
+footer. Same fix as the other four: `grid auto-rows-min content-start`, rows sized to content, the
+container scrolls. This one only appears once the append-only log has accumulated real rows, which is
+why the earlier sweeps (against a shorter ledger) passed.
+
+**Verified against freshly restarted servers.** Backend on `127.0.0.1:8000`
+(`--reload-dir backend --reload-dir src`, scoped so the reloader stops walking `.venv`'s 26k files and
+`raw_data`'s 6.8GB), Vite on `:5173` proxying `/api`. An orphaned uvicorn worker from an earlier
+session (7.5h old) and a stray `vite preview` were cleaned up first. Full sweep: all five secondary
+pages **PASS** (every panel > 50px, zero clipped, no horizontal scroll), the desk **PASS** at 1280 /
+1440 / 1920, and zero console errors, zero page exceptions and zero failed requests across every page
+and every compute action. `ruff check .` clean · `tsc` clean · `oxlint` 5 pre-existing warnings ·
+`npm run build` clean · `pytest` 1297 passed, 3 skipped.

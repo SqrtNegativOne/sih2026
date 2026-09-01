@@ -84,6 +84,18 @@ export-models = "ml.export:main"
 # Ignore minor stylistic and scratch-stage warnings
 ignore = ['SIM118', 'PLR0124', 'RUF059']
 
+[tool.ruff.lint.per-file-ignores]
+# The flake8-datetimez (DTZ) family exists to stop *production* code from
+# constructing an instant whose timezone it never established -- the real
+# failure it prevents is a parsed port timestamp silently shifting by hours
+# (see berth_truth/parsers/adani_schedule.parse_timestamp for the concrete
+# case). Inside the suite, a naive datetime is the point: fixtures are fixed
+# literals chosen to make an assertion readable, they are never compared
+# against a real clock, and forcing tz=UTC on each one would add noise to
+# every test without making a single one stricter. Scoped to tests/ only, so
+# the rule keeps its teeth everywhere it can actually catch a real shift.
+"tests/**/*.py" = ["DTZ001", "DTZ005", "DTZ007", "DTZ011"]
+
 [tool.pytest.ini_options]
 # Lets tests import `ml`, `opt`, `data_builders` without an editable install.
 # "." is for tests/backend, which imports the top-level `backend` package --

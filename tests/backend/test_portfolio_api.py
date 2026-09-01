@@ -3,6 +3,8 @@ COA mix), given a real endpoint. opt.portfolio's own math is validated in
 tests/opt/test_portfolio.py; these tests cover the HTTP wiring only."""
 from __future__ import annotations
 
+from itertools import pairwise
+
 from fastapi.testclient import TestClient
 
 from backend.main import app
@@ -46,7 +48,7 @@ class TestPortfolioEndpoint:
         scramble the risk_aversion_k -> risk_aversion mapping along the way."""
         r = client.post("/portfolio", json=_BASE)
         stds = [m["cost_std_usd"] for m in r.json()["frontier"]]
-        assert all(a >= b - 1e-6 for a, b in zip(stds, stds[1:]))
+        assert all(a >= b - 1e-6 for a, b in pairwise(stds))
 
     def test_default_risk_aversion_k_is_one(self) -> None:
         r = client.post("/portfolio", json=_BASE)

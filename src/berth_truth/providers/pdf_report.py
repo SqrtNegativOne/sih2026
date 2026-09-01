@@ -125,7 +125,12 @@ def _parse_timestamp(cell: str | None, reference: date) -> tuple[datetime | None
     if reference.month == 1 and mon == 12:
         year -= 1
     try:
-        return datetime(year, mon, dd, hh, mm), None
+        # Naive on purpose (DTZ001), same reasoning as
+        # parsers.adani_schedule.parse_timestamp: the report prints a bare
+        # 'HH:MM DD-MM' with no zone, and these are port-local clock times.
+        # Stamping UTC would assert an offset the document never gives and
+        # would move every arrival by hours.
+        return datetime(year, mon, dd, hh, mm), None  # noqa: DTZ001
     except ValueError:
         return None, f"timestamp cell parsed but is not a real date: {cell!r} (year={year})"
 

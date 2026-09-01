@@ -1,6 +1,8 @@
-import pytest
 import polars as pl
-from ml.baselines import pinball, _clean_sigma
+import pytest
+
+from ml.baselines import _clean_sigma, pinball
+
 
 def test_pinball_loss():
     # True values

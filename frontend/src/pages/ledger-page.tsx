@@ -281,7 +281,19 @@ function ReplaySection() {
 
 export function LedgerPage() {
   return (
-    <div className="flex h-full flex-col gap-2 overflow-auto p-2" id="ledger">
+    // Grid with content-sized rows, not `flex flex-col` -- the same fix the
+    // other four secondary pages needed (F-57), arrived at here for the
+    // matching reason. A flex item defaults to `flex-shrink: 1`, so once the
+    // live ledger had accumulated enough real entries to exceed the viewport,
+    // both panels were compressed below their own content instead of the page
+    // scrolling: measured at +53px and +12px of hidden overflow, with the
+    // oldest rows and the replay panel's footer simply not reachable. Auto
+    // rows size to content and the container scrolls, which is what a growing
+    // append-only log needs.
+    <div
+      className="grid h-full auto-rows-min content-start gap-2 overflow-auto p-2"
+      id="ledger"
+    >
       <LiveLedgerSection />
       <ReplaySection />
     </div>

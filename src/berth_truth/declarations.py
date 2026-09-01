@@ -135,11 +135,11 @@ def parse_declaration_text(
 
     rows: list[DraftDeclaration] = []
     for day, mon, yr, value in daily_matches:
-        # Naive by construction (ruff DTZ007, not suppressed): the document
-        # states a calendar date only, no timezone -- same reasoning as
-        # parsers.adani_schedule.parse_timestamp, and .date() below discards
-        # any time-of-day component immediately regardless.
-        row_date = datetime.strptime(f"{day}-{mon}-{yr}", "%d-%b-%y").date()
+        # Naive by construction: the document states a calendar date only, no
+        # timezone -- same reasoning as parsers.adani_schedule.parse_timestamp
+        # -- and .date() discards any time-of-day component immediately
+        # regardless, so a tzinfo here could not survive to influence anything.
+        row_date = datetime.strptime(f"{day}-{mon}-{yr}", "%d-%b-%y").date()  # noqa: DTZ007
         rows.append(
             DraftDeclaration(
                 port_id=port_id,

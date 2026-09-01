@@ -106,22 +106,31 @@ def parse_timestamp(raw: str) -> tuple[datetime | None, str | None]:
     quarantines that case with the raw string. Never falls back to a partial
     or guessed interpretation.
 
-    Deliberately returns a naive ``datetime`` (ruff DTZ007, not suppressed
-    with a per-line noqa but explained here instead): the page itself never
-    states a timezone for these times. Attaching one -- UTC or otherwise --
-    would assert a fact the source doesn't provide; these are almost
-    certainly IST (India Standard Time) port-local clock times, and stamping
-    them UTC would silently shift every value by 5:30. Naive-and-documented
-    is more honest than tz-aware-and-wrong. If a caller later needs a
-    tz-aware value, converting is one explicit step at that call site with
-    an explicit, cited reason for the offset -- not this function's job.
+    Deliberately returns a naive ``datetime``: the page itself never states a
+    timezone for these times. Attaching one -- UTC or otherwise -- would
+    assert a fact the source doesn't provide; these are almost certainly IST
+    (India Standard Time) port-local clock times, and stamping them UTC would
+    silently shift every value by 5:30. Naive-and-documented is more honest
+    than tz-aware-and-wrong. If a caller later needs a tz-aware value,
+    converting is one explicit step at that call site with an explicit, cited
+    reason for the offset -- not this function's job.
+
+    The DTZ007 below is suppressed per-line rather than left to fire. It used
+    to be left visible on purpose, so a reader would meet the tension; in
+    practice it just kept `ruff check` permanently red, which trains everyone
+    to skim past a failing lint run and is how a real finding eventually gets
+    missed. The reasoning above is the durable record; the noqa carries a
+    pointer to it.
     """
     text = raw.strip()
     if not text:
         return None, None
     for fmt in _TIMESTAMP_FORMATS:
         try:
-            return datetime.strptime(text, fmt), None
+            # Rationale for the suppression below: see this function's
+            # docstring -- the source states no timezone and these are
+            # port-local (almost certainly IST) clock times.
+            return datetime.strptime(text, fmt), None  # noqa: DTZ007
         except ValueError:
             continue
     return None, f"matches neither known format {_TIMESTAMP_FORMATS!r}"

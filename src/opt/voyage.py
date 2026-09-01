@@ -223,14 +223,16 @@ def _vessel_can_call(
         result = check_vessel_against_register(
             register_port_id,
             commodity=commodity,
-            # Deliberate (ruff DTZ011, not suppressed): as_of is a calendar
-            # date, not an instant -- every real caller in this module now
-            # passes a real one explicitly (schedule_voyages uses the
-            # cargo's own laycan_start), so this default is only ever
-            # reached by a caller with no date context at all, where "the
-            # machine's local today" is the same reasonable, low-stakes
-            # fallback the rest of this codebase uses in that situation.
-            as_of=as_of if as_of is not None else date.today(),
+            # Deliberate (DTZ011): as_of is a calendar date, not an instant --
+            # every real caller in this module now passes a real one
+            # explicitly (schedule_voyages uses the cargo's own laycan_start),
+            # so this default is only ever reached by a caller with no date
+            # context at all, where "the machine's local today" is the same
+            # reasonable, low-stakes fallback the rest of this codebase uses
+            # in that situation. datetime.now(tz=UTC).date() would be a
+            # different date than the operator's for part of every day, which
+            # is worse, not better, for a port-calendar lookup.
+            as_of=as_of if as_of is not None else date.today(),  # noqa: DTZ011
             vessel_draft_m=vessel.draft_m,
             vessel_loa_m=vessel.loa_m,
             vessel_beam_m=vessel.beam_m,
