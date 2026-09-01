@@ -29,7 +29,7 @@ export function TopBar({ onNewQuote }: TopBarProps) {
     <header className="relative z-50 flex h-10 shrink-0 items-center justify-between bg-navbar pl-3 pr-3 text-navbar-foreground">
       <div className="flex h-full items-center gap-5">
         <div className="flex items-center gap-2 text-figure font-extrabold tracking-tight">
-          <Ship className="h-[18px] w-[18px]" strokeWidth={2} />
+          <Ship className="h-4.5 w-4.5" strokeWidth={2} />
           CHARTERING
         </div>
         <nav className="hidden h-full items-end gap-4 md:flex">

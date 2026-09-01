@@ -359,7 +359,7 @@ export function RouteMap({
         </div>
       }
     >
-      <div ref={ref} className="relative h-full min-h-[260px] w-full">
+      <div ref={ref} className="relative h-full min-h-65 w-full">
         <svg ref={svgRef} width={width} height={height} className="block cursor-grab">
           <rect
             width={width}
@@ -525,7 +525,7 @@ export function RouteMap({
 
         {tip && (
           <div
-            className="pointer-events-none absolute z-10 max-w-[240px] rounded border border-border bg-surface p-2 text-body shadow-[0_2px_10px_rgba(0,0,0,0.14)]"
+            className="pointer-events-none absolute z-10 max-w-60 rounded border border-border bg-surface p-2 text-body shadow-[0_2px_10px_rgba(0,0,0,0.14)]"
             style={{
               left: Math.min(tip.x + 12, width - 240),
               top: Math.min(tip.y + 12, height - 72),

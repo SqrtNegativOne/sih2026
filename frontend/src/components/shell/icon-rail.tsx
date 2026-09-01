@@ -136,11 +136,11 @@ export function IconRail({
             )}
           >
             <Icon
-              className="h-[18px] w-[18px] shrink-0"
+              className="h-4.5 w-4.5 shrink-0"
               strokeWidth={isActive ? 2.25 : 1.75}
               aria-hidden="true"
             />
-            <span className="hyphens-auto break-words">{label}</span>
+            <span className="hyphens-auto wrap-break-word">{label}</span>
           </button>
         )
       })}

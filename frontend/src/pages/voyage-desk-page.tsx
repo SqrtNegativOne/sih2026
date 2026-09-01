@@ -225,13 +225,13 @@ export function VoyageDeskPage({
           380px rather than the 340px the other two would need on their
           own -- a level row beats two tight panels and one truncated one. */}
       <div className="grid grid-cols-1 gap-1 xl:grid-cols-12">
-        <div className="h-[380px] xl:col-span-4">
+        <div className="h-95 xl:col-span-4">
           <VerdictBlock quote={quote} />
         </div>
-        <div className="h-[380px] xl:col-span-4">
+        <div className="h-95 xl:col-span-4">
           <RateForecastTable rows={quote.rate_forecast} todayQuote={quote.today_quote_usd_per_day} />
         </div>
-        <div className="h-[380px] xl:col-span-4">
+        <div className="h-95 xl:col-span-4">
           {quote.risk_assessment ? (
             <RiskFeed assessment={quote.risk_assessment} />
           ) : (
@@ -252,7 +252,7 @@ export function VoyageDeskPage({
           beside it measured ~175px of real content and simply scrolls when
           a route has more legs. */}
       <div className="grid grid-cols-1 gap-1 xl:grid-cols-12">
-        <div className="h-[440px] xl:col-span-8">
+        <div className="h-110 xl:col-span-8">
           <RouteMap
             routes={quote.route_exploration}
             ports={ports}
@@ -262,7 +262,7 @@ export function VoyageDeskPage({
             onFocus={setMapFocus}
           />
         </div>
-        <div className="h-[440px] xl:col-span-4">
+        <div className="h-110 xl:col-span-4">
           <RouteList routes={quote.route_exploration} focusId={mapFocus} onFocus={setMapFocus} />
         </div>
       </div>
@@ -271,7 +271,7 @@ export function VoyageDeskPage({
           (port constraints) of real content; 224px was generous, 200px
           still clears both with real room for a longer fleet-mix table. */}
       <div className="grid grid-cols-1 gap-1 xl:grid-cols-12">
-        <div className="h-[240px] xl:col-span-6">
+        <div className="h-60 xl:col-span-6">
           {quote.fleet_mix ? (
             <FleetMixTable frontier={quote.fleet_mix} />
           ) : (
@@ -281,14 +281,14 @@ export function VoyageDeskPage({
             />
           )}
         </div>
-        <div className="h-[240px] xl:col-span-3">
+        <div className="h-60 xl:col-span-3">
           <PortChecksTable
             origin={quote.origin_port_check}
             dest={quote.dest_port_check}
             ports={ports}
           />
         </div>
-        <div className="h-[240px] xl:col-span-3">
+        <div className="h-60 xl:col-span-3">
           {hasAssignments ? (
             <VoyageAssignmentsTable rec={rec} ports={ports} />
           ) : (
@@ -313,7 +313,7 @@ export function VoyageDeskPage({
           price becomes available), and the map row above already carries
           this section of the page visually. */}
       <div className="grid grid-cols-1 gap-1 xl:grid-cols-12">
-        <div className="h-[400px] xl:col-span-6">
+        <div className="h-100 xl:col-span-6">
           <LandedCostPanel
             breakdown={envelope.landed_cost}
             destPort={quote.dest_port}
@@ -323,7 +323,7 @@ export function VoyageDeskPage({
             vesselClass={quote.target_vessel_class}
           />
         </div>
-        <div className="h-[400px] xl:col-span-6">
+        <div className="h-100 xl:col-span-6">
           <BackhaulPanel vessel={vessels[0]} dischargePort={quote.dest_port} />
         </div>
       </div>
@@ -348,14 +348,14 @@ export function VoyageDeskPage({
         const span = anchoragePort ? 'xl:col-span-4' : 'xl:col-span-6'
         return (
           <div className="grid grid-cols-1 gap-1 xl:grid-cols-12">
-            <div className={`h-[210px] ${span}`}>
+            <div className={`h-52.5 ${span}`}>
               <CIIPanel emissions={quote.emissions} />
             </div>
-            <div className={`h-[210px] ${span}`}>
+            <div className={`h-52.5 ${span}`}>
               <FracturePanel fracture={quote.fracture} />
             </div>
             {anchoragePort && (
-              <div className={`h-[210px] ${span}`}>
+              <div className={`h-52.5 ${span}`}>
                 <AnchoragePanel port={anchoragePort} />
               </div>
             )}

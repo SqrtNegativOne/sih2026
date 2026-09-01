@@ -239,7 +239,7 @@ export function QuoteDrawer({
             role="dialog"
             aria-modal="true"
             aria-label="New charter quote"
-            className="fixed right-0 top-0 z-50 flex h-full w-[380px] max-w-[92vw] flex-col border-l border-border bg-surface shadow-raised"
+            className="fixed right-0 top-0 z-50 flex h-full w-95 max-w-[92vw] flex-col border-l border-border bg-surface shadow-raised"
             initial={{ x: '100%' }}
             animate={{ x: 0 }}
             exit={{ x: '100%' }}

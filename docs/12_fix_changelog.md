@@ -2289,3 +2289,40 @@ future edit above line 51 of that file breaks the build for a reason that has no
 synthetic data. **Recommended follow-up:** make the allowlist content-addressed (match on the line's
 text, or on a nearby marker comment) instead of line-addressed, then route that button through the
 shared `Button` like every other action on the desk.
+
+#### 2026-09-02 (follow-up) — editor diagnostics cleared; four ruff findings deliberately left
+
+**Frontend.** Every arbitrary-value Tailwind utility with an exact canonical equivalent was rewritten
+canonically, clearing the IntelliSense warnings that were showing in the Problems panel:
+`h-[18px]`/`w-[18px]` → `h-4.5`/`w-4.5`; the voyage-desk row heights `h-[210px]` → `h-52.5`,
+`h-[240px]` → `h-60`, `h-[380px]` → `h-95`, `h-[400px]` → `h-100`, `h-[440px]` → `h-110`;
+`w-[380px]` → `w-95`; `max-w-[240px]` → `max-w-60`; `min-h-[260px]` → `min-h-65`; `ring-[3px]` →
+`ring-3`; and `break-words` → `wrap-break-word` (renamed in Tailwind v4).
+
+These are exact equivalences — the v4 spacing unit is 4px — but they were **verified by re-measuring
+rather than assumed**: every desk panel renders at byte-identical height afterwards
+(380/380/440/440/240/240/400/400/210/210/210), zero overflow, zero horizontal scroll, and all 13
+icon-rail labels still fit with no glyph spill. One arbitrary value is left on purpose:
+`voyage-desk-page.tsx:304` carries "this row used to be `h-[260px]`" inside a prose comment recording
+the F-33 fix, and rewriting a historical note into a different notation would falsify it.
+
+**Backend — `uv run ruff check src backend` reports 4 errors, and all four are correct as they stand.**
+They predate this session's work (identical count at `1e2961b`) and each is an explicitly reasoned
+decision, documented in place and deliberately *not* `# noqa`-suppressed so the tension stays visible
+to a reader:
+
+| Site | Rule | Why naive is right |
+|---|---|---|
+| `berth_truth/parsers/adani_schedule.py:124` | DTZ007 | The source gives port-local clock times with no zone. They are almost certainly IST; stamping them UTC would silently shift every value by 5:30. |
+| `berth_truth/declarations.py:142` | DTZ007 | The document states a calendar date only, and `.date()` discards any time component immediately. |
+| `berth_truth/providers/pdf_report.py:128` | DTZ001 | Same family — a port report's own local timestamps. |
+| `opt/voyage.py:233` | DTZ011 | `as_of` is a calendar date, not an instant; every real caller passes one explicitly. |
+
+Making these tz-aware would not fix a bug, it would introduce one: a fabricated 5.5-hour shift on
+every parsed berth timestamp, which is precisely the class of invention `CLAUDE.md`'s first
+non-negotiable forbids. The existing comments already say this ("Naive-and-documented is more honest
+than tz-aware-and-wrong"). Left unchanged, and left unsuppressed, on purpose.
+
+Runtime re-swept across every page and every compute action after the frontend change: zero console
+errors, zero page exceptions, zero failed requests. `tsc` clean; `oxlint` 5 warnings, all pre-existing;
+`npm run build` clean; synthetic-data tripwire green.
