@@ -17,7 +17,7 @@ const RATING_CLASS: Record<CIIRating, string> = {
 
 function RatingChip({ rating }: { rating: CIIRating }) {
   return (
-    <span className={cn('rounded-sm px-1.5 py-px text-[11px] font-bold', RATING_CLASS[rating])}>
+    <span className={cn('rounded-sm px-2 py-px text-body font-bold', RATING_CLASS[rating])}>
       {rating}
     </span>
   )
@@ -32,8 +32,8 @@ function VesselRow({ p }: { p: VesselCIIProjection }) {
   return (
     <tr>
       <td>
-        <span className="text-[11px] font-medium text-foreground">{p.vessel_id}</span>
-        <span className="ml-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+        <span className="text-body font-medium text-foreground">{p.vessel_id}</span>
+        <span className="ml-1 text-caption uppercase tracking-wide text-muted-foreground">
           {p.vessel_class}
         </span>
       </td>
@@ -63,7 +63,7 @@ export function CIIPanel({ emissions }: { emissions: VoyageEmissions | null }) {
         title="Carbon Intensity (CII)"
         hint="IMO Carbon Intensity Indicator projection for each real vessel on this quote's route: attained vs required CII (gCO2/dwt·nm) and the A-E rating those two numbers imply."
       >
-        <div className="flex h-full items-center justify-center text-center text-[12px] text-muted-foreground">
+        <div className="flex h-full items-center justify-center text-center text-lead text-muted-foreground">
           Add a vessel to the quote to project its IMO carbon rating.
         </div>
       </Panel>
@@ -95,7 +95,7 @@ export function CIIPanel({ emissions }: { emissions: VoyageEmissions | null }) {
           ))}
         </tbody>
       </table>
-      <div className="border-t border-border px-1.5 py-1 text-[9px] text-muted-foreground">
+      <div className="border-t border-border px-2 py-1 text-micro text-muted-foreground">
         gCO2/dwt·nm, both columns · positive margin = better than required
       </div>
     </Panel>

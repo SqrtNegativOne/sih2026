@@ -16,6 +16,7 @@ import { SolveProgress } from '@/components/desk/solve-progress'
 import { SummaryStrip } from '@/components/desk/summary-strip'
 import { VerdictBlock } from '@/components/desk/verdict-block'
 import { VoyageAssignmentsTable } from '@/components/desk/voyage-assignments-table'
+import { Button } from '@/components/ui/button'
 import { anchoragePortForQuotePort } from '@/lib/anchorage-ports'
 import type { ChokepointReference, PortListing, ProgressStage, QuoteEnvelope, VesselInput } from '@/lib/types'
 
@@ -35,10 +36,16 @@ interface VoyageDeskPageProps {
   vessels: VesselInput[]
 }
 
-function EmptyPanel({ label }: { label: string }) {
+/** A slot on the desk grid with no panel to put in it. Matches Panel's own
+ *  border, radius and hairline so a missing signal reads as a deliberate gap
+ *  in the layout rather than as a broken box. */
+function EmptyPanel({ label, hint }: { label: string; hint?: string }) {
   return (
-    <div className="flex h-full items-center justify-center rounded border border-border bg-surface p-3 text-center text-[12px] text-muted-foreground">
-      {label}
+    <div className="h-full rounded-md border border-border bg-surface shadow-panel">
+      <div className="panel-state">
+        <p className="panel-state-title">{label}</p>
+        {hint && <p className="panel-state-hint">{hint}</p>}
+      </div>
     </div>
   )
 }
@@ -59,37 +66,80 @@ export function VoyageDeskPage({
 
   if (!envelope) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
-        {error ? (
-          <div className="flex items-center gap-1 rounded border border-risk/40 bg-risk-soft px-3 py-2 text-[12px] text-risk">
-            <TriangleAlert className="h-4 w-4" />
-            {error}
+      <div className="flex h-full items-center justify-center p-4">
+        {/*
+          The first thing a new user meets. The old version was the single
+          sentence "No voyage priced yet." above a button -- true, but it
+          named the absence rather than the product, so nothing on a cold
+          desk said what pricing a voyage actually gets you. This states the
+          four real outputs (the same four this page then renders), keeps
+          exactly one call to action, and stays in the desk's own register:
+          no illustration, no marketing line, no invented statistics.
+        */}
+        <div className="w-full max-w-md">
+          {error && (
+            <div className="mb-4 flex items-start gap-2 rounded-md border border-risk/40 bg-risk-soft px-3 py-2 text-left">
+              <TriangleAlert className="mt-px h-4 w-4 shrink-0 text-risk" aria-hidden="true" />
+              <div>
+                <div className="text-caption font-bold uppercase tracking-wide text-risk">
+                  The last quote failed
+                </div>
+                <p className="mt-1 text-body leading-relaxed text-risk">{error}</p>
+              </div>
+            </div>
+          )}
+
+          <div className="rounded-md border border-border bg-surface shadow-panel">
+            <div className="border-b border-border bg-surface-2 px-4 py-3">
+              <h1 className="text-figure font-bold tracking-tight text-foreground">
+                Price a dry-bulk voyage
+              </h1>
+              <p className="mt-1 text-body leading-relaxed text-muted-foreground">
+                Enter a route, a cargo and a laycan window. The desk returns a timing
+                verdict and the evidence behind it.
+              </p>
+            </div>
+
+            <ul className="divide-y divide-border/60">
+              {[
+                ['Lock or wait', 'Today’s rate against the projected trough, with the option value of waiting priced in.'],
+                ['A 30-day rate forecast', 'With the walk-away ceiling this charter should not cross.'],
+                ['Route and port feasibility', 'Draft, LOA and beam checked against the real limits at both ends.'],
+                ['Cost, carbon and exposure', 'Landed cost per tonne, CII rating, and chokepoint risk on the legs you transit.'],
+              ].map(([label, detail]) => (
+                <li key={label} className="flex gap-3 px-4 py-2">
+                  <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-structure" aria-hidden="true" />
+                  <div>
+                    <div className="text-body font-semibold text-foreground">{label}</div>
+                    <div className="mt-0.5 text-caption leading-relaxed text-muted-foreground">
+                      {detail}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+
+            <div className="border-t border-border px-4 py-3">
+              <Button variant="primary" size="lg" className="w-full" onClick={onNewQuote}>
+                New charter quote
+              </Button>
+              <p className="mt-2 text-center text-micro text-muted-foreground">
+                Every figure is computed from data on disk. Nothing here is simulated.
+              </p>
+            </div>
           </div>
-        ) : (
-          <p className="text-[13px] text-muted-foreground">No voyage priced yet.</p>
-        )}
-        <button
-          type="button"
-          onClick={onNewQuote}
-          className="rounded bg-primary px-3 py-1.5 text-[12px] font-semibold uppercase tracking-wide text-primary-foreground hover:bg-primary/90"
-        >
-          New Charter Quote
-        </button>
+        </div>
       </div>
     )
   }
 
   if (envelope.status === 'structural_infeasible') {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-3">
+      <div className="flex h-full flex-col items-center justify-center gap-3 p-4">
         <InfeasibilityPanel problems={envelope.structural_problems} />
-        <button
-          type="button"
-          onClick={onNewQuote}
-          className="rounded bg-primary px-3 py-1.5 text-[12px] font-semibold uppercase tracking-wide text-primary-foreground hover:bg-primary/90"
-        >
+        <Button variant="primary" size="md" onClick={onNewQuote}>
           Change the request
-        </button>
+        </Button>
       </div>
     )
   }
@@ -110,30 +160,30 @@ export function VoyageDeskPage({
 
       {isContingent && (
         <div className="rounded border border-wait bg-wait-soft px-3 py-2">
-          <div className="flex items-center gap-1 text-[12px] font-bold uppercase tracking-wide text-wait">
+          <div className="flex items-center gap-1 text-lead font-bold uppercase tracking-wide text-wait">
             <Info className="h-4 w-4" />
             Your original request had no solution. This is the nearest one that does.
           </div>
-          <div className="mt-1.5 grid gap-1.5 sm:grid-cols-2">
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
             <div>
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <div className="text-caption font-semibold uppercase tracking-wide text-muted-foreground">
                 What blocked it
               </div>
-              <ul className="mt-0.5 list-inside list-disc text-[11px] text-foreground">
+              <ul className="mt-0.5 list-inside list-disc text-body text-foreground">
                 {envelope.original_blockers.slice(0, 4).map((b, i) => (
                   <li key={i}>{b}</li>
                 ))}
               </ul>
             </div>
             <div>
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <div className="text-caption font-semibold uppercase tracking-wide text-muted-foreground">
                 What was loosened
               </div>
-              <ul className="mt-0.5 space-y-0.5 text-[11px] text-foreground">
+              <ul className="mt-0.5 space-y-0.5 text-body text-foreground">
                 {envelope.relaxations_applied.map((r, i) => (
                   <li key={i}>
                     {r.message}
-                    <span className="desk-num ml-1 text-[10px] text-muted-foreground">
+                    <span className="desk-num ml-1 text-caption text-muted-foreground">
                       {r.before} to {r.after}
                     </span>
                   </li>
@@ -185,7 +235,10 @@ export function VoyageDeskPage({
           {quote.risk_assessment ? (
             <RiskFeed assessment={quote.risk_assessment} />
           ) : (
-            <EmptyPanel label="No risk data on disk for this date" />
+            <EmptyPanel
+              label="No risk data for this date"
+              hint="The risk feed reads from harvested files on disk. Nothing covers this charter date yet."
+            />
           )}
         </div>
       </div>
@@ -218,25 +271,31 @@ export function VoyageDeskPage({
           (port constraints) of real content; 224px was generous, 200px
           still clears both with real room for a longer fleet-mix table. */}
       <div className="grid grid-cols-1 gap-1 xl:grid-cols-12">
-        <div className="h-[200px] xl:col-span-6">
+        <div className="h-[240px] xl:col-span-6">
           {quote.fleet_mix ? (
             <FleetMixTable frontier={quote.fleet_mix} />
           ) : (
-            <EmptyPanel label="No fleet-mix frontier" />
+            <EmptyPanel
+              label="No fleet-mix frontier"
+              hint="The optimizer found no alternative split of this cargo across vessel classes to compare."
+            />
           )}
         </div>
-        <div className="h-[200px] xl:col-span-3">
+        <div className="h-[240px] xl:col-span-3">
           <PortChecksTable
             origin={quote.origin_port_check}
             dest={quote.dest_port_check}
             ports={ports}
           />
         </div>
-        <div className="h-[200px] xl:col-span-3">
+        <div className="h-[240px] xl:col-span-3">
           {hasAssignments ? (
             <VoyageAssignmentsTable rec={rec} ports={ports} />
           ) : (
-            <EmptyPanel label="Add a vessel and a cargo revenue figure in the quote form to schedule and assign it." />
+            <EmptyPanel
+              label="Nothing scheduled"
+              hint="Add a vessel and a cargo revenue figure to the quote form, and the optimizer will assign and sequence it here."
+            />
           )}
         </div>
       </div>

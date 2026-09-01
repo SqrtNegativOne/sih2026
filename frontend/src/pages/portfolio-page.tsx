@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
-import { Panel } from '@/components/desk/panel'
+import { PageState, Panel } from '@/components/desk/panel'
 import { StatRow } from '@/components/desk/stat'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Combobox, type ComboOption } from '@/components/ui/combobox'
 import { Input } from '@/components/ui/input'
 import { useElementSize } from '@/hooks/use-element-size'
@@ -35,7 +36,7 @@ const CHANNEL = {
 
 function MixBar({ mix, className }: { mix: PortfolioMixResult; className?: string }) {
   return (
-    <div className={cn('flex h-4 w-full overflow-hidden rounded-[2px] border border-border', className)}>
+    <div className={cn('flex h-4 w-full overflow-hidden rounded-sm border border-border', className)}>
       {(['spot', 'tc', 'coa'] as const).map((k) => {
         const c = CHANNEL[k]
         const frac = mix[c.key]
@@ -48,7 +49,7 @@ function MixBar({ mix, className }: { mix: PortfolioMixResult; className?: strin
             title={`${c.label} ${formatPct(frac)}`}
           >
             {frac >= 0.12 && (
-              <span className="text-[8px] font-bold uppercase tracking-wide text-white/90">
+              <span className="text-micro font-bold uppercase tracking-wide text-white/90">
                 {formatPct(frac)}
               </span>
             )}
@@ -65,8 +66,8 @@ function MixLegend() {
       {(['spot', 'tc', 'coa'] as const).map((k) => {
         const c = CHANNEL[k]
         return (
-          <span key={k} className="flex items-center gap-1 text-[10px] text-muted-foreground">
-            <span className={cn('h-2 w-2 rounded-[1px]', c.bar)} />
+          <span key={k} className="flex items-center gap-1 text-caption text-muted-foreground">
+            <span className={cn('h-2 w-2 rounded-xs', c.bar)} />
             {c.label}
           </span>
         )
@@ -97,6 +98,31 @@ function FrontierChart({
   const yMax = Math.max(...ys) || 1
   const xSpan = xMax - xMin || 1
 
+  // A frontier is only a frontier when the mixes actually differ. When every
+  // risk-aversion setting lands on the same expected cost and the same
+  // variance -- which is the real answer whenever one channel dominates at
+  // every k -- the axes have nothing to separate, and the chart drew all
+  // eight points stacked in the bottom-left corner of an otherwise empty
+  // 150px box. That reads as a broken chart rather than as the finding it is,
+  // so say the finding instead. The table below still lists every row.
+  const costSpread = xMax - xMin
+  const riskSpread = Math.max(...ys) - Math.min(...ys)
+  const isDegenerate = costSpread < Math.abs(xMax) * 1e-6 && riskSpread < 1
+  if (isDegenerate) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-2 rounded-sm border border-dashed border-border bg-surface-2/60 px-4 py-6 text-center">
+        <p className="text-body font-semibold text-foreground">
+          No trade-off to plot — every mix on this frontier is identical.
+        </p>
+        <p className="max-w-[62ch] text-caption leading-relaxed text-muted-foreground">
+          Across all {frontier.length} risk-aversion settings the optimiser returns the same expected
+          cost ({formatUsdCompact(xMax)}) and the same variance, so there is no cost-versus-risk
+          curve to trace. One coverage channel dominates at every k under these inputs.
+        </p>
+      </div>
+    )
+  }
+
   const x = (v: number) => CHART_PAD.l + ((v - xMin) / xSpan) * (w - CHART_PAD.l - CHART_PAD.r)
   const y = (v: number) =>
     CHART_PAD.t + (1 - (v - yMin) / (yMax - yMin || 1)) * (CHART_H - CHART_PAD.t - CHART_PAD.b)
@@ -125,10 +151,10 @@ function FrontierChart({
           stroke="var(--border)"
           strokeWidth={1}
         />
-        <text x={CHART_PAD.l - 6} y={CHART_PAD.t + 4} textAnchor="end" className="fill-muted-foreground text-[8px]">
+        <text x={CHART_PAD.l - 6} y={CHART_PAD.t + 4} textAnchor="end" className="fill-muted-foreground text-micro">
           risk
         </text>
-        <text x={w - CHART_PAD.r} y={CHART_H - 4} textAnchor="end" className="fill-muted-foreground text-[8px]">
+        <text x={w - CHART_PAD.r} y={CHART_H - 4} textAnchor="end" className="fill-muted-foreground text-micro">
           expected cost →
         </text>
 
@@ -208,7 +234,7 @@ export function PortfolioPage({ ports }: { ports: PortListing[] }) {
   }
 
   return (
-    <div className="flex h-full flex-col gap-1.5 overflow-hidden p-1.5" id="portfolio">
+    <div className="flex h-full flex-col gap-2 overflow-hidden p-2" id="portfolio">
       <Panel
         title="Portfolio Mix"
         meta="spot / period TC / COA"
@@ -219,7 +245,7 @@ export function PortfolioPage({ ports }: { ports: PortListing[] }) {
             <select
               value={form.vesselClass}
               onChange={(e) => set('vesselClass', e.target.value as VesselClass)}
-              className="h-7 w-28 rounded border border-input bg-surface px-1.5 text-[11px]"
+              className="h-7 w-28 cursor-pointer rounded-sm border border-input bg-surface px-2 text-body transition-colors hover:border-muted-foreground/60 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
             >
               {VESSEL_CLASSES.map((c) => (
                 <option key={c} value={c}>
@@ -232,7 +258,7 @@ export function PortfolioPage({ ports }: { ports: PortListing[] }) {
             <Input
               type="number"
               min={1}
-              className="h-7 w-24 text-[11px]"
+              className="h-7 w-24 text-body"
               value={form.contractTermDays}
               onChange={(e) => set('contractTermDays', e.target.value)}
             />
@@ -241,7 +267,7 @@ export function PortfolioPage({ ports }: { ports: PortListing[] }) {
             <Input
               type="number"
               min={0}
-              className="h-7 w-28 text-[11px]"
+              className="h-7 w-28 text-body"
               value={form.plantBurdenCoverDays}
               onChange={(e) => set('plantBurdenCoverDays', e.target.value)}
             />
@@ -250,7 +276,7 @@ export function PortfolioPage({ ports }: { ports: PortListing[] }) {
             <Input
               type="number"
               min={0}
-              className="h-7 w-32 text-[11px]"
+              className="h-7 w-32 text-body"
               value={form.stockoutCostUsd}
               onChange={(e) => set('stockoutCostUsd', e.target.value)}
             />
@@ -260,7 +286,7 @@ export function PortfolioPage({ ports }: { ports: PortListing[] }) {
               type="number"
               min={0}
               step={0.01}
-              className="h-7 w-24 text-[11px]"
+              className="h-7 w-24 text-body"
               value={form.spotSourcingHazardRatePerDay}
               onChange={(e) => set('spotSourcingHazardRatePerDay', e.target.value)}
             />
@@ -275,17 +301,18 @@ export function PortfolioPage({ ports }: { ports: PortListing[] }) {
               <Combobox value={form.destPort} onChange={(v) => set('destPort', v)} options={options} placeholder="Class-only" />
             </div>
           </Field>
-          <button
-            type="button"
+          <Button
+            variant="primary"
+            size="md"
             onClick={run}
             disabled={loading}
-            className="h-7 rounded-[3px] border border-market bg-market/10 px-3 text-[11px] font-semibold text-market disabled:opacity-40"
+            title={loading ? 'A real optimisation is running.' : 'Optimise the coverage mix'}
           >
-            {loading ? 'Solving…' : 'Run analysis'}
-          </button>
+            {loading ? 'Solving…' : result ? 'Re-run analysis' : 'Run analysis'}
+          </Button>
         </div>
 
-        <div className="border-t border-border px-2 pb-1.5 pt-1">
+        <div className="border-t border-border px-2 pb-2 pt-1">
           <Field label={`Risk aversion — k = ${form.riskAversionK}`} hint="How many real spot-cost standard deviations you're willing to pay to avoid, for the recommended mix. 0 = minimize expected cost only.">
             <input
               type="range"
@@ -296,7 +323,7 @@ export function PortfolioPage({ ports }: { ports: PortListing[] }) {
               onChange={(e) => set('riskAversionK', e.target.value)}
               className="h-1 w-full max-w-md cursor-pointer appearance-none rounded bg-muted accent-primary"
             />
-            <div className="flex max-w-md justify-between text-[9px] uppercase tracking-wide text-muted-foreground">
+            <div className="flex max-w-md justify-between text-micro uppercase tracking-wide text-muted-foreground">
               <span>Cost-minimizing</span>
               <span>Risk-averse</span>
             </div>
@@ -304,17 +331,36 @@ export function PortfolioPage({ ports }: { ports: PortListing[] }) {
         </div>
       </Panel>
 
-      {error && <div className="p-2 text-sm text-risk">{error}</div>}
+      {error && (
+        <PageState
+          tone="error"
+          title="The portfolio analysis failed"
+          hint={error}
+          action={
+            <Button variant="danger" size="sm" onClick={run}>
+              Try again
+            </Button>
+          }
+        />
+      )}
 
-      {!result && !loading && (
-        <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-          Set the three real business inputs above, then run the analysis to see the recommended spot/period/COA
-          coverage mix.
-        </div>
+      {loading && !error && (
+        <PageState
+          tone="busy"
+          title="Optimising the coverage mix…"
+          hint="Solving the spot / period-TC / COA split across the full risk-aversion frontier. This is a real optimisation, not a cached result."
+        />
+      )}
+
+      {!result && !loading && !error && (
+        <PageState
+          title="No mix computed yet"
+          hint="Set the plant burden cover, stockout cost and spot sourcing rate above, then run the analysis to see the recommended spot / period-TC / COA coverage."
+        />
       )}
 
       {result && (
-        <div className="grid min-h-0 flex-1 grid-cols-1 gap-1.5 overflow-auto lg:grid-cols-2">
+        <div className="grid min-h-0 flex-1 auto-rows-min grid-cols-1 content-start gap-2 overflow-auto lg:grid-cols-2">
           <Panel title="Recommended Mix" meta={`k = ${result.recommended.risk_aversion_k}`} className="lg:col-span-1">
             <div className="flex flex-col gap-2 p-1">
               <MixBar mix={result.recommended} />
@@ -341,7 +387,7 @@ export function PortfolioPage({ ports }: { ports: PortListing[] }) {
               <StatRow label="Pure-spot cost std. dev." value={formatUsdCompact(result.spot_cost_std_usd)} />
               <div className="stat-row">
                 <span className="stat-label">Rate basis</span>
-                <Badge variant={result.route_basis_applied ? 'secondary' : 'outline'} className="text-[9px]">
+                <Badge variant={result.route_basis_applied ? 'secondary' : 'outline'} className="text-micro">
                   {result.route_basis_applied ? 'Route-specific' : 'Class-only'}
                 </Badge>
               </div>

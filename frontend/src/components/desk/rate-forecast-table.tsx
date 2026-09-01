@@ -15,7 +15,7 @@ function RouteEvidenceBadge({ evidence }: { evidence: RouteEvidence }) {
   return (
     <Badge
       variant={evidence === 'OBSERVED' ? 'secondary' : evidence === 'MODELLED' ? 'outline' : 'outline'}
-      className="text-[9px]"
+      className="text-micro"
       title={
         evidence === 'ROUTE_RATE_BASIS_UNAVAILABLE'
           ? 'No real route-level rate evidence clears the bar for this origin -- priced on the class benchmark, not this specific route.'
@@ -82,7 +82,7 @@ function FanChart({ rows, todayQuote }: { rows: RateHorizon[]; todayQuote: numbe
           strokeDasharray="3 3"
           opacity={0.5}
         />
-        <text x={PAD.l - 4} y={yToday + 3} textAnchor="end" className="fill-muted-foreground text-[8px]">
+        <text x={PAD.l - 4} y={yToday + 3} textAnchor="end" className="fill-muted-foreground text-micro">
           today
         </text>
 
@@ -95,17 +95,17 @@ function FanChart({ rows, todayQuote }: { rows: RateHorizon[]; todayQuote: numbe
               x={x(r.horizon_days)}
               y={H - 4}
               textAnchor="middle"
-              className="fill-muted-foreground text-[8px]"
+              className="fill-muted-foreground text-micro"
             >
               {r.horizon_days}d
             </text>
           </g>
         ))}
         {/* y bounds */}
-        <text x={PAD.l - 4} y={y(yMax) + 8} textAnchor="end" className="fill-muted-foreground text-[8px]">
+        <text x={PAD.l - 4} y={y(yMax) + 8} textAnchor="end" className="fill-muted-foreground text-micro">
           ${formatNumber(Math.round(yMax / 100) * 100)}
         </text>
-        <text x={PAD.l - 4} y={y(yMin)} textAnchor="end" className="fill-muted-foreground text-[8px]">
+        <text x={PAD.l - 4} y={y(yMin)} textAnchor="end" className="fill-muted-foreground text-micro">
           ${formatNumber(Math.round(yMin / 100) * 100)}
         </text>
       </svg>
@@ -131,7 +131,7 @@ export function RateForecastTable({
       actions={<RouteEvidenceBadge evidence={routeEvidence} />}
       flush
     >
-      <div className="border-b border-border px-2 pb-1 pt-1.5">
+      <div className="border-b border-border px-2 pb-1 pt-2">
         <FanChart rows={rows} todayQuote={todayQuote} />
       </div>
       <table className="desk-table">
@@ -180,7 +180,7 @@ export function RateForecastTable({
                       style={{ width: `${r.confidence_pct}%` }}
                     />
                   </div>
-                  <span className="desk-num text-[10px] text-muted-foreground">
+                  <span className="desk-num text-caption text-muted-foreground">
                     {Math.round(r.confidence_pct)}
                   </span>
                 </div>

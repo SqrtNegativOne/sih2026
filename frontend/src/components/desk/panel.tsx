@@ -1,4 +1,4 @@
-import { Info } from 'lucide-react'
+import { Info, TriangleAlert } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 
@@ -19,7 +19,9 @@ interface PanelProps {
 
 /**
  * The single container primitive for the desk: a 1px-bordered white box with a
- * tonal header strip. No shadows — hierarchy comes from borders and tone.
+ * tonal header strip. Hierarchy comes from borders and tone, plus one hairline
+ * shadow so a white panel separates from the grey ground it sits on — never
+ * from lift on hover.
  */
 export function Panel({ title, meta, hint, actions, className, flush, children, id }: PanelProps) {
   return (
@@ -37,37 +39,152 @@ export function Panel({ title, meta, hint, actions, className, flush, children, 
         // results panel, fully rendered with real data) to ~2px -- invisible,
         // not absent. Panel now sizes to its own content by default; callers
         // that genuinely need it to fill a fixed-height box opt in with
-        // `className="h-full"` explicitly (see the nine desk/* components
-        // that do).
-        'flex min-h-0 flex-col overflow-hidden rounded-[3px] border border-border bg-surface',
+        // `className="h-full"` explicitly (see the desk/* components that do).
+        'flex min-h-0 flex-col overflow-hidden rounded-md border border-border bg-surface shadow-panel',
         className,
       )}
     >
-      <header className="flex h-6 shrink-0 items-center justify-between gap-2 border-b border-border bg-surface-2 px-1.5">
-        <div className="flex items-center gap-1.5 truncate">
-          <span className="truncate text-[10px] font-bold uppercase tracking-[0.03em] text-primary">
+      {/* h-7 (28px), one step of the 4px grid taller than the old h-6: the
+          title, the ⓘ, the meta text and an action button all sat inside 24px
+          before, which left the button's own 20px box with 2px of air and made
+          every header read as cramped against the 8px body padding below it. */}
+      <header className="flex h-7 shrink-0 items-center justify-between gap-2 border-b border-border bg-surface-2 px-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <h2 className="truncate text-caption font-bold uppercase tracking-[0.04em] text-primary">
             {title}
-          </span>
+          </h2>
           {hint && (
             <span
-              className="shrink-0 cursor-help text-muted-foreground"
+              className="shrink-0 cursor-help text-muted-foreground transition-colors hover:text-primary"
               title={hint}
               aria-label={hint}
             >
-              <Info className="h-3 w-3" />
+              <Info className="h-3 w-3" aria-hidden="true" />
             </span>
           )}
           {meta != null && (
-            <span className="truncate text-[10px] uppercase tracking-wide text-muted-foreground">
+            <span className="truncate text-micro uppercase tracking-wide text-muted-foreground">
               {meta}
             </span>
           )}
         </div>
         {actions != null && <div className="flex shrink-0 items-center gap-1">{actions}</div>}
       </header>
-      <div className={cn('min-h-0 flex-1', flush ? 'overflow-auto' : 'overflow-auto p-1.5')}>
+      <div className={cn('min-h-0 flex-1', flush ? 'overflow-auto' : 'overflow-auto p-2')}>
         {children}
       </div>
     </section>
+  )
+}
+
+/**
+ * The "nothing to show yet" state. `title` says what is missing; the optional
+ * `hint` says how to supply it. Both are required reading for a user who has
+ * just clicked something and got a blank panel back — a bare em-dash tells
+ * them nothing about whether the desk is broken or simply waiting on input.
+ */
+export function PanelEmpty({ title, hint }: { title: string; hint?: string }) {
+  return (
+    <div className="panel-state">
+      <p className="panel-state-title">{title}</p>
+      {hint && <p className="panel-state-hint">{hint}</p>}
+    </div>
+  )
+}
+
+/**
+ * The error state. Always shows the real message the API or the solver
+ * returned rather than a generic apology, and offers a retry when the caller
+ * has something to retry.
+ */
+export function PanelError({ message, onRetry }: { message: string; onRetry?: () => void }) {
+  return (
+    <div className="panel-state">
+      <TriangleAlert className="h-4 w-4 text-risk" aria-hidden="true" />
+      <p className="max-w-[52ch] text-body leading-relaxed text-risk">{message}</p>
+      {onRetry && (
+        <button
+          type="button"
+          onClick={onRetry}
+          className="rounded-sm border border-risk/40 bg-risk-soft px-2 py-1 text-caption font-semibold uppercase tracking-wide text-risk transition-colors hover:bg-risk/15"
+        >
+          Try again
+        </button>
+      )}
+    </div>
+  )
+}
+
+/**
+ * The page-level equivalent of the three states above, for the five secondary
+ * screens (Portfolio, Fragility, Tonnage Field, Port Twin, Ledger) whose
+ * results occupy the whole area below their control panel rather than sitting
+ * inside a Panel.
+ *
+ * Each of those pages previously hand-wrote its own `text-sm text-risk` div
+ * for errors and its own centred sentence for "nothing run yet", so the same
+ * three moments looked different on all five — and, more seriously, none of
+ * them rendered anything at all while a multi-second real solve was in
+ * flight: clicking "Run analysis" left the page visually unchanged, which is
+ * indistinguishable from a dead button. That was the user-visible complaint
+ * behind F-54 and it is worth never reproducing.
+ */
+export function PageState({
+  tone = 'idle',
+  title,
+  hint,
+  action,
+}: {
+  tone?: 'idle' | 'busy' | 'error'
+  title: string
+  hint?: string
+  action?: ReactNode
+}) {
+  return (
+    <div className="flex flex-1 items-center justify-center p-6">
+      <div className="flex max-w-md flex-col items-center gap-2 text-center">
+        {tone === 'error' && <TriangleAlert className="h-5 w-5 text-risk" aria-hidden="true" />}
+        {tone === 'busy' && (
+          <div className="flex w-full max-w-xs flex-col gap-2" aria-hidden="true">
+            <div className="skeleton h-2.5 w-full" />
+            <div className="skeleton h-2.5 w-4/5" />
+            <div className="skeleton h-2.5 w-2/3" />
+          </div>
+        )}
+        <p
+          className={cn(
+            'text-lead font-semibold',
+            tone === 'error' ? 'text-risk' : 'text-foreground',
+          )}
+          role={tone === 'busy' ? 'status' : undefined}
+          aria-live={tone === 'busy' ? 'polite' : undefined}
+        >
+          {title}
+        </p>
+        {hint && (
+          <p className="text-caption leading-relaxed text-muted-foreground">{hint}</p>
+        )}
+        {action}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * The loading state. Skeleton bars take the shape of the rows that will
+ * replace them, so the panel does not jump when real data lands — a spinner
+ * centred in the box would resize the content area twice instead of once.
+ */
+export function PanelLoading({ rows = 4, label = 'Loading' }: { rows?: number; label?: string }) {
+  return (
+    <div className="flex flex-col gap-2 p-2" role="status" aria-live="polite" aria-busy="true">
+      <span className="sr-only">{label}</span>
+      {Array.from({ length: rows }, (_, i) => (
+        <div key={i} className="flex items-center gap-2">
+          <div className="skeleton h-3 flex-1" style={{ opacity: 1 - i * 0.12 }} />
+          <div className="skeleton h-3 w-12 shrink-0" style={{ opacity: 1 - i * 0.12 }} />
+        </div>
+      ))}
+    </div>
   )
 }

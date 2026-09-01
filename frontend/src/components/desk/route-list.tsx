@@ -43,11 +43,11 @@ export function RouteList({
               type="button"
               onClick={() => onFocus(focusId === r.id ? null : r.id)}
               className={cn(
-                'flex w-full flex-col gap-0.5 px-2 py-1.5 text-left',
+                'flex w-full flex-col gap-0.5 px-2 py-2 text-left',
                 focusId === r.id ? 'bg-accent' : 'hover:bg-surface-2',
               )}
             >
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-2">
                 <span
                   className="h-2 w-2 shrink-0 rounded-full"
                   style={{
@@ -57,19 +57,19 @@ export function RouteList({
                         : (colors.get(r.id) ?? 'var(--structure)'),
                   }}
                 />
-                <span className="flex-1 truncate text-[11px] font-semibold text-foreground">
+                <span className="flex-1 truncate text-body font-semibold text-foreground">
                   {r.label}
                 </span>
                 <span
                   className={cn(
-                    'rounded-sm px-1 text-[8px] font-bold uppercase tracking-wide',
+                    'rounded-sm px-1 text-micro font-bold uppercase tracking-wide',
                     STATUS_STYLE[r.status],
                   )}
                 >
                   {r.status}
                 </span>
               </div>
-              <div className="flex items-center justify-between pl-3.5 text-[10px] text-muted-foreground">
+              <div className="flex items-center justify-between pl-3.5 text-caption text-muted-foreground">
                 <span className="truncate">
                   {r.reason ??
                     r.legs

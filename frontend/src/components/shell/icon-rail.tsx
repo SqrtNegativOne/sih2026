@@ -77,7 +77,18 @@ export function IconRail({
     // was fine. z-50 matches the drawer panel's own z-index; DOM order (the
     // drawer renders after this rail) keeps the panel on top where the two
     // would otherwise overlap, so this only fixes the backdrop coverage.
-    <nav className="relative z-50 hidden w-16 shrink-0 flex-col border-r border-sidebar-border bg-sidebar py-1 md:flex">
+    // w-20 (80px), up from w-16 (64px). At 64px the longest labels here --
+    // SCHEDULING, PORTFOLIO, ESTIMATES -- rendered centre-clipped against the
+    // viewport's left edge ("CHEDULING", "STIMATES"). 72px was not enough
+    // either: measured, SCHEDULING and PORTFOLIO come to exactly the 66px the
+    // span had, and at zero slack sub-pixel rounding still shaved the final
+    // glyph ("SCHEDULINC", "PORTFOLIC" in a real screenshot). 80px leaves
+    // ~8px of real slack on the longest label, which is what it takes for
+    // these to render whole rather than merely to fit on paper.
+    <nav
+      aria-label="Modules"
+      className="relative z-50 hidden w-20 shrink-0 flex-col gap-px overflow-y-auto border-r border-sidebar-border bg-sidebar py-1 md:flex"
+    >
       {ITEMS.map(({ icon: Icon, label, target, view, notImplemented }) => {
         // F-34 fix: this used to default `active` to the literal string
         // 'Estimates', so that item was highlighted as "current" any time
@@ -106,17 +117,30 @@ export function IconRail({
               else scrollTo(target)
             }}
             title={notImplemented ? `${label} — not implemented` : label}
+            aria-current={isActive ? 'page' : undefined}
             className={cn(
-              'flex flex-col items-center gap-0.5 px-0.5 py-2 text-center text-[8.5px] font-semibold uppercase leading-tight transition-colors',
+              'flex flex-col items-center gap-1 px-1 py-2 text-center text-micro font-semibold uppercase leading-tight transition-colors',
+              'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring',
               notImplemented
-                ? 'cursor-not-allowed border-l-2 border-transparent text-muted-foreground/40'
+                // /40 measured 1.01:1 against the sidebar -- effectively
+                // invisible rather than merely dimmed. A disabled control is
+                // exempt from the AA floor, but the whole point of rendering
+                // TC In/Out at all is to say the feature is known and not
+                // built (the P7 convention); a label nobody can read says
+                // nothing. /70 still reads as clearly unavailable next to the
+                // live items.
+                ? 'cursor-not-allowed border-l-2 border-transparent text-muted-foreground/70'
                 : isActive
-                  ? 'border-l-2 border-primary bg-accent text-primary'
-                  : 'border-l-2 border-transparent text-muted-foreground hover:bg-accent hover:text-foreground',
+                  ? 'cursor-pointer border-l-2 border-primary bg-accent text-primary'
+                  : 'cursor-pointer border-l-2 border-transparent text-muted-foreground hover:bg-accent hover:text-foreground',
             )}
           >
-            <Icon className="h-[18px] w-[18px]" strokeWidth={1.75} />
-            <span className="break-words">{label}</span>
+            <Icon
+              className="h-[18px] w-[18px] shrink-0"
+              strokeWidth={isActive ? 2.25 : 1.75}
+              aria-hidden="true"
+            />
+            <span className="hyphens-auto break-words">{label}</span>
           </button>
         )
       })}

@@ -42,7 +42,7 @@ function inputsAvailableNote(c: ChokepointFracture): string | null {
 
 function BandChip({ band }: { band: FractureBand }) {
   return (
-    <span className={cn('rounded-sm px-1.5 py-px text-[10px] font-bold uppercase tracking-wide', BAND_CLASS[band])}>
+    <span className={cn('rounded-sm px-2 py-px text-caption font-bold uppercase tracking-wide', BAND_CLASS[band])}>
       {BAND_LABEL[band]}
     </span>
   )
@@ -53,16 +53,16 @@ function ChokepointRow({ c }: { c: ChokepointFracture }) {
   return (
     <tr>
       <td>
-        <span className="text-[11px] font-medium text-foreground">{c.chokepoint_name}</span>
+        <span className="text-body font-medium text-foreground">{c.chokepoint_name}</span>
         {c.jwc_listed && (
-          <span className="ml-1.5 text-[9px] uppercase tracking-wide text-muted-foreground">JWC listed</span>
+          <span className="ml-2 text-micro uppercase tracking-wide text-muted-foreground">JWC listed</span>
         )}
       </td>
       <td>
         <BandChip band={c.band} />
       </td>
       <td className="desk-num text-right">{formatNumber(c.index, 1)}</td>
-      <td className="text-right text-[10px] text-muted-foreground">
+      <td className="text-right text-caption text-muted-foreground">
         {note ?? 'full signal set'}
       </td>
     </tr>
@@ -78,7 +78,7 @@ export function FracturePanel({ fracture }: { fracture: QuoteFractureSummary | n
         title="Chokepoint Fracture Index"
         hint="A combined 0-100 disruption score per chokepoint on this route -- real PortWatch transit anomaly, real GDELT conflict-coverage anomaly, and real Joint War Committee Listed Area membership, fused. A score built from fewer than the full signal set is capped at 'Watch', however high its raw index -- see opt.fracture's own module docstring."
       >
-        <div className="flex h-full items-center justify-center text-center text-[12px] text-muted-foreground">
+        <div className="flex h-full items-center justify-center text-center text-lead text-muted-foreground">
           Fracture data unavailable for this quote's route.
         </div>
       </Panel>
@@ -93,7 +93,7 @@ export function FracturePanel({ fracture }: { fracture: QuoteFractureSummary | n
         title="Chokepoint Fracture Index"
         hint="A combined 0-100 disruption score per chokepoint on this route -- real PortWatch transit anomaly, real GDELT conflict-coverage anomaly, and real Joint War Committee Listed Area membership, fused."
       >
-        <div className="flex h-full items-center justify-center text-center text-[12px] text-muted-foreground">
+        <div className="flex h-full items-center justify-center text-center text-lead text-muted-foreground">
           This route transits no monitored chokepoint.
         </div>
       </Panel>
@@ -125,7 +125,7 @@ export function FracturePanel({ fracture }: { fracture: QuoteFractureSummary | n
         </tbody>
       </table>
       {fracture.jwc_listed_areas.length > 0 && (
-        <div className="border-t border-border px-1.5 py-1 text-[9px] text-muted-foreground">
+        <div className="border-t border-border px-2 py-1 text-micro text-muted-foreground">
           Route enters {fracture.jwc_listed_areas.length} Joint War Committee Listed Area
           {fracture.jwc_listed_areas.length === 1 ? '' : 's'}: {fracture.jwc_listed_areas.join(', ')}
         </div>

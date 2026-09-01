@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Panel } from '@/components/desk/panel'
+import { PageState, Panel } from '@/components/desk/panel'
 import { StatRow } from '@/components/desk/stat'
 import { Badge } from '@/components/ui/badge'
 import { Combobox, type ComboOption } from '@/components/ui/combobox'
@@ -40,7 +40,7 @@ function VerdictBadge({ verdict }: { verdict: PortRealityReport['verdict'] }) {
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-[3px] px-2.5 py-1 font-mono text-[13px] font-extrabold uppercase tracking-wide text-white',
+        'inline-flex items-center gap-2 rounded-sm px-2 py-1 font-mono text-lead font-extrabold uppercase tracking-wide text-white',
         tone === 'go' && 'bg-go',
         tone === 'risk' && 'bg-risk',
         tone === 'wait' && 'bg-wait',
@@ -55,7 +55,7 @@ function SourceQualityBadge({ quality }: { quality: string | null }) {
   if (!quality) return null
   const isWeak = quality === 'PUBLIC_AGGREGATOR'
   return (
-    <Badge variant={isWeak ? 'destructive' : 'secondary'} className="text-[9px]">
+    <Badge variant={isWeak ? 'destructive' : 'secondary'} className="text-micro">
       {quality.replace(/_/g, ' ')}
     </Badge>
   )
@@ -132,7 +132,7 @@ export function PortTwinPage({ ports }: { ports: PortListing[] }) {
   }, [port, vesselDwt, draftM, loaM, beamM, vesselClass, isLaden, commodity])
 
   return (
-    <div className="flex h-full flex-col gap-1.5 overflow-hidden p-1.5" id="port-twin">
+    <div className="flex h-full flex-col gap-2 overflow-hidden p-2" id="port-twin">
       {/* Query bar */}
       <Panel title="Port Twin" meta="Real berth constraints, tide rules, and empirical wait/handling data, per port">
         <div className="flex flex-wrap items-end gap-2 p-1">
@@ -154,7 +154,7 @@ export function PortTwinPage({ ports }: { ports: PortListing[] }) {
           <div className="flex flex-col gap-0.5">
             <span className="stat-label">Class</span>
             <select
-              className="h-7 w-28 rounded-[3px] border border-input bg-background px-1.5 text-[11px]"
+              className="h-7 w-28 rounded-sm border border-input bg-background px-2 text-body"
               value={vesselClass}
               onChange={(e) => setVesselClass(e.target.value)}
             >
@@ -167,32 +167,49 @@ export function PortTwinPage({ ports }: { ports: PortListing[] }) {
           </div>
           <div className="flex flex-col gap-0.5">
             <span className="stat-label">State</span>
+            {/* A two-state toggle, not a command: it says which state is
+                currently selected and switches on click, so it carries
+                aria-pressed rather than reading as a button that "does"
+                something. */}
             <button
               type="button"
               onClick={() => setIsLaden((v) => !v)}
+              aria-pressed={isLaden}
+              title={`Currently ${isLaden ? 'laden' : 'in ballast'} — click to switch`}
               className={cn(
-                'h-7 w-20 rounded-[3px] border text-[11px] font-semibold',
-                isLaden ? 'border-go bg-go-soft text-go' : 'border-border bg-background text-muted-foreground',
+                'h-7 w-20 cursor-pointer rounded-sm border text-body font-semibold transition-colors',
+                'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring',
+                isLaden
+                  ? 'border-go bg-go-soft text-go hover:bg-go/15'
+                  : 'border-border bg-surface-2 text-muted-foreground hover:border-muted-foreground/60',
               )}
             >
               {isLaden ? 'Laden' : 'Ballast'}
             </button>
           </div>
           <LabeledInput label="Commodity" value={commodity} onChange={setCommodity} width="w-32" />
-          {loading && <span className="stat-label animate-pulse">loading…</span>}
         </div>
       </Panel>
 
-      {!port && (
-        <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-          Select a port to inspect its real berth constraints, tide status, and empirical wait data.
-        </div>
+      {!port && !error && (
+        <PageState
+          title="No port selected"
+          hint="Pick a port above to inspect its real berth constraints, tide status, and empirical waiting-time record."
+        />
       )}
 
-      {error && <div className="p-2 text-sm text-risk">{error}</div>}
+      {port && loading && !error && (
+        <PageState
+          tone="busy"
+          title={`Reading ${prettyPort(port)}…`}
+          hint="Fetching real berth geometry, tide authority rules, port calls and the empirical wait distribution."
+        />
+      )}
+
+      {error && <PageState tone="error" title="Could not load this port" hint={error} />}
 
       {port && reality && (
-        <div className="grid min-h-0 flex-1 grid-cols-1 gap-1.5 overflow-auto lg:grid-cols-3">
+        <div className="grid min-h-0 flex-1 auto-rows-min grid-cols-1 content-start gap-2 overflow-auto lg:grid-cols-3">
           {/* Verdict + constraint */}
           <Panel
             title="Feasibility Verdict"
@@ -202,8 +219,8 @@ export function PortTwinPage({ ports }: { ports: PortListing[] }) {
           >
             <div className="flex flex-col gap-2 p-1">
               <VerdictBadge verdict={reality.verdict} />
-              {reality.reason && <p className="text-[11px] text-muted-foreground">{reality.reason}</p>}
-              <div className="border-t border-border pt-1.5">
+              {reality.reason && <p className="text-body text-muted-foreground">{reality.reason}</p>}
+              <div className="border-t border-border pt-2">
                 <StatRow
                   label="Limit source"
                   value={
@@ -231,9 +248,9 @@ export function PortTwinPage({ ports }: { ports: PortListing[] }) {
                 <StatRow label="Confidence" value={`${Math.round(reality.confidence * 100)}%`} />
               </div>
               {reality.untested_checks.length > 0 && (
-                <div className="border-t border-border pt-1.5">
+                <div className="border-t border-border pt-2">
                   <span className="stat-label">Untested checks</span>
-                  <ul className="mt-0.5 list-disc space-y-0.5 pl-3.5 text-[10px] text-muted-foreground">
+                  <ul className="mt-0.5 list-disc space-y-0.5 pl-3.5 text-caption text-muted-foreground">
                     {reality.untested_checks.map((c) => (
                       <li key={c}>{c}</li>
                     ))}
@@ -241,7 +258,7 @@ export function PortTwinPage({ ports }: { ports: PortListing[] }) {
                 </div>
               )}
               {reality.binding_constraint && (
-                <div className="border-t border-border pt-1.5 text-[10px] text-muted-foreground">
+                <div className="border-t border-border pt-2 text-caption text-muted-foreground">
                   Source: {reality.binding_constraint.source_doc_id}
                   {reality.binding_constraint.source_url && (
                     <>
@@ -266,7 +283,7 @@ export function PortTwinPage({ ports }: { ports: PortListing[] }) {
 
           {/* Tide */}
           <Panel title="Tide Assessment" meta={reality.tide.authority ?? 'no tide data'}>
-            <div className="flex flex-col gap-1.5 p-1">
+            <div className="flex flex-col gap-2 p-1">
               <Badge
                 variant={
                   reality.tide.impact === 'NONE'
@@ -280,17 +297,17 @@ export function PortTwinPage({ ports }: { ports: PortListing[] }) {
                 {reality.tide.impact}
               </Badge>
               {reality.tide.rule_text && (
-                <p className="text-[11px] text-muted-foreground">"{reality.tide.rule_text}"</p>
+                <p className="text-body text-muted-foreground">"{reality.tide.rule_text}"</p>
               )}
               {reality.tide.allowance_m != null && (
                 <StatRow label="Published allowance" value={`${reality.tide.allowance_m} m`} />
               )}
               {reality.tide.source_is_current === false && (
-                <p className="text-[10px] text-risk">Source document is superseded — not current.</p>
+                <p className="text-caption text-risk">Source document is superseded — not current.</p>
               )}
-              {reality.tide.reason && <p className="text-[10px] text-muted-foreground">{reality.tide.reason}</p>}
+              {reality.tide.reason && <p className="text-caption text-muted-foreground">{reality.tide.reason}</p>}
               {reality.tide.authority === null && (
-                <p className="text-[11px] text-muted-foreground">No tide constraint on record for this berth.</p>
+                <p className="text-body text-muted-foreground">No tide constraint on record for this berth.</p>
               )}
             </div>
           </Panel>
@@ -302,16 +319,16 @@ export function PortTwinPage({ ports }: { ports: PortListing[] }) {
               <StatRow label="Max observed LOA" value={fmtOrDash(reality.observed_envelope.max_loa_m, 'm')} />
               <StatRow label="Max observed beam" value={fmtOrDash(reality.observed_envelope.max_beam_m, 'm')} />
               {reality.declared_vs_observed_conflicts.length > 0 ? (
-                <div className="mt-1 border-t border-border pt-1.5">
+                <div className="mt-1 border-t border-border pt-2">
                   <span className="stat-label text-risk">Declared vs observed conflicts</span>
                   {reality.declared_vs_observed_conflicts.map((c) => (
-                    <p key={c.dimension} className="mt-0.5 text-[10px] text-risk">
+                    <p key={c.dimension} className="mt-0.5 text-caption text-risk">
                       {c.note}
                     </p>
                   ))}
                 </div>
               ) : (
-                <p className="mt-1 text-[10px] text-muted-foreground">
+                <p className="mt-1 text-caption text-muted-foreground">
                   No conflicts — every observed call falls within the declared limits.
                 </p>
               )}
@@ -349,7 +366,7 @@ export function PortTwinPage({ ports }: { ports: PortListing[] }) {
                             <td className="desk-num text-right font-semibold">{fmtHours(d.p90_hours)}</td>
                           </>
                         ) : (
-                          <td colSpan={3} className="text-right text-[10px] text-muted-foreground">
+                          <td colSpan={3} className="text-right text-caption text-muted-foreground">
                             insufficient sample (n={d.n}) — falls back to static baseline
                           </td>
                         )}
@@ -360,7 +377,7 @@ export function PortTwinPage({ ports }: { ports: PortListing[] }) {
               </table>
             )}
             {waits?.portwatch_mapping_status === 'PROXY' && (
-              <p className="p-1 text-[10px] text-wait">⚠ {waits.portwatch_mapping_note}</p>
+              <p className="p-1 text-caption text-wait">⚠ {waits.portwatch_mapping_note}</p>
             )}
           </Panel>
 
@@ -380,7 +397,7 @@ export function PortTwinPage({ ports }: { ports: PortListing[] }) {
                 />
               </div>
             ) : (
-              <p className="p-2 text-[11px] text-muted-foreground">
+              <p className="p-2 text-body text-muted-foreground">
                 Insufficient real handling data (n={reality.handling?.n ?? 0}) — no fabricated rate shown.
               </p>
             )}
@@ -394,7 +411,7 @@ export function PortTwinPage({ ports }: { ports: PortListing[] }) {
             flush
           >
             {berths?.status === 'NOT_AVAILABLE' ? (
-              <p className="p-2 text-[11px] text-muted-foreground">{berths.reason}</p>
+              <p className="p-2 text-body text-muted-foreground">{berths.reason}</p>
             ) : (
               <table className="desk-table w-full">
                 <thead>
@@ -414,19 +431,19 @@ export function PortTwinPage({ ports }: { ports: PortListing[] }) {
                     <tr key={b.berth_id}>
                       <td className="font-semibold">{b.berth_id}</td>
                       <td>
-                        <Badge variant={b.limit_status === 'PUBLISHED' ? 'secondary' : 'outline'} className="text-[9px]">
+                        <Badge variant={b.limit_status === 'PUBLISHED' ? 'secondary' : 'outline'} className="text-micro">
                           {b.limit_status}
                         </Badge>
                         {!b.is_published_constraint_berth && (
-                          <span className="ml-1 text-[9px] text-muted-foreground">observed-only</span>
+                          <span className="ml-1 text-micro text-muted-foreground">observed-only</span>
                         )}
                       </td>
                       <td className="desk-num text-right">{fmtOrDash(b.permissible_draft_m)}</td>
                       <td className="desk-num text-right">{fmtOrDash(b.max_loa_m)}</td>
                       <td className="desk-num text-right">{fmtOrDash(b.max_beam_m)}</td>
-                      <td className="text-[10px]">{b.commodity_class ?? '—'}</td>
-                      <td className="text-[10px] text-muted-foreground">{b.berth_function ?? '—'}</td>
-                      <td className="text-[10px] text-muted-foreground">{b.source_doc_id}</td>
+                      <td className="text-caption">{b.commodity_class ?? '—'}</td>
+                      <td className="text-caption text-muted-foreground">{b.berth_function ?? '—'}</td>
+                      <td className="text-caption text-muted-foreground">{b.source_doc_id}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -442,7 +459,7 @@ export function PortTwinPage({ ports }: { ports: PortListing[] }) {
             flush
           >
             {calls?.status === 'NOT_AVAILABLE' ? (
-              <p className="p-2 text-[11px] text-muted-foreground">
+              <p className="p-2 text-body text-muted-foreground">
                 No fact_port_call history has been ingested for this port yet.
               </p>
             ) : (
@@ -464,12 +481,12 @@ export function PortTwinPage({ ports }: { ports: PortListing[] }) {
                       <td className="font-semibold">{r.vessel_name ?? '—'}</td>
                       <td>{r.berth_or_point ?? '—'}</td>
                       <td className="desk-num text-right">{fmtOrDash(r.arrival_draft_m)}</td>
-                      <td className="max-w-40 truncate text-[10px]" title={r.cargo_raw ?? undefined}>
+                      <td className="max-w-40 truncate text-caption" title={r.cargo_raw ?? undefined}>
                         {r.cargo_raw ?? '—'}
                       </td>
                       <td>{r.load_discharge ?? '—'}</td>
-                      <td className="text-[10px] text-muted-foreground">{r.arrival_ts?.slice(0, 16) ?? '—'}</td>
-                      <td className="text-[10px] text-muted-foreground">{r.berth_ts?.slice(0, 16) ?? '—'}</td>
+                      <td className="text-caption text-muted-foreground">{r.arrival_ts?.slice(0, 16) ?? '—'}</td>
+                      <td className="text-caption text-muted-foreground">{r.berth_ts?.slice(0, 16) ?? '—'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -501,7 +518,7 @@ function LabeledInput({
     <div className="flex flex-col gap-0.5">
       <span className="stat-label">{label}</span>
       <Input
-        className={cn('h-7 text-[11px]', width)}
+        className={cn('h-7 text-body', width)}
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />

@@ -133,9 +133,12 @@ export function Combobox({
             setActive(0)
           }}
           onKeyDown={onKeyDown}
-          className="h-7 w-full rounded border border-input bg-surface px-2 pr-7 text-[12px] text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+          className="h-7 w-full cursor-pointer rounded-sm border border-input bg-surface px-2 pr-7 text-lead text-foreground transition-colors placeholder:text-muted-foreground/70 hover:border-muted-foreground/60 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-muted-foreground"
         />
-        <ChevronsUpDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+        <ChevronsUpDown
+          aria-hidden="true"
+          className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
+        />
       </div>
 
       {open &&
@@ -144,10 +147,10 @@ export function Combobox({
           <ul
             id={listId}
             style={{ position: 'fixed', top: coords.top, left: coords.left, width: coords.width }}
-            className="z-[60] max-h-56 overflow-auto rounded border border-border bg-surface py-1 shadow-[0_2px_10px_rgba(0,0,0,0.08)]"
+            className="z-[60] max-h-56 overflow-auto rounded-md border border-border bg-surface py-1 shadow-raised"
           >
             {filtered.length === 0 && (
-              <li className="px-2 py-1.5 text-[11px] text-muted-foreground">
+              <li className="px-2 py-2 text-body text-muted-foreground">
                 {allowFreeText ? 'Press Enter to use as typed' : 'No match'}
               </li>
             )}
@@ -160,7 +163,7 @@ export function Combobox({
                   onClick={() => commit(o.value)}
                   onMouseEnter={() => setActive(i)}
                   className={cn(
-                    'flex w-full items-center gap-2 px-2 py-1.5 text-left text-[12px]',
+                    'flex w-full items-center gap-2 px-2 py-2 text-left text-lead',
                     i === active ? 'bg-accent text-accent-foreground' : 'text-foreground',
                   )}
                 >
@@ -169,7 +172,7 @@ export function Combobox({
                   />
                   <span className="flex-1 truncate">{o.label}</span>
                   {o.hint && (
-                    <span className="desk-num text-[10px] text-muted-foreground">{o.hint}</span>
+                    <span className="desk-num text-caption text-muted-foreground">{o.hint}</span>
                   )}
                 </button>
               </li>

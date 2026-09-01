@@ -30,7 +30,7 @@ function Row({
       <td className="desk-num text-right">
         {rejected || usdPerMt == null ? '—' : `$${usdPerMt.toFixed(2)}`}
       </td>
-      <td className="desk-num text-right text-[10px] text-muted-foreground">
+      <td className="desk-num text-right text-caption text-muted-foreground">
         {rejected ? '—' : `${formatUsdCompact(c.cost_p10_usd)}–${formatUsdCompact(c.cost_p90_usd)}`}
       </td>
       <td className="text-center">
@@ -43,7 +43,7 @@ function Row({
       <td className="text-center">
         {c.requires_transshipment ? (
           <span
-            className="rounded-sm bg-wait/15 px-1 text-[10px] font-semibold text-wait"
+            className="rounded-sm bg-wait/15 px-1 text-caption font-semibold text-wait"
             title={c.transshipment_hub ?? undefined}
           >
             T/S
@@ -105,7 +105,7 @@ export function FleetMixTable({ frontier }: { frontier: FleetMixFrontier }) {
         </tbody>
       </table>
       {frontier.rejected_configurations.length > 0 && (
-        <ul className="space-y-0.5 border-t border-border bg-surface-2 px-2 py-1.5 text-[10px] text-muted-foreground">
+        <ul className="space-y-0.5 border-t border-border bg-surface-2 px-2 py-2 text-caption text-muted-foreground">
           {frontier.rejected_configurations
             .filter((c) => c.infeasible_reason)
             .map((c) => (

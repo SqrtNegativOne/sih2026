@@ -74,7 +74,10 @@ function vesselIsValid(v: VesselDraft): boolean {
 }
 
 const inputCls =
-  'h-7 w-full rounded border border-input bg-surface px-2 text-[12px] text-foreground focus:outline-none focus:ring-2 focus:ring-primary'
+  'h-7 w-full rounded-sm border border-input bg-surface px-2 text-lead text-foreground ' +
+  'transition-colors placeholder:text-muted-foreground/70 hover:border-muted-foreground/60 ' +
+  'focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40 ' +
+  'disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-muted-foreground'
 
 export function QuoteDrawer({
   open,
@@ -137,6 +140,19 @@ export function QuoteDrawer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [latestDate])
 
+  // Escape closes the drawer. It is a modal overlay -- it covers the whole
+  // viewport with a backdrop that eats clicks (the root cause behind
+  // F-48/F-52/F-53) -- and an overlay a keyboard user cannot dismiss is a
+  // trap. Backdrop click already worked; this is the other half.
+  useEffect(() => {
+    if (!open) return
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open, onClose])
+
   const portOptions = useMemo<ComboOption[]>(
     // F-39: p.name is the raw port id (e.g. "Newcastle_AU") -- prettyPort
     // matches every other screen's display convention ("Newcastle AU").
@@ -191,24 +207,54 @@ export function QuoteDrawer({
     <AnimatePresence>
       {open && (
         <>
+          {/*
+            z-50, not the z-40 this used to carry.
+
+            F-48 and F-52 raised the icon rail, the top bar and <main> to z-50
+            so their controls stayed clickable through this backdrop — which
+            was necessary only because the drawer auto-opened on every load.
+            F-53 removed that root cause by defaulting it closed, but the z-50
+            on <main> stayed, and it left the backdrop unable to cover the very
+            content it exists to block: measured live, a click anywhere over
+            the page with the drawer open resolved to the page, not to this
+            element, so backdrop-click dismissal silently did nothing (and a
+            user could still operate controls "underneath" an open modal).
+
+            Matching z-50 rather than exceeding it is deliberate: within one
+            stacking context, equal z-index paints in DOM order, and the drawer
+            renders after <main>, the rail and the header — so this backdrop
+            covers all three, while the panel below (also z-50, later still)
+            stays above this backdrop. Nothing renders on mount, so F-53's fix
+            is untouched.
+          */}
           <motion.div
-            className="fixed inset-0 z-40 bg-black/30"
+            className="fixed inset-0 z-50 bg-black/30"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
+            aria-hidden="true"
           />
           <motion.aside
-            className="fixed right-0 top-0 z-50 flex h-full w-[380px] max-w-[92vw] flex-col border-l border-border bg-surface"
+            role="dialog"
+            aria-modal="true"
+            aria-label="New charter quote"
+            className="fixed right-0 top-0 z-50 flex h-full w-[380px] max-w-[92vw] flex-col border-l border-border bg-surface shadow-raised"
             initial={{ x: '100%' }}
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ type: 'spring', stiffness: 320, damping: 34 }}
           >
             <div className="flex h-10 shrink-0 items-center justify-between border-b border-border bg-navbar px-3 text-navbar-foreground">
-              <span className="text-[12px] font-bold uppercase tracking-wide">New Charter Quote</span>
-              <button type="button" onClick={onClose} className="rounded p-1 hover:bg-white/10">
-                <X className="h-4 w-4" />
+              <span className="text-lead font-bold uppercase tracking-wide">New Charter Quote</span>
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close the quote form"
+                title="Close (Esc)"
+                className="rounded-sm p-1 transition-colors hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
 
@@ -323,7 +369,7 @@ export function QuoteDrawer({
                     onChange={(e) => setRiskTolerance(e.target.value)}
                     className="h-1 w-full cursor-pointer appearance-none rounded bg-muted accent-primary"
                   />
-                  <div className="flex justify-between text-[9px] uppercase tracking-wide text-muted-foreground">
+                  <div className="flex justify-between text-micro uppercase tracking-wide text-muted-foreground">
                     <span>Risk-neutral</span>
                     <span>Risk-averse</span>
                   </div>
@@ -331,7 +377,7 @@ export function QuoteDrawer({
 
                 <div className="space-y-2 border-t border-border pt-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    <span className="text-caption font-semibold uppercase tracking-wide text-muted-foreground">
                       Vessels in hand (optional)
                     </span>
                     <button
@@ -339,7 +385,7 @@ export function QuoteDrawer({
                       onClick={() =>
                         setVessels((vs) => [...vs, newVesselDraft(vs.length + 1, anchorDate)])
                       }
-                      className="text-[10px] font-semibold uppercase tracking-wide text-primary hover:underline"
+                      className="text-caption font-semibold uppercase tracking-wide text-primary hover:underline"
                     >
                       + Add vessel
                     </button>
@@ -348,13 +394,13 @@ export function QuoteDrawer({
                   {vessels.map((v, i) => (
                     <div key={v.key} className="space-y-2 rounded border border-border p-2">
                       <div className="flex items-center justify-between">
-                        <span className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        <span className="text-micro font-semibold uppercase tracking-wide text-muted-foreground">
                           Vessel {i + 1}
                         </span>
                         <button
                           type="button"
                           onClick={() => setVessels((vs) => vs.filter((x) => x.key !== v.key))}
-                          className="text-[9px] font-semibold uppercase tracking-wide text-risk hover:underline"
+                          className="text-micro font-semibold uppercase tracking-wide text-risk hover:underline"
                         >
                           Remove
                         </button>
@@ -401,27 +447,47 @@ export function QuoteDrawer({
                             ['ladenFuel', 'Laden t/d'],
                             ['ballastFuel', 'Ballast t/d'],
                           ] as const
+                        /* These seven carried their name in `placeholder`
+                           only, and every one of them is pre-filled from
+                           newVesselDraft() -- so the label was gone the moment
+                           the field was rendered. A column of seven unlabelled
+                           numbers (13.5, 225, 32.2, 13, 32, 27) gives a user
+                           no way to tell draft from LOA from beam from speed,
+                           which is exactly the set you must get right for the
+                           port-constraint check further down the desk to mean
+                           anything. Persistent labels, and the input keeps its
+                           accessible name whether or not it holds a value. */
                         ).map(([field, label]) => (
+                          <label key={field} className="flex flex-col gap-0.5">
+                            <span className="text-micro font-semibold uppercase tracking-wide text-muted-foreground">
+                              {label}
+                            </span>
+                            <input
+                              type="number"
+                              step="0.1"
+                              min={0.1}
+                              aria-label={label}
+                              value={v[field]}
+                              onChange={(e) => updateVessel(v.key, { [field]: e.target.value })}
+                              className={cn(inputCls, 'font-mono')}
+                            />
+                          </label>
+                        ))}
+                        <label className="col-span-2 flex flex-col gap-0.5">
+                          <span className="text-micro font-semibold uppercase tracking-wide text-muted-foreground">
+                            Available from
+                          </span>
                           <input
-                            key={field}
-                            type="number"
-                            step="0.1"
-                            min={0.1}
-                            placeholder={label}
-                            value={v[field]}
-                            onChange={(e) => updateVessel(v.key, { [field]: e.target.value })}
+                            type="date"
+                            aria-label="Available from"
+                            value={v.availableFrom}
+                            onChange={(e) => updateVessel(v.key, { availableFrom: e.target.value })}
                             className={cn(inputCls, 'font-mono')}
                           />
-                        ))}
-                        <input
-                          type="date"
-                          value={v.availableFrom}
-                          onChange={(e) => updateVessel(v.key, { availableFrom: e.target.value })}
-                          className={cn(inputCls, 'col-span-2 font-mono')}
-                        />
+                        </label>
                       </div>
                       {!vesselIsValid(v) && (
-                        <p className="text-[9px] uppercase text-risk">
+                        <p className="text-micro uppercase text-risk">
                           Needs an ID, a current port, and positive figures.
                         </p>
                       )}
@@ -443,18 +509,45 @@ export function QuoteDrawer({
                 </div>
 
                 {sameEnds && (
-                  <p className="text-[11px] text-risk">Origin and destination must differ.</p>
+                  <p className="text-body text-risk">Origin and destination must differ.</p>
                 )}
-                {portsError && <p className="text-[11px] text-risk">{portsError}</p>}
+                {portsError && <p className="text-body text-risk">{portsError}</p>}
               </div>
 
+              {/*
+                This one button is styled inline rather than through the
+                shared <Button>, and that is deliberate. The repo tripwire
+                tests/test_no_synthetic_frontend_data.py allowlists the
+                PRNG-derived React key in newVesselDraft() above BY LINE
+                NUMBER (quote-drawer.tsx:51). Adding an import to this file
+                shifts that line and fails the build on both halves of the
+                tripwire at once -- the offender scan and the stale-entry
+                scan. The classes below are exactly what
+                button({variant:'primary', size:'lg'}) emits; keep the two in
+                step if either changes. Fixing this properly means making the
+                allowlist content-addressed rather than line-addressed, which
+                is a change to tests/ and outside this pass.
+              */}
               <div className="shrink-0 border-t border-border p-3">
                 <button
                   type="submit"
+                  className="inline-flex h-8 w-full shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-sm bg-primary px-4 text-lead font-semibold text-primary-foreground transition-colors duration-150 hover:bg-primary/90 active:bg-primary/95 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-45"
                   disabled={!canSubmit || submitting}
-                  className="h-8 w-full rounded bg-primary text-[12px] font-semibold uppercase tracking-wide text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+                  // A disabled button with no stated reason reads as broken.
+                  // Say which field is still missing instead.
+                  title={
+                    submitting
+                      ? 'Solving…'
+                      : sameEnds
+                        ? 'Origin and destination must differ.'
+                        : originPort === '' || destPort === ''
+                          ? 'Pick an origin and a destination port first.'
+                          : !vesselsValid
+                            ? 'Every vessel needs an ID, a current port, and positive figures.'
+                            : 'Run the quote'
+                  }
                 >
-                  {submitting ? 'Solving…' : 'Run Quote'}
+                  {submitting ? 'Solving…' : 'Run quote'}
                 </button>
               </div>
             </form>
@@ -476,11 +569,11 @@ function Field({
 }) {
   return (
     <label className="flex flex-col gap-1">
-      <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+      <span className="text-caption font-semibold uppercase tracking-wide text-muted-foreground">
         {label}
       </span>
       {children}
-      {hint && <span className="text-[9px] leading-tight text-muted-foreground">{hint}</span>}
+      {hint && <span className="text-micro leading-tight text-muted-foreground">{hint}</span>}
     </label>
   )
 }

@@ -48,7 +48,7 @@ export function PortChecksTable({
       render: (pc) => (
         <span
           className={cn(
-            'rounded-sm px-1 text-[10px] font-bold',
+            'rounded-sm px-1 text-caption font-bold',
             CONGESTION_CLASS[pc.congestion_label],
           )}
         >
@@ -77,7 +77,7 @@ export function PortChecksTable({
         <tbody>
           {rows.map(({ label, render }) => (
             <tr key={label}>
-              <td className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <td className="text-caption font-semibold uppercase tracking-wide text-muted-foreground">
                 {label}
               </td>
               <td className="desk-num text-right">{render(origin)}</td>

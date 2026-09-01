@@ -323,7 +323,7 @@ export function RouteMap({
                 })
               }
               className={cn(
-                'rounded-sm px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide',
+                'rounded-sm px-2 py-0.5 text-micro font-semibold uppercase tracking-wide',
                 hidden.has(k)
                   ? 'bg-surface-2 text-muted-foreground line-through'
                   : 'bg-accent text-accent-foreground',
@@ -337,7 +337,7 @@ export function RouteMap({
               type="button"
               onClick={() => setShowRejected((s) => !s)}
               className={cn(
-                'rounded-sm px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide',
+                'rounded-sm px-2 py-0.5 text-micro font-semibold uppercase tracking-wide',
                 showRejected ? 'bg-risk-soft text-risk' : 'bg-surface-2 text-muted-foreground',
               )}
             >
@@ -351,7 +351,7 @@ export function RouteMap({
                 onFocus(null)
                 setUserTf({ k: 1, x: 0, y: 0 })
               }}
-              className="rounded-sm bg-primary px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary-foreground"
+              className="rounded-sm bg-primary px-2 py-0.5 text-micro font-semibold uppercase tracking-wide text-primary-foreground"
             >
               Reset zoom
             </button>
@@ -471,7 +471,7 @@ export function RouteMap({
                   <text
                     x={5}
                     y={above ? -5 : 12}
-                    className="text-[9px] font-semibold"
+                    className="text-micro font-semibold"
                     fill="#1c2b3a"
                     stroke="#fff"
                     strokeWidth={3}
@@ -506,9 +506,9 @@ export function RouteMap({
         </svg>
 
         {legendRoutes.length > 0 && (
-          <div className="pointer-events-none absolute bottom-2 left-2 rounded border border-border bg-surface/90 px-2 py-1 text-[10px]">
+          <div className="pointer-events-none absolute bottom-2 left-2 rounded border border-border bg-surface/90 px-2 py-1 text-caption">
             {legendRoutes.map((r) => (
-              <div key={r.id} className="flex items-center gap-1.5">
+              <div key={r.id} className="flex items-center gap-2">
                 <span
                   className="inline-block h-0.5 w-4"
                   style={{ background: colors.get(r.id) ?? 'var(--structure)' }}
@@ -516,7 +516,7 @@ export function RouteMap({
                 <span className="text-foreground">{r.label}</span>
               </div>
             ))}
-            <div className="mt-0.5 flex items-center gap-1.5 text-muted-foreground">
+            <div className="mt-0.5 flex items-center gap-2 text-muted-foreground">
               <span className="inline-block h-0 w-4 border-t border-dashed border-muted-foreground" />
               considered
             </div>
@@ -525,7 +525,7 @@ export function RouteMap({
 
         {tip && (
           <div
-            className="pointer-events-none absolute z-10 max-w-[240px] rounded border border-border bg-surface p-1.5 text-[11px] shadow-[0_2px_10px_rgba(0,0,0,0.14)]"
+            className="pointer-events-none absolute z-10 max-w-[240px] rounded border border-border bg-surface p-2 text-body shadow-[0_2px_10px_rgba(0,0,0,0.14)]"
             style={{
               left: Math.min(tip.x + 12, width - 240),
               top: Math.min(tip.y + 12, height - 72),

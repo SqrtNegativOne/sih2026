@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Panel } from '@/components/desk/panel'
+import { Panel, PanelError, PanelLoading } from '@/components/desk/panel'
 import { StatRow } from '@/components/desk/stat'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { fetchLedgerLive, fetchLedgerPerformance, fetchLedgerReplay, postLedgerOutcome, resetLedgerLive } from '@/lib/api'
 import { formatNumber, prettyPort } from '@/lib/format'
@@ -30,18 +31,22 @@ function OutcomeForm({ entry, onRecorded }: { entry: LedgerLiveEntry; onRecorded
   }
 
   return (
-    <div className="flex items-center gap-1.5">
-      <Input placeholder="realised $/day" className="h-6 w-28 text-[10px]" value={rate} onChange={(e) => setRate(e.target.value)} />
-      <Input type="date" className="h-6 w-32 text-[10px]" value={atDate} onChange={(e) => setAtDate(e.target.value)} />
-      <button
-        type="button"
+    <div className="flex items-center gap-2">
+      <Input placeholder="realised $/day" className="h-6 w-28 text-caption" value={rate} onChange={(e) => setRate(e.target.value)} />
+      <Input type="date" className="h-6 w-32 text-caption" value={atDate} onChange={(e) => setAtDate(e.target.value)} />
+      <Button
+        size="sm"
         onClick={submit}
         disabled={submitting || !rate || !atDate}
-        className="h-6 rounded-[3px] border border-market bg-market/10 px-2 text-[10px] font-semibold text-market disabled:opacity-40"
+        title={
+          !rate || !atDate
+            ? 'Enter the realised rate and the date it was fixed.'
+            : 'Record this outcome against the recommendation'
+        }
       >
-        Record
-      </button>
-      {err && <span className="text-[9px] text-risk">{err}</span>}
+        {submitting ? 'Recording…' : 'Record'}
+      </Button>
+      {err && <span className="text-micro text-risk">{err}</span>}
     </div>
   )
 }
@@ -84,24 +89,24 @@ function LiveLedgerSection() {
       hint="Every real /quote call appends an entry here automatically. Starts empty and fills forward -- nothing here is seeded or historical."
       actions={
         <>
-          <Badge variant="secondary" className="text-[9px]">real, forward-only</Badge>
+          <Badge variant="secondary" className="text-micro">real, forward-only</Badge>
           {live && live.total > 0 && (
-            <button
-              type="button"
+            <Button
+              variant="danger"
+              size="xs"
               onClick={handleReset}
               disabled={resetting}
               title="Clear every entry -- for starting a clean demo, not for hiding unfavourable results (it's all-or-nothing)"
-              className="h-5 rounded-[3px] border border-risk/40 bg-risk-soft px-2 text-[10px] font-semibold text-risk disabled:opacity-40"
             >
               {resetting ? 'Clearing…' : 'Clear ledger'}
-            </button>
+            </Button>
           )}
         </>
       }
     >
-      {error && <p className="p-2 text-[11px] text-risk">{error}</p>}
+      {error && <p className="p-2 text-body text-risk">{error}</p>}
       {perf && (
-        <div className="grid grid-cols-2 gap-x-4 border-b border-border p-1.5 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-x-4 border-b border-border p-2 md:grid-cols-4">
           <StatRow label="Entries" value={perf.n_entries_total} />
           <StatRow label="Pending" value={perf.n_pending} tone={perf.n_pending > 0 ? 'wait' : 'plain'} />
           <StatRow label="Scored" value={perf.n_scored} />
@@ -122,7 +127,7 @@ function LiveLedgerSection() {
         </div>
       )}
       {live && live.total === 0 && (
-        <p className="p-3 text-[11px] text-muted-foreground">
+        <p className="p-3 text-body text-muted-foreground">
           No real recommendations recorded yet. This ledger fills forward as the system is used — it is never
           seeded with historical or example entries.
         </p>
@@ -144,24 +149,24 @@ function LiveLedgerSection() {
           <tbody>
             {live.entries.map((e) => (
               <tr key={e.entry_id}>
-                <td className="text-[10px] text-muted-foreground">{e.decision_timestamp.slice(0, 16)}</td>
-                <td className="text-[10px]">
+                <td className="text-caption text-muted-foreground">{e.decision_timestamp.slice(0, 16)}</td>
+                <td className="text-caption">
                   {prettyPort(e.origin_port)} → {prettyPort(e.dest_port)}
                 </td>
                 <td>{e.target_vessel_class}</td>
                 <td className="desk-num text-right">{formatNumber(e.today_quote_usd_per_day)}</td>
                 <td className="desk-num text-right text-muted-foreground">{formatNumber(e.risk_tolerance, 2)}</td>
                 <td>
-                  <Badge variant={e.lock_action === 'LOCK' ? 'secondary' : 'outline'} className="text-[9px]">
+                  <Badge variant={e.lock_action === 'LOCK' ? 'secondary' : 'outline'} className="text-micro">
                     {e.lock_action}
                   </Badge>
                 </td>
                 <td>
-                  <span className={cn('text-[10px]', e.status === 'pending' ? 'text-wait' : 'text-go')}>{e.status}</span>
+                  <span className={cn('text-caption', e.status === 'pending' ? 'text-wait' : 'text-go')}>{e.status}</span>
                 </td>
                 <td>
                   {e.outcome ? (
-                    <span className="desk-num text-[10px]">
+                    <span className="desk-num text-caption">
                       {formatNumber(e.outcome.realized_rate_usd_per_day)} @ {e.outcome.realized_at_date}
                     </span>
                   ) : (
@@ -203,9 +208,9 @@ function ReplaySection() {
     <Panel
       title="Historical Model Replay"
       meta="A retrospective backtest — not real decisions this system made"
-      actions={<Badge variant="destructive" className="text-[9px]">retrospective simulation</Badge>}
+      actions={<Badge variant="destructive" className="text-micro">retrospective simulation</Badge>}
     >
-      <div className="border-b-2 border-wait bg-wait-soft p-2 text-[11px] text-wait">
+      <div className="border-b-2 border-wait bg-wait-soft p-2 text-body text-wait">
         <span className="font-bold uppercase tracking-wide">{replay?.label ?? 'retrospective model simulation — not decisions this system actually made'}</span>
         <p className="mt-0.5 text-foreground">
           A real backtest over a frozen historical period, calibrated on a separate slice of data
@@ -215,20 +220,23 @@ function ReplaySection() {
       </div>
       {!requested && (
         <div className="flex flex-col items-start gap-2 p-2">
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-body text-muted-foreground">
             Runs a real PSO calibration + backtest on the first load (real minutes-scale cost). Cached after that.
           </p>
-          <button
-            type="button"
-            onClick={load}
-            className="rounded-[3px] border border-market bg-market/10 px-2 py-1 text-[11px] font-semibold text-market"
-          >
+          <Button variant="primary" size="md" onClick={load}>
             Run replay
-          </button>
+          </Button>
         </div>
       )}
-      {loading && <p className="p-2 text-[11px] text-muted-foreground animate-pulse">calibrating on valid and scoring the real frozen test split…</p>}
-      {error && <p className="p-2 text-[11px] text-risk">{error}</p>}
+      {loading && (
+        <div className="p-2">
+          <p className="mb-2 text-body text-muted-foreground" role="status" aria-live="polite">
+            Calibrating on the validation split and scoring the real frozen test split…
+          </p>
+          <PanelLoading rows={4} label="Running the replay" />
+        </div>
+      )}
+      {error && <PanelError message={error} onRetry={load} />}
       {replay && (
         <div className="flex flex-col gap-2 p-1">
           <div className="grid grid-cols-2 gap-x-4 md:grid-cols-4">
@@ -273,7 +281,7 @@ function ReplaySection() {
 
 export function LedgerPage() {
   return (
-    <div className="flex h-full flex-col gap-1.5 overflow-auto p-1.5" id="ledger">
+    <div className="flex h-full flex-col gap-2 overflow-auto p-2" id="ledger">
       <LiveLedgerSection />
       <ReplaySection />
     </div>

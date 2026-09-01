@@ -74,6 +74,52 @@
     --radius-sm: calc(var(--radius) * 0.5);
     --radius-md: var(--radius);
     --radius-lg: calc(var(--radius) * 1.5);
+
+    /*
+     * Type scale. Before this existed the desk used twelve ad-hoc sizes
+     * (8, 8.5, 9, 9.5, 10, 11, 12, 13, 14, 15, 26, 34px) picked per component,
+     * so two panels side by side disagreed about what "a label" or "a footnote"
+     * looked like. Seven steps now, each with one job:
+     *
+     *   micro      chart axis ticks, icon-rail labels -- text that must not
+     *              compete with the data it annotates
+     *   caption    uppercase field labels, provenance notes, footnotes
+     *   body       table cells and the default reading size for data
+     *   lead       prose, empty states, top-bar nav
+     *   figure     a panel's own headline number
+     *   figure-lg  a page's headline number
+     *   display    the LOCK / WAIT verdict, one per screen
+     *
+     * Line heights are baked in: tight for numerals (which never wrap), >=1.4
+     * for anything read as a sentence.
+     */
+    --text-micro: 9px;
+    --text-micro--line-height: 1.35;
+    --text-caption: 10px;
+    --text-caption--line-height: 1.4;
+    --text-body: 11px;
+    --text-body--line-height: 1.45;
+    --text-lead: 12px;
+    --text-lead--line-height: 1.5;
+    --text-figure: 14px;
+    --text-figure--line-height: 1.2;
+    --text-figure-lg: 22px;
+    --text-figure-lg--line-height: 1.1;
+    --text-display: 34px;
+    --text-display--line-height: 1;
+
+    /*
+     * Elevation. The desk's rule is still "hierarchy comes from borders and
+     * tone, not from lift" -- these are hairlines, not drop shadows: `panel`
+     * is a single 1px shade that separates a white panel from the #e9edf2
+     * ground it sits on (the border alone reads flat at this density), and
+     * `raised` is reserved for genuinely floating surfaces (the quote drawer,
+     * popovers) where a user needs to see that something is over the page
+     * rather than in it.
+     */
+    --shadow-panel: 0 1px 2px 0 rgb(18 32 46 / 0.05);
+    --shadow-raised:
+        0 8px 24px -6px rgb(18 32 46 / 0.16), 0 2px 6px -2px rgb(18 32 46 / 0.08);
 }
 
 :root {
@@ -142,7 +188,49 @@
   body {
     @apply bg-background text-foreground font-sans antialiased;
     font-size: 12px;
-    line-height: 1.35;
+    line-height: 1.45;
+  }
+
+  /*
+   * Every numeral on the desk is tabular. Columns of money only line up if the
+   * glyphs are the same width, and a figure that updates in place (the rate,
+   * the countdown) must not jiggle as digits change. Applied at the element
+   * level so no component can forget it.
+   */
+  code,
+  kbd,
+  samp,
+  pre,
+  .font-mono,
+  [class*='font-mono'] {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /*
+   * One visible focus ring, everywhere, for keyboard users only. Before this
+   * the desk inherited whatever each control happened to have -- several had
+   * `focus:outline-none` with no replacement, so tabbing through the quote
+   * form left no indication of where you were.
+   */
+  :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+    @apply outline-2 outline-offset-1 outline-ring;
+  }
+
+  /*
+   * Motion is an enhancement here, never information: nothing on the desk is
+   * only conveyable by animating. So under `prefers-reduced-motion` we can cut
+   * all of it -- panel expands, chart tweens, number rolls, map easing -- and
+   * lose nothing but the easing.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
 
@@ -154,24 +242,27 @@
    * treatment except the verdict and its cost comparison.
    */
   .stat-row {
-    @apply flex items-baseline justify-between gap-3 py-[2px];
+    @apply flex items-baseline justify-between gap-3 py-0.5;
   }
   .stat-label {
-    @apply text-[9.5px] font-semibold uppercase tracking-wide text-muted-foreground;
+    @apply text-caption font-semibold uppercase tracking-wide text-muted-foreground;
   }
   .stat-value {
-    @apply font-mono text-[11px] tabular-nums text-foreground;
+    @apply font-mono text-body tabular-nums text-foreground;
   }
 
   .desk-table {
     @apply w-full border-collapse text-left;
   }
+  /* Header cells sit on the 4px grid (8px inline / 4px block) like every other
+     surface on the desk; they used to be 6px/3px, which put every table half a
+     step out of rhythm with the panel padding around it. */
   .desk-table thead th {
-    @apply bg-surface-2 px-1.5 py-[3px] text-[9.5px] font-semibold uppercase tracking-wide
+    @apply bg-surface-2 px-2 py-1 text-caption font-semibold uppercase tracking-wide
            text-muted-foreground border-b border-border whitespace-nowrap;
   }
   .desk-table tbody td {
-    @apply px-1.5 py-[2.5px] border-b border-border/50 align-middle;
+    @apply px-2 py-1 text-body border-b border-border/50 align-middle;
   }
   .desk-table tbody tr:last-child td {
     @apply border-b-0;
@@ -182,7 +273,61 @@
     @apply bg-surface-2;
   }
   .desk-num {
-    @apply font-mono text-[11px] tabular-nums;
+    @apply font-mono text-body tabular-nums;
+  }
+
+  /*
+   * One chip, everywhere. Status bands, CII ratings, confidence levels,
+   * provenance tags and "n=4, thin" notes were each rolling their own padding
+   * (px-1/px-1.5/px-2 x py-px/py-0.5) and their own font size, so a row of
+   * three chips from three different panels never lined up. The colour is
+   * still the caller's -- only the geometry is shared.
+   */
+  .desk-chip {
+    @apply inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-sm px-2 py-0.5
+           text-micro font-bold uppercase tracking-wide;
+  }
+  /* The neutral variant, for a chip that carries a fact rather than a status
+     (scene id, sample size, "prior") -- outlined instead of filled so it never
+     competes with a semantic chip beside it. */
+  .desk-chip-neutral {
+    @apply border border-border bg-surface font-mono font-semibold normal-case tracking-normal
+           text-muted-foreground;
+  }
+
+  /*
+   * The four panel states. Every data panel needs all of them and they were
+   * previously hand-written per component, so "no data" looked like six
+   * different things across the desk. Centred, quiet, and always sized to the
+   * panel rather than to the sentence.
+   */
+  .panel-state {
+    @apply flex h-full min-h-16 flex-col items-center justify-center gap-2 p-4 text-center;
+  }
+  .panel-state-title {
+    @apply text-lead text-muted-foreground;
+  }
+  /* Full --muted-foreground, not an /80 tint of it: the tint measured 2.95:1
+     on white, and this is the line that tells a user how to fix the empty
+     state -- the last text on the desk that should be hard to read. */
+  .panel-state-hint {
+    @apply max-w-[46ch] text-caption leading-relaxed text-muted-foreground;
+  }
+
+  /*
+   * Skeletons take the geometry of the content they stand in for, so a panel
+   * does not resize when real data lands. Pulse only -- no shimmer sweep.
+   */
+  .skeleton {
+    @apply animate-pulse rounded-sm bg-surface-2;
+  }
+
+  /*
+   * A footnote strip pinned under a table: units, caveats, provenance. Same
+   * treatment in every panel that has one.
+   */
+  .panel-note {
+    @apply border-t border-border px-2 py-1 text-micro leading-relaxed text-muted-foreground;
   }
 }
 

@@ -28,7 +28,7 @@ export function TopBar({ onNewQuote }: TopBarProps) {
     // stay correctly unclickable while the drawer covers them.
     <header className="relative z-50 flex h-10 shrink-0 items-center justify-between bg-navbar pl-3 pr-3 text-navbar-foreground">
       <div className="flex h-full items-center gap-5">
-        <div className="flex items-center gap-1.5 text-[15px] font-extrabold tracking-tight">
+        <div className="flex items-center gap-2 text-figure font-extrabold tracking-tight">
           <Ship className="h-[18px] w-[18px]" strokeWidth={2} />
           CHARTERING
         </div>
@@ -39,7 +39,7 @@ export function TopBar({ onNewQuote }: TopBarProps) {
               type="button"
               onClick={() => scrollTo(s.id)}
               className={
-                'pb-1.5 text-[12px] font-medium transition-colors ' +
+                'pb-2 text-lead font-medium transition-colors ' +
                 (i === 0
                   ? 'border-b-2 border-navbar-foreground text-navbar-foreground'
                   : 'text-navbar-muted hover:text-navbar-foreground')
@@ -57,19 +57,30 @@ export function TopBar({ onNewQuote }: TopBarProps) {
          * do nothing on click read as broken, not "coming soon". Disabled
          * with an honest tooltip, the same treatment the icon rail already
          * gives TC In/TC Out for the identical reason. */}
+        {/* Measured at a 1:1 contrast ratio before this change: a half-opacity
+            muted foreground on a half-opacity white pill, over navy, came out
+            genuinely unreadable rather than merely quiet. A disabled control
+            is exempt from the AA floor, but "not implemented" is the whole
+            point of showing it — if the label cannot be read, the control just
+            looks broken. Now it sits on the navbar's own tone with its real
+            muted colour. */}
         <div className="relative hidden sm:block" title="Search — not implemented">
-          <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/50" />
+          <Search
+            aria-hidden="true"
+            className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-navbar-muted"
+          />
           <input
             type="text"
             disabled
+            aria-label="Search — not implemented"
             placeholder="Search — not implemented"
-            className="w-44 cursor-not-allowed rounded bg-surface/50 py-1 pl-7 pr-2 text-[12px] text-muted-foreground/50 placeholder:text-muted-foreground/50 focus:outline-none"
+            className="w-44 cursor-not-allowed rounded-sm border border-white/15 bg-white/5 py-1 pl-7 pr-2 text-lead text-navbar-muted placeholder:text-navbar-muted focus:outline-none"
           />
         </div>
         <button
           type="button"
           onClick={onNewQuote}
-          className="rounded bg-white px-2.5 py-1 text-[12px] font-semibold text-primary transition-colors hover:bg-white/90"
+          className="rounded bg-white px-2 py-1 text-lead font-semibold text-primary transition-colors hover:bg-white/90"
         >
           New Quote
         </button>

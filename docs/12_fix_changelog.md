@@ -68,6 +68,12 @@ the number/behaviour changed, not just that code was edited.
 | F-52 | Blocker | Drawer backdrop still covered every secondary page's own controls (Run analysis/Run sweep did nothing) | ✅ done |
 | F-53 | Blocker | Root cause of F-48/F-52: the New Quote drawer auto-opened on every fresh load | ✅ done |
 | F-54 | Blocker | The REAL cause of "Run analysis does nothing": `Panel`'s own `h-full` squashed every secondary-page results panel to ~2px | ✅ done |
+| F-55 | Major | `tailwind-merge` classified the new `text-*` type-scale utilities as colours and silently dropped real colour classes (primary button label rendered at 2.48:1) | ✅ done |
+| F-56 | Moderate | Icon-rail labels rendered glyph-clipped ("CHEDULING", "PORTFOLIC") -- the 64px rail was narrower than its own longest labels | ✅ done |
+| F-57 | Moderate | Secondary-page result grids stretched rows to fill, clipping panel content mid-row (Feasibility Verdict, Observed Envelope, Basin × Class, Findings) | ✅ done |
+| F-58 | Moderate | Backdrop-click could not dismiss the quote drawer: `<main>`'s F-52 `z-50` painted above the `z-40` backdrop | ✅ done |
+| F-59 | Minor | Five AA contrast failures: grade-D chip, risk-feed separator and "vs", empty-state hint, satellite age badge and confidence chip on the dark SAR plate | ✅ done |
+| F-60 | Minor | Portfolio's efficient-frontier chart drew a degenerate (all-identical) frontier as an empty box with one corner dot | ✅ done |
 
 Legend: ⬜ not started · 🔶 in progress · ✅ done · ⏸️ deferred (with reason) · ➖ no action needed
 
@@ -2140,3 +2146,146 @@ landed.
 
 `cd frontend && npx tsc --noEmit`: clean. `npx oxlint` on all 11 changed files: clean (only
 pre-existing warning patterns). No backend/Python source changed this pass.
+
+---
+
+### 2026-09-02 — Visual design and UX refinement pass (F-55 … F-60)
+
+A design-only pass over `frontend/src/`. **No backend change of any kind**: zero files touched under
+`backend/`, `src/` or `tests/`, no endpoint, request shape or response handling altered, and no
+displayed value's meaning, units, rounding or provenance label changed. `git status --porcelain |
+grep -v "^.. frontend/"` returns only this changelog.
+
+#### Foundations
+
+**A type scale replaces twelve ad-hoc sizes.** The desk was using 8, 8.5, 9, 9.5, 10, 11, 12, 13, 14,
+15, 26 and 34px, chosen per component, so two panels side by side disagreed about what "a label" or
+"a footnote" looked like. Seven named steps now live as `--text-*` theme keys in `index.css` —
+`micro` / `caption` / `body` / `lead` / `figure` / `figure-lg` / `display` — each with a baked-in line
+height (tight for numerals, ≥1.4 for anything read as a sentence). All 236 call sites migrated; no
+arbitrary `text-[Npx]` remains anywhere under `frontend/src/`.
+
+**Spacing on a 4px grid.** Every `1.5` (6px) and `2.5` (10px) padding/margin/gap step was folded onto
+the grid, table cells moved from `px-1.5 py-[2.5px]` to `px-2 py-1`, and the panel header from 24px to
+28px (its title, ⓘ, meta and a 20px action button previously shared 24px). Remaining `0.5` (2px) steps
+are optical hairlines on 4-8px dots and rules, kept deliberately.
+
+**Shared primitives.** `Button` (cva, five intent variants × five sizes) replaces seven hand-rolled
+action-button styles — Portfolio's "Run analysis", Fragility's "Run sweep" and Backhaul's "Score every
+port" were three visibly different buttons for the same gesture. `Disclosure` is now the single
+progressive-disclosure control. `PanelEmpty` / `PanelError` / `PanelLoading` / `PageState` give the
+four data states one appearance everywhere; `.desk-chip` unifies twelve different chip paddings.
+Border radii collapsed from `rounded`/`rounded-[3px]`/`rounded-[2px]`/`rounded-[1px]` onto the two
+existing radius tokens.
+
+#### F-55 — `tailwind-merge` silently dropped colour classes (the one with teeth)
+
+Adding the type scale introduced class names `tailwind-merge` had never seen. It classified
+`text-micro`…`text-display` as **text colours**, so they conflicted with real colour classes — and
+because `cva` emits variant classes before size classes, the size won and the colour was discarded.
+The primary button therefore rendered its label in the body foreground on a primary-blue fill:
+**measured 2.48:1**, well under the 4.5:1 AA floor, while the markup still said
+`text-primary-foreground`. Fixed once for the whole app by declaring the scale as a `font-size` class
+group via `extendTailwindMerge` in `lib/utils.ts`. Worth recording because the symptom (a wrong
+colour) points nowhere near the cause (a class-merging config), and nothing in the type system or the
+linter can see it.
+
+#### F-56 — icon-rail labels clipped
+
+At `w-16` (64px) the rail was narrower than its own longest labels; a 1440px screenshot showed
+"CHEDULING" and "STIMATES". `w-18` was not enough either — measured, SCHEDULING and PORTFOLIO come to
+*exactly* the 66px the span had, and at zero slack sub-pixel rounding still shaved the final glyph
+("SCHEDULINC", "PORTFOLIC"). `w-20` (80px) leaves ~8px of real slack. The lesson is the measurement
+itself: `scrollWidth === clientWidth` reported "fits" on text that visibly did not.
+
+#### F-57 — result grids clipped panel content mid-row
+
+The five secondary pages put results in `grid min-h-0 flex-1 … overflow-auto`. With a definite height
+from `flex-1`, auto rows stretched to fill rather than sizing to content, so panels were cut
+mid-row — Port Twin's "Feasibility Verdict" lost the bottom half of its Confidence row (+22px),
+"Observed Envelope" +12px, Tonnage Field's "Basin × Class" +38px, Fragility's "Findings" +113px.
+`auto-rows-min content-start` sizes each row to its tallest item while items still stretch to match
+each other. Measured after: **zero clipped panels on all five pages**, and same-row panels report
+identical heights (256/256/256 on Port Twin, 351/351/351 on Tonnage Field, 198/198 on Portfolio).
+
+#### F-58 — backdrop click could not dismiss the quote drawer
+
+F-48 and F-52 raised the rail, top bar and `<main>` to `z-50` so their controls stayed clickable
+through the drawer's `z-40` backdrop — necessary only because the drawer auto-opened on load. F-53
+removed that root cause, but the `z-50` on `<main>` stayed, leaving the backdrop unable to cover the
+content it exists to block: measured live, a click anywhere over the page with the drawer open
+resolved to the page, not the backdrop, so dismissal silently did nothing and a user could still
+operate controls "underneath" an open modal. The backdrop now matches at `z-50`; within one stacking
+context equal `z-index` paints in DOM order, and the drawer renders after all three, so it covers them
+while its own panel (later still) stays on top. Nothing renders on mount, so F-53 is untouched.
+`Escape` now closes the drawer too, and it carries `role="dialog" aria-modal`.
+
+#### F-59 — five AA contrast failures
+
+Found with a canvas-based auditor that resolves `oklab()` and composites alpha down the ancestor
+chain. This mattered: a naive regex auditor read Tailwind v4's `oklab(L a b / α)` serialisations as
+0-255 RGB and reported 23 failures, nearly all phantom — the accurate one found 5 real ones.
+Fixed: the grade-D chip (white on `#d9741f`, 3.25:1 → dark letter, matching what B and C already did);
+the risk-feed `|` separator (1.48:1 as literal text → a decorative `aria-hidden` rule, which is also
+what a screen reader should hear); its "vs" label and the empty-state hint (opacity tints → full
+`--muted-foreground`); and on the satellite overlay both the age badge (`--wait` on near-black,
+4.13:1 → a light amber) and the confidence chips (a 15% tint on black reads as black, so a
+*low*-confidence count — the one a reader most needs to distrust — was the least legible thing on the
+image → solid fills on the dark plate).
+
+Two failures remain by design: the TC In / TC Out rail items at 2.04:1. They are disabled controls,
+which WCAG 1.4.3 exempts, and they must still *read* as unavailable — raised from `/40` (1.01:1,
+effectively invisible) to `/70`, since the point of rendering them at all is to say the feature is
+known and not built.
+
+#### F-60 — degenerate efficient frontier
+
+When every risk-aversion setting returns the same expected cost and variance — the real answer
+whenever one coverage channel dominates at every *k* — the chart drew all eight points stacked in the
+corner of an otherwise empty 150px box, which reads as a broken chart rather than as the finding it
+is. It now states the finding; the table below still lists every row.
+
+#### User-facing UX
+
+The cold-start desk said only "No voyage priced yet." — true, but it named the absence rather than the
+product. It now states the four real outputs this page then renders, with one call to action and no
+marketing tone. Every empty state says *what* is missing and *how* to supply it rather than showing a
+bare dash. Every long-running action (Portfolio, Fragility, Tonnage Field, Ledger) now renders a busy
+state: previously, clicking "Run analysis" left the page visually unchanged for several seconds, which
+is indistinguishable from a dead button — the exact complaint behind F-54. Disabled controls state
+their reason on hover. `SolveProgress` gained a real progress bar derived from the stage events it
+already renders (never a timer or an estimate).
+
+Accessibility: one `focus-visible` ring rule for all interactive elements; severity in the risk feed
+now carries a word as well as a colour; `aria-pressed` on the two toggles; `aria-label` on every
+icon-only button; `aria-current` on the active rail item; and a global `prefers-reduced-motion` block.
+
+**Honesty markers were treated as protected, not clutter.** Every provenance chip and caveat is
+still present and legible — "1/5 components real", `MODEL_DERIVED`, "n=4 observations", "thin sample",
+"insufficient sample (n=0) — falls back to static baseline", "no fabricated rate shown", the
+`Class-only` rate-basis badge, the satellite scene's age. They were restyled to look deliberate.
+
+#### Verification
+
+Geometry, not text presence — the F-54 lesson. Every panel measured with
+`getBoundingClientRect()` after a real quote and a real click on each page's own compute button:
+**every panel > 50px, zero clipped, zero horizontal scroll at 1280 / 1440 / 1920**. Screenshots
+reviewed at all three widths for the desk plus each of the five secondary pages, the drawer and the
+empty state. Zero console errors and zero failed network requests on every page.
+
+`npx tsc --noEmit` clean · `npx oxlint src` 5 warnings, all pre-existing (`grade.tsx`, `badge.tsx`,
+`anchorage-panel.tsx`, `use-mobile.ts`), none introduced · `npm run build` clean, bundle 713 KB /
+232 KB gzip against a 702 KB / 229 KB baseline (+3 KB gzip, the shared primitives) · no new
+dependencies · `uv run python -m pytest -q` 1297 passed, 3 skipped.
+
+**One deliberate wart, flagged rather than hidden.** `tests/test_no_synthetic_frontend_data.py`
+allowlists the PRNG-derived React key in `quote-drawer.tsx`'s `newVesselDraft()` **by line number**
+(`quote-drawer.tsx:51`). Adding a single import to that file shifts the line and fails *both* halves
+of the tripwire at once — the offender scan and the stale-entry scan. Rather than edit `tests/`
+(out of scope for a design pass, and `CLAUDE.md` forbids touching the allowlist), the quote drawer's
+submit button is styled inline with exactly the classes
+`button({variant:'primary', size:'lg'})` emits, and carries a comment saying so. This is fragile: any
+future edit above line 51 of that file breaks the build for a reason that has nothing to do with
+synthetic data. **Recommended follow-up:** make the allowlist content-addressed (match on the line's
+text, or on a nearby marker comment) instead of line-addressed, then route that button through the
+shared `Button` like every other action on the desk.

@@ -2,11 +2,16 @@ import { cn } from '@/lib/utils'
 
 export type GradeLetter = 'A' | 'B' | 'C' | 'D' | 'E'
 
+// The letter is set on the band's own colour, so each pairing has to clear AA
+// on its own. B and C already used a dark letter for that reason; D did not,
+// and white on --grade-d (#d9741f) measured 3.25:1 -- under the 4.5:1 floor
+// for a 10px glyph, and the one grade a reader most needs to distinguish from
+// E beside it. A dark letter on the same orange clears it comfortably.
 const GRADE_CLASS: Record<GradeLetter, string> = {
   A: 'bg-grade-a text-white',
   B: 'bg-grade-b text-[#12250c]',
   C: 'bg-grade-c text-[#3a2c02]',
-  D: 'bg-grade-d text-white',
+  D: 'bg-grade-d text-[#3a1c02]',
   E: 'bg-grade-e text-white',
 }
 
@@ -23,7 +28,7 @@ export function Grade({ letter, className }: { letter: GradeLetter; className?: 
   return (
     <span
       className={cn(
-        'inline-flex h-4 w-4 items-center justify-center rounded-sm text-[10px] font-bold leading-none',
+        'inline-flex h-4 w-4 items-center justify-center rounded-sm text-caption font-bold leading-none',
         GRADE_CLASS[letter],
         className,
       )}

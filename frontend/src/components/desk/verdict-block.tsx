@@ -1,5 +1,4 @@
-import { useState } from 'react'
-import { ChevronDown, ChevronUp } from 'lucide-react'
+import { Disclosure } from '@/components/desk/disclosure'
 import { addDays, formatShortDate, formatUsd, formatUsdCompact } from '@/lib/format'
 import type { QuoteResult } from '@/lib/types'
 import { cn } from '@/lib/utils'
@@ -10,7 +9,6 @@ import { cn } from '@/lib/utils'
  * locking today and waiting for the projected trough.
  */
 export function VerdictBlock({ quote }: { quote: QuoteResult }) {
-  const [showWhy, setShowWhy] = useState(false)
   const isLock = quote.lock_action === 'LOCK'
   const term = quote.contract_term_days
   const rec = quote.full_recommendation
@@ -50,30 +48,37 @@ export function VerdictBlock({ quote }: { quote: QuoteResult }) {
   const p90Total = rec.p90_savings_usd_per_day * term
 
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-[3px] border border-border bg-surface">
-      {/* Verdict fill */}
+    <div className="flex h-full flex-col overflow-hidden rounded-md border border-border bg-surface shadow-panel">
+      {/*
+        The single dominant element on the desk. Everything else on this
+        screen is caption-to-body sized; this is the one display-scale figure,
+        on the one full-bleed semantic fill, so a five-second glance lands
+        here first and reads the answer before reading any evidence.
+      */}
       <div
         className={cn(
-          'flex items-center justify-between gap-3 px-2.5 py-1.5 text-white',
+          'flex items-center justify-between gap-3 px-3 py-2 text-white',
           isLock ? 'bg-go' : 'bg-wait',
         )}
       >
         <div>
-          <div className="text-[9px] font-semibold uppercase tracking-[0.15em] opacity-90">
+          <div className="text-micro font-semibold uppercase tracking-[0.18em] text-white/85">
             Verdict
           </div>
-          <div className="font-mono text-[34px] font-extrabold leading-none tracking-tight">
+          <div className="mt-0.5 font-mono text-display font-extrabold tracking-tight">
             {quote.lock_action}
           </div>
         </div>
-        <div className="text-right text-[10px] leading-tight">
-          <div className="font-semibold uppercase tracking-wide">{quote.target_vessel_class}</div>
-          <div className="opacity-90">{term} day charter</div>
+        <div className="text-right">
+          <div className="text-caption font-bold uppercase tracking-wide">
+            {quote.target_vessel_class}
+          </div>
+          <div className="mt-0.5 text-micro text-white/85">{term}-day charter</div>
         </div>
       </div>
 
       {/* Lock vs wait, in money */}
-      <div className="flex-1 overflow-auto p-1.5">
+      <div className="flex-1 overflow-auto p-2">
         <table className="desk-table">
           <thead>
             <tr>
@@ -88,7 +93,7 @@ export function VerdictBlock({ quote }: { quote: QuoteResult }) {
               <td className="font-semibold">Lock today</td>
               <td className="desk-num text-right">{formatUsd(lockRate)}</td>
               <td className="desk-num text-right font-semibold">{formatUsdCompact(lockTerm)}</td>
-              <td className="text-right text-[11px] text-muted-foreground">now</td>
+              <td className="text-right text-body text-muted-foreground">now</td>
             </tr>
             <tr className={!isLock ? 'bg-wait-soft' : undefined}>
               <td className="font-semibold">Wait for trough</td>
@@ -98,7 +103,7 @@ export function VerdictBlock({ quote }: { quote: QuoteResult }) {
               <td className="desk-num text-right font-semibold">
                 {waitTerm != null ? formatUsdCompact(waitTerm) : '—'}
               </td>
-              <td className="text-right text-[11px] text-muted-foreground">{windowText}</td>
+              <td className="text-right text-body text-muted-foreground">{windowText}</td>
             </tr>
             <tr>
               <td className="font-semibold">Ceiling</td>
@@ -107,18 +112,18 @@ export function VerdictBlock({ quote }: { quote: QuoteResult }) {
               </td>
               <td
                 className={cn(
-                  'text-right text-[11px] font-semibold',
+                  'text-right text-body font-semibold',
                   lockRate <= quote.ceiling_usd_per_day ? 'text-go' : 'text-risk',
                 )}
               >
                 {lockRate <= quote.ceiling_usd_per_day ? 'today under ceiling' : 'today over ceiling'}
               </td>
-              <td className="text-right text-[11px] text-muted-foreground">walk-away line</td>
+              <td className="text-right text-body text-muted-foreground">walk-away line</td>
             </tr>
           </tbody>
         </table>
 
-        <div className="mt-1.5 space-y-0.5 border-t border-border pt-1.5">
+        <div className="mt-2 space-y-1 border-t border-border pt-2">
           <div className="stat-row">
             <span className="stat-label">
               {edgeFavorsLock ? 'Locking beats always-spot by, expected' : 'Staying spot beats locking by, expected'}
@@ -129,27 +134,45 @@ export function VerdictBlock({ quote }: { quote: QuoteResult }) {
           </div>
           <div className="stat-row">
             <span className="stat-label">Range across the term (P10 to P90)</span>
-            <span className="stat-value text-[10px] text-muted-foreground">
+            <span className="stat-value text-caption text-muted-foreground">
               {formatUsdCompact(p10Total)} to {formatUsdCompact(p90Total)}
             </span>
           </div>
           <div className="stat-row">
             <span className="stat-label">Probability locking beats spot</span>
             <span className="flex items-center gap-2">
-              <span className="h-1.5 w-20 overflow-hidden rounded-full bg-muted">
+              {/* The bar is a second, redundant encoding of the number beside
+                  it -- never the only one -- so it reads at a glance without
+                  being the thing a colour-blind user has to rely on. */}
+              <span
+                role="img"
+                aria-label={`${confidence} percent`}
+                className="h-1.5 w-20 overflow-hidden rounded-full bg-border"
+              >
                 <span
-                  className={cn('block h-full rounded-full', edgeFavorsLock ? 'bg-go' : 'bg-risk')}
+                  className={cn(
+                    'block h-full rounded-full transition-[width] duration-300',
+                    edgeFavorsLock ? 'bg-go' : 'bg-risk',
+                  )}
                   style={{ width: `${confidence}%` }}
                 />
               </span>
-              <span className="stat-value">{confidence}%</span>
+              <span className="stat-value w-8 text-right font-semibold">{confidence}%</span>
             </span>
           </div>
+
+          {/*
+            The two caveats below qualify the numbers above rather than adding
+            new ones, so they are grouped into one tinted block instead of
+            running as loose paragraphs between the figures -- same words,
+            same visibility, but the eye can now skip the prose and come back
+            to it, which it could not when it was interleaved.
+          */}
           {optionValue != null && optionValue > 0 && (
-            <p className="pt-1 text-[10px] leading-snug text-muted-foreground">
-              The <strong className="text-foreground">{quote.lock_action}</strong> verdict above
-              already prices in the value of keeping the right to wait and lock later instead
-              ({formatUsd(optionValue)}/day) — that's why it can differ from the simple
+            <p className="mt-2 rounded-sm border-l-2 border-market/50 bg-market-soft/50 px-2 py-2 text-caption leading-relaxed text-muted-foreground">
+              The <strong className="font-semibold text-foreground">{quote.lock_action}</strong>{' '}
+              verdict above already prices in the value of keeping the right to wait and lock later
+              instead ({formatUsd(optionValue)}/day) — that's why it can differ from the simple
               always-spot comparison above, which doesn't account for that option.
             </p>
           )}
@@ -159,13 +182,13 @@ export function VerdictBlock({ quote }: { quote: QuoteResult }) {
            * moved the number, using the backend's own plain-English sentence
            * rather than re-deriving one here. */}
           {quote.transit_buffer != null && quote.transit_buffer.expected_delay_days > 0 && (
-            <p className="pt-1 text-[10px] leading-snug text-muted-foreground">
+            <p className="rounded-sm border-l-2 border-wait/50 bg-wait-soft/60 px-2 py-2 text-caption leading-relaxed text-muted-foreground">
               <span className="font-semibold text-foreground">Weather buffer: </span>
               +{quote.transit_buffer.expected_delay_days.toFixed(1)} expected delay day(s) priced
               into the WAIT comparison above. {quote.transit_buffer.explanation}
             </p>
           )}
-          <p className="border-t border-border/60 pt-1 text-[10px] leading-snug text-muted-foreground">
+          <p className="mt-2 border-t border-border/60 pt-2 text-caption leading-relaxed text-muted-foreground">
             <span className="font-semibold text-foreground">Re-check: </span>
             {rec.review_trigger.schedule.toLowerCase()}, or immediately if{' '}
             {rec.review_trigger.conditions.join(', or if ')}.
@@ -175,22 +198,22 @@ export function VerdictBlock({ quote }: { quote: QuoteResult }) {
            * previously computed on every quote and never rendered
            * anywhere. Collapsed by default so it doesn't compete with the
            * headline numbers above; one click away instead of hidden. */}
-          <button
-            type="button"
-            onClick={() => setShowWhy((v) => !v)}
-            className="flex w-full items-center gap-1 pt-1 text-[10px] font-semibold uppercase tracking-wide text-market"
-          >
-            {showWhy ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-            Why this verdict
-          </button>
-          {showWhy && (
-            <ul className="list-inside list-disc space-y-0.5 pb-0.5 text-[10px] leading-snug text-muted-foreground">
+          <Disclosure label="Why this verdict">
+            <ul className="space-y-1 text-caption leading-relaxed text-muted-foreground">
               {quote.explanations.lock_wait.factors.map((f, i) => (
-                <li key={i}>{f}</li>
+                <li key={i} className="flex gap-2">
+                  <span
+                    className="mt-2 h-1 w-1 shrink-0 rounded-full bg-market"
+                    aria-hidden="true"
+                  />
+                  <span>{f}</span>
+                </li>
               ))}
-              <li className="italic">{quote.explanations.lock_wait.method}</li>
+              <li className="border-t border-border/60 pt-1 italic">
+                {quote.explanations.lock_wait.method}
+              </li>
             </ul>
-          )}
+          </Disclosure>
         </div>
       </div>
     </div>

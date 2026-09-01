@@ -4,9 +4,10 @@ import { ParentSize } from '@visx/responsive'
 import { scaleLinear } from '@visx/scale'
 import { AreaClosed, LinePath } from '@visx/shape'
 import { useEffect, useMemo, useState } from 'react'
-import { Panel } from '@/components/desk/panel'
+import { PageState, Panel, PanelError, PanelLoading } from '@/components/desk/panel'
 import { StatRow } from '@/components/desk/stat'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { fetchTonnageField, fetchTonnageFieldForward, fetchTonnageFieldValidation } from '@/lib/api'
 import { formatNumber } from '@/lib/format'
 import type {
@@ -30,7 +31,7 @@ type Provenance = 'OBSERVED' | 'ESTIMATED' | 'MODEL_DERIVED' | 'DECLARED' | 'INF
 function ProvenanceTag({ kind }: { kind: Provenance }) {
   return (
     <span
-      className="rounded-[2px] border border-border px-1 py-px font-mono text-[8px] font-semibold uppercase tracking-wide text-muted-foreground"
+      className="rounded-sm border border-border px-1 py-px font-mono text-micro font-semibold uppercase tracking-wide text-muted-foreground"
       title={PROVENANCE_HINT[kind]}
     >
       {kind}
@@ -49,14 +50,14 @@ const PROVENANCE_HINT: Record<Provenance, string> = {
 function IndexTypeBanner({ data }: { data: TonnageFieldResponse }) {
   if (data.index_type === 'ABSOLUTE') {
     return (
-      <div className="border border-go bg-go-soft p-2 text-[11px] text-go">
+      <div className="border border-go bg-go-soft p-2 text-body text-go">
         <span className="font-bold uppercase tracking-wide">Absolute scale validated.</span>{' '}
         {data.index_type_reasoning}
       </div>
     )
   }
   return (
-    <div className="border border-wait bg-wait-soft p-2 text-[11px] text-wait">
+    <div className="border border-wait bg-wait-soft p-2 text-body text-wait">
       <span className="font-bold uppercase tracking-wide">Relative index -- not absolute tonnage.</span>{' '}
       Every figure below is a{' '}
       <span className="font-semibold">Physical Supply Pressure Index / Tonnage Tightness Index</span> -- a
@@ -89,7 +90,7 @@ function CurrentTightnessPanel({ data }: { data: TonnageFieldResponse }) {
               <span className="flex items-center gap-1">
                 {row.vessel_class}
                 {row.low_confidence && (
-                  <Badge variant="outline" className="text-[8px]">
+                  <Badge variant="outline" className="text-micro">
                     thin sample (n={row.n_obs})
                   </Badge>
                 )}
@@ -128,7 +129,7 @@ function BasinBreakdownPanel({ data }: { data: TonnageFieldResponse }) {
             )
             .map((row) => (
               <tr key={`${row.basin}-${row.vessel_class}`}>
-                <td className="text-[10px] text-muted-foreground">{row.basin.replace('_', ' ')}</td>
+                <td className="text-caption text-muted-foreground">{row.basin.replace('_', ' ')}</td>
                 <td>{row.vessel_class}</td>
                 <td className="desk-num text-right">{formatNumber(row.tightness, 4)}</td>
               </tr>
@@ -155,7 +156,7 @@ function EvidenceQualityPanel({ data }: { data: TonnageFieldResponse }) {
           value={`${formatNumber(data.evidence_quality.clipped_fraction * 100, 1)}%`}
           tone={data.evidence_quality.clipped_fraction > 0.05 ? 'wait' : 'plain'}
         />
-        <div className="mt-1 border-t border-border pt-1.5">
+        <div className="mt-1 border-t border-border pt-2">
           <span className="stat-label">vs. real Signal Ocean ballaster counts ({sv.n_points} points)</span>
           <StatRow label="Ratio range" value={`${formatNumber(sv.min_ratio, 2)}x – ${formatNumber(sv.max_ratio, 2)}x`} />
           <StatRow label="Median ratio" value={`${formatNumber(sv.median_ratio, 2)}x`} />
@@ -176,7 +177,7 @@ function EvidenceQualityPanel({ data }: { data: TonnageFieldResponse }) {
 
 function TightnessChart({ points }: { points: TightnessForwardPoint[] }) {
   if (points.length === 0) {
-    return <p className="p-2 text-[11px] text-muted-foreground">No forward projection for this class.</p>
+    return <p className="p-2 text-body text-muted-foreground">No forward projection for this class.</p>
   }
   const yMax = Math.max(...points.map((p) => p.p90)) * 1.08
   const yMin = 0
@@ -251,29 +252,36 @@ function ForwardTightnessPanel({ forward }: { forward: TonnageFieldForwardRespon
       hint="Persistence / random-walk-with-drift extrapolation of the recent trailing trend -- not a forecast model. The band widens as sqrt(horizon), honestly reflecting that nothing beyond recent port activity is known this far out."
       actions={<ProvenanceTag kind="MODEL_DERIVED" />}
     >
-      <div className="flex flex-col gap-1.5 p-1">
-        <div className="flex gap-1">
+      <div className="flex flex-col gap-2 p-1">
+        {/* A segmented control, not four loose buttons: one shared border,
+            no gaps, and the selected segment filled -- so it reads as "pick
+            one of four" at a glance rather than as four independent actions. */}
+        <div
+          role="group"
+          aria-label="Vessel class"
+          className="inline-flex overflow-hidden rounded-sm border border-border"
+        >
           {CLASS_ORDER.map((c) => (
             <button
               key={c}
               type="button"
               onClick={() => setCls(c)}
+              aria-pressed={cls === c}
               className={cn(
-                'rounded-[3px] border px-1.5 py-0.5 text-[10px] font-semibold',
-                cls === c ? 'border-market bg-market/10 text-market' : 'border-border text-muted-foreground',
+                'cursor-pointer border-r border-border px-2 py-1 text-caption font-semibold transition-colors last:border-r-0',
+                'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring',
+                cls === c
+                  ? 'bg-market text-white'
+                  : 'bg-surface text-muted-foreground hover:bg-surface-2 hover:text-foreground',
               )}
             >
               {c}
             </button>
           ))}
         </div>
-        {forward ? (
-          <TightnessChart points={points} />
-        ) : (
-          <p className="p-2 text-[11px] text-muted-foreground animate-pulse">loading forward projection…</p>
-        )}
+        {forward ? <TightnessChart points={points} /> : <PanelLoading rows={3} label="Loading the forward projection" />}
         {forward && points.length > 0 && (
-          <div className="flex justify-between text-[10px] text-muted-foreground">
+          <div className="flex justify-between text-caption text-muted-foreground">
             <span>p10: {formatNumber(points[0].p10, 4)} → {formatNumber(points.at(-1)!.p10, 4)}</span>
             <span>p50: {formatNumber(points[0].p50, 4)} → {formatNumber(points.at(-1)!.p50, 4)}</span>
             <span>p90: {formatNumber(points[0].p90, 4)} → {formatNumber(points.at(-1)!.p90, 4)}</span>
@@ -299,7 +307,7 @@ function SignDiagnosisRow({ d }: { d: SignDiagnosis }) {
         {formatNumber(d.pearson_r, 3)}
       </td>
       <td className="desk-num text-right">{d.n_obs}</td>
-      <td className="max-w-96 text-[10px] text-muted-foreground">{d.explanation}</td>
+      <td className="max-w-96 text-caption text-muted-foreground">{d.explanation}</td>
     </tr>
   )
 }
@@ -368,25 +376,29 @@ function ValidationPanel() {
     >
       {!requested && (
         <div className="flex flex-col items-start gap-2 p-2">
-          <p className="text-[11px] text-muted-foreground">
-            Runs a real A/B XGBoost ablation on the first load (~45s: trains 6 real models). Cached after that.
+          <p className="text-body leading-relaxed text-muted-foreground">
+            Runs a real A/B XGBoost ablation on the first load — about 45 seconds, training six real
+            models. Cached after that.
           </p>
-          <button
-            type="button"
-            onClick={load}
-            className="rounded-[3px] border border-market bg-market/10 px-2 py-1 text-[11px] font-semibold text-market"
-          >
+          <Button variant="primary" size="md" onClick={load}>
             Run validation
-          </button>
+          </Button>
         </div>
       )}
-      {loading && <p className="p-2 text-[11px] text-muted-foreground animate-pulse">training A/B models and scoring the real holdout split…</p>}
-      {error && <p className="p-2 text-[11px] text-risk">{error}</p>}
+      {loading && (
+        <div className="p-2">
+          <p className="mb-2 text-body text-muted-foreground" role="status" aria-live="polite">
+            Training the A/B models and scoring the real holdout split…
+          </p>
+          <PanelLoading rows={4} label="Training models" />
+        </div>
+      )}
+      {error && <PanelError message={error} onRetry={load} />}
       {validation && (
         <div className="flex flex-col gap-2 p-1">
           <div
             className={cn(
-              'border p-2 text-[11px]',
+              'border p-2 text-body',
               validation.ablation.adopt_b ? 'border-go bg-go-soft text-go' : 'border-wait bg-wait-soft text-wait',
             )}
           >
@@ -402,12 +414,12 @@ function ValidationPanel() {
             <div>
               <span className="stat-label">IV (instrumental variable)</span>
               <StatRow label="Status" value={validation.iv_verdict.status.replace(/_/g, ' ')} />
-              <p className="mt-0.5 text-[10px] text-muted-foreground">{validation.iv_verdict.reason}</p>
+              <p className="mt-0.5 text-caption text-muted-foreground">{validation.iv_verdict.reason}</p>
             </div>
             <div>
               <span className="stat-label">Kalman / state-space</span>
               <StatRow label="Status" value={validation.kalman_verdict.status.replace(/_/g, ' ')} />
-              <p className="mt-0.5 text-[10px] text-muted-foreground">{validation.kalman_verdict.reason}</p>
+              <p className="mt-0.5 text-caption text-muted-foreground">{validation.kalman_verdict.reason}</p>
             </div>
           </div>
 
@@ -460,25 +472,37 @@ export function TonnageFieldPage() {
   }, [])
 
   if (error) {
-    return <div className="p-4 text-sm text-risk">{error}</div>
+    return (
+      <div className="flex h-full flex-col">
+        <PageState tone="error" title="Could not load the Tonnage Field" hint={error} />
+      </div>
+    )
   }
   if (!data) {
-    return <div className="p-4 text-sm text-muted-foreground animate-pulse">loading Tonnage Field…</div>
+    return (
+      <div className="flex h-full flex-col">
+        <PageState
+          tone="busy"
+          title="Loading the Tonnage Field…"
+          hint="Reading the physical supply-pressure signal computed from real port-call activity."
+        />
+      </div>
+    )
   }
 
   return (
-    <div className="flex h-full flex-col gap-1.5 overflow-hidden p-1.5" id="tonnage-field">
+    <div className="flex h-full flex-col gap-2 overflow-hidden p-2" id="tonnage-field">
       <Panel
         title="Tonnage Field"
         meta={`Physical supply-pressure signal · computed ${new Date(data.computed_at).toLocaleString()}${data.stale ? ' · STALE (last-good)' : ''}`}
         actions={
           <>
             {data.stale && (
-              <Badge variant="destructive" className="text-[9px]">
+              <Badge variant="destructive" className="text-micro">
                 STALE
               </Badge>
             )}
-            <Badge variant={data.index_type === 'RELATIVE' ? 'outline' : 'secondary'} className="text-[9px]">
+            <Badge variant={data.index_type === 'RELATIVE' ? 'outline' : 'secondary'} className="text-micro">
               {data.index_type}
             </Badge>
           </>
@@ -489,7 +513,7 @@ export function TonnageFieldPage() {
         </div>
       </Panel>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-1.5 overflow-auto lg:grid-cols-3">
+      <div className="grid min-h-0 flex-1 auto-rows-min grid-cols-1 content-start gap-2 overflow-auto lg:grid-cols-3">
         <CurrentTightnessPanel data={data} />
         <BasinBreakdownPanel data={data} />
         <EvidenceQualityPanel data={data} />

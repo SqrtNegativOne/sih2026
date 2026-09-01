@@ -14,7 +14,7 @@ function ProvenanceBadge({ provenance }: { provenance: DataProvenance | null }) 
   // real/derived tones (OBSERVED/MODEL_DERIVED/ESTIMATED/INFERRED).
   const variant = provenance === 'DECLARED' ? 'outline' : 'secondary'
   return (
-    <Badge variant={variant} className="text-[9px]">
+    <Badge variant={variant} className="text-micro">
       {provenance === 'DECLARED' ? 'your input' : provenance.toLowerCase().replace('_', ' ')}
     </Badge>
   )
@@ -34,22 +34,22 @@ function ComponentRow({
   title?: string
 }) {
   return (
-    <div className="flex items-center justify-between gap-2 border-b border-border/60 px-1.5 py-1 last:border-b-0">
+    <div className="flex items-center justify-between gap-2 border-b border-border/60 px-2 py-1 last:border-b-0">
       <div className="flex min-w-0 flex-col">
-        <span className="text-[11px] font-medium text-foreground" title={title}>
+        <span className="text-body font-medium text-foreground" title={title}>
           {label}
         </span>
         {usdPerMt == null && (
-          <span className="truncate text-[9px] text-muted-foreground" title={reason}>
+          <span className="truncate text-micro text-muted-foreground" title={reason}>
             {reason}
           </span>
         )}
       </div>
-      <div className="flex shrink-0 items-center gap-1.5">
+      <div className="flex shrink-0 items-center gap-2">
         <ProvenanceBadge provenance={provenance} />
         <span
           className={cn(
-            'desk-num text-[12px]',
+            'desk-num text-lead',
             usdPerMt == null ? 'text-muted-foreground' : 'text-foreground',
           )}
         >
@@ -136,7 +136,7 @@ export function LandedCostPanel({
   if (!shown) {
     return (
       <Panel className="h-full" title="Landed Cost" meta="$/MT">
-        <div className="flex h-full items-center justify-center text-center text-[11px] text-muted-foreground">
+        <div className="flex h-full items-center justify-center text-center text-body text-muted-foreground">
           No real transit-day estimate for this route -- freight can't be converted to $/MT yet.
         </div>
       </Panel>
@@ -187,23 +187,23 @@ export function LandedCostPanel({
         />
       </div>
 
-      <div className="mt-1 flex items-center justify-between border-t border-border bg-surface-2 px-1.5 py-1.5">
+      <div className="mt-1 flex items-center justify-between border-t border-border bg-surface-2 px-2 py-2">
         <div className="flex flex-col">
-          <span className="text-[10px] font-bold uppercase tracking-wide text-primary">
+          <span className="text-caption font-bold uppercase tracking-wide text-primary">
             {allMissing ? 'Partial total (lower bound)' : 'Total'}
           </span>
           {allMissing && (
-            <span className="text-[9px] text-muted-foreground">
+            <span className="text-micro text-muted-foreground">
               excludes: {shown.components_missing.join(', ')}
             </span>
           )}
         </div>
         <div className="text-right">
-          <div className="desk-num text-[14px] font-semibold text-foreground">
+          <div className="desk-num text-figure font-semibold text-foreground">
             ${formatNumber(shown.partial_total_usd_per_mt, 2)}
           </div>
           {shown.partial_total_inr_per_mt != null && (
-            <div className="desk-num text-[10px] text-muted-foreground">
+            <div className="desk-num text-caption text-muted-foreground">
               ₹{formatNumber(shown.partial_total_inr_per_mt, 0)} (fx {shown.fx_inr_per_usd})
             </div>
           )}
@@ -212,15 +212,15 @@ export function LandedCostPanel({
 
       {/* Your assumptions -- every value here is user-entered, never a
        * repo-invented default. Unmistakably a form, not a data display. */}
-      <div className="border-t border-border bg-surface-2/60 p-1.5">
-        <div className="mb-1 text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
+      <div className="border-t border-border bg-surface-2/60 p-2">
+        <div className="mb-1 text-micro font-bold uppercase tracking-wide text-muted-foreground">
           Fill the gaps with your own assumptions
         </div>
         <div className="grid grid-cols-2 gap-1 sm:grid-cols-3">
           <label className="flex flex-col gap-0.5">
             <span className="stat-label">Handling $/MT</span>
             <Input
-              className="h-6 text-[11px]"
+              className="h-6 text-body"
               placeholder="unset"
               value={assumptions.handlingRateUsdPerMt}
               onChange={(e) => setAssumptions((a) => ({ ...a, handlingRateUsdPerMt: e.target.value }))}
@@ -229,7 +229,7 @@ export function LandedCostPanel({
           <label className="flex flex-col gap-0.5">
             <span className="stat-label">Demurrage $/day</span>
             <Input
-              className="h-6 text-[11px]"
+              className="h-6 text-body"
               placeholder="unset"
               value={assumptions.demurrageUsdPerDay}
               onChange={(e) => setAssumptions((a) => ({ ...a, demurrageUsdPerDay: e.target.value }))}
@@ -238,7 +238,7 @@ export function LandedCostPanel({
           <label className="flex flex-col gap-0.5">
             <span className="stat-label">Laytime allowance (d)</span>
             <Input
-              className="h-6 text-[11px]"
+              className="h-6 text-body"
               placeholder="unset"
               value={assumptions.laytimeAllowanceDays}
               onChange={(e) => setAssumptions((a) => ({ ...a, laytimeAllowanceDays: e.target.value }))}
@@ -247,7 +247,7 @@ export function LandedCostPanel({
           <label className="flex flex-col gap-0.5">
             <span className="stat-label">Commodity</span>
             <select
-              className="h-6 rounded border border-input bg-background px-1 text-[11px]"
+              className="h-6 rounded border border-input bg-background px-1 text-body"
               value={assumptions.commodity}
               onChange={(e) => setAssumptions((a) => ({ ...a, commodity: e.target.value as Assumptions['commodity'] }))}
             >
@@ -262,18 +262,18 @@ export function LandedCostPanel({
               checked={assumptions.convertToInr}
               onChange={(e) => setAssumptions((a) => ({ ...a, convertToInr: e.target.checked }))}
             />
-            <span className="text-[10px] text-muted-foreground">show ₹ (real FX)</span>
+            <span className="text-caption text-muted-foreground">show ₹ (real FX)</span>
           </label>
           <button
             type="button"
             onClick={recompute}
             disabled={loading || voyageDays == null || !hasAnyAssumption}
-            className="h-6 self-end rounded-[3px] border border-market bg-market/10 px-2 text-[10px] font-semibold text-market disabled:opacity-40"
+            className="h-6 self-end rounded-sm border border-market bg-market/10 px-2 text-caption font-semibold text-market disabled:opacity-40"
           >
             {loading ? 'Recomputing…' : 'Recompute'}
           </button>
         </div>
-        {error && <div className="mt-1 text-[10px] text-risk">{error}</div>}
+        {error && <div className="mt-1 text-caption text-risk">{error}</div>}
       </div>
     </Panel>
   )

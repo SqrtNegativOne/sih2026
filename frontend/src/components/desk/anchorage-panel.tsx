@@ -14,6 +14,14 @@ const CONFIDENCE_CLASS: Record<AnchorageConfidence, string> = {
   low: 'bg-risk/15 text-risk',
 }
 
+/** The same three tones as CONFIDENCE_CLASS, re-cut as solid fills for the
+ *  dark SAR overlay, where a 15%-alpha tint on black reads as black. */
+const CONFIDENCE_CLASS_ON_DARK: Record<AnchorageConfidence, string> = {
+  high: 'bg-go text-white',
+  medium: 'bg-wait text-white',
+  low: 'bg-risk text-white',
+}
+
 const ZOOM_MIN = 1
 const ZOOM_MAX = 8
 const IDENTITY_TF = { k: 1, x: 0, y: 0 }
@@ -112,7 +120,7 @@ function ZoomableImage({
         <button
           type="button"
           onClick={() => zoomBy(1 / 1.5)}
-          className="pointer-events-auto flex h-5 w-5 items-center justify-center rounded-sm bg-black/70 text-[13px] font-bold leading-none text-white hover:bg-black/90"
+          className="pointer-events-auto flex h-5 w-5 items-center justify-center rounded-sm bg-black/70 text-lead font-bold leading-none text-white hover:bg-black/90"
           title="Zoom out"
         >
           −
@@ -120,7 +128,7 @@ function ZoomableImage({
         <button
           type="button"
           onClick={() => zoomBy(1.5)}
-          className="pointer-events-auto flex h-5 w-5 items-center justify-center rounded-sm bg-black/70 text-[13px] font-bold leading-none text-white hover:bg-black/90"
+          className="pointer-events-auto flex h-5 w-5 items-center justify-center rounded-sm bg-black/70 text-lead font-bold leading-none text-white hover:bg-black/90"
           title="Zoom in"
         >
           +
@@ -129,7 +137,7 @@ function ZoomableImage({
           <button
             type="button"
             onClick={() => setTf(IDENTITY_TF)}
-            className="pointer-events-auto rounded-sm bg-black/70 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white hover:bg-black/90"
+            className="pointer-events-auto rounded-sm bg-black/70 px-2 py-0.5 text-micro font-bold uppercase tracking-wide text-white hover:bg-black/90"
             title="Reset zoom"
           >
             Reset
@@ -184,7 +192,7 @@ export function AnchoragePanel({ port }: { port: AnchoragePortCode }) {
   if (loading) {
     return (
       <Panel className="h-full" id="anchorage" title="Anchorage Census (Satellite)" hint={hint}>
-        <div className="flex h-full items-center justify-center text-center text-[12px] text-muted-foreground">
+        <div className="flex h-full items-center justify-center text-center text-lead text-muted-foreground">
           Loading…
         </div>
       </Panel>
@@ -194,7 +202,7 @@ export function AnchoragePanel({ port }: { port: AnchoragePortCode }) {
   if (error) {
     return (
       <Panel className="h-full" id="anchorage" title="Anchorage Census (Satellite)" hint={hint}>
-        <div className="flex h-full items-center justify-center text-center text-[12px] text-risk">{error}</div>
+        <div className="flex h-full items-center justify-center text-center text-lead text-risk">{error}</div>
       </Panel>
     )
   }
@@ -202,7 +210,7 @@ export function AnchoragePanel({ port }: { port: AnchoragePortCode }) {
   if (!census) {
     return (
       <Panel className="h-full" id="anchorage" title="Anchorage Census (Satellite)" hint={hint}>
-        <div className="flex h-full flex-col items-center justify-center gap-1 text-center text-[12px] text-muted-foreground">
+        <div className="flex h-full flex-col items-center justify-center gap-1 text-center text-lead text-muted-foreground">
           <span>No Sentinel-1 scene has been processed for {prettyPort(port)} yet.</span>
         </div>
       </Panel>
@@ -219,22 +227,22 @@ export function AnchoragePanel({ port }: { port: AnchoragePortCode }) {
       flush={!imgFailed}
     >
       {imgFailed ? (
-        <div className="flex h-full flex-col gap-1.5 p-2">
+        <div className="flex h-full flex-col gap-2 p-2">
           <div className="flex items-baseline justify-between">
-            <span className="desk-num text-[26px] font-bold text-foreground">
+            <span className="desk-num text-figure-lg font-bold text-foreground">
               {formatNumber(census.vessel_count)}
             </span>
-            <span className={cn('rounded-sm px-1.5 py-px text-[10px] font-bold uppercase tracking-wide', CONFIDENCE_CLASS[census.confidence])}>
+            <span className={cn('rounded-sm px-2 py-px text-caption font-bold uppercase tracking-wide', CONFIDENCE_CLASS[census.confidence])}>
               {census.confidence} confidence
             </span>
           </div>
-          <div className="text-[11px] text-muted-foreground">
+          <div className="text-body text-muted-foreground">
             vessels detected in the anchorage box -- no overlay image rendered for this scene yet
           </div>
-          <div className="mt-1 flex items-center gap-1.5 rounded border border-wait/40 bg-wait-soft px-1.5 py-1 text-[11px] font-semibold text-wait">
+          <div className="mt-1 flex items-center gap-2 rounded border border-wait/40 bg-wait-soft px-2 py-1 text-body font-semibold text-wait">
             {formatRelativeAge(census.acquired_at)} ({formatIsoShort(census.acquired_at.slice(0, 10))})
           </div>
-          <div className="mt-auto grid grid-cols-2 gap-1 text-[10px] text-muted-foreground">
+          <div className="mt-auto grid grid-cols-2 gap-1 text-caption text-muted-foreground">
             <div>
               <div className="uppercase tracking-wide">Scene</div>
               <div className="truncate font-mono text-foreground" title={census.scene_id}>
@@ -254,20 +262,30 @@ export function AnchoragePanel({ port }: { port: AnchoragePortCode }) {
             alt={`Sentinel-1 SAR crop of ${prettyPort(census.port)}'s anchorage, ${census.vessel_count} vessel(s) ringed in red`}
             onError={() => setImgFailed(true)}
           />
-          <div className="pointer-events-none absolute left-1.5 top-1.5 flex items-center gap-1.5">
-            <span className="desk-num rounded-sm bg-black/70 px-1.5 py-0.5 text-[15px] font-bold text-white">
+          <div className="pointer-events-none absolute left-2 top-2 flex items-center gap-2">
+            <span className="desk-num rounded-sm bg-black/75 px-2 py-0.5 text-figure font-bold text-white">
               {formatNumber(census.vessel_count)}
             </span>
+            {/* The panel-body confidence tones (a 15% tint behind coloured
+                text) are built for a white ground; laid over the near-black
+                SAR plate the tint all but vanishes and the text drops to
+                roughly 1:1 -- a low-confidence count, the one a reader most
+                needs to distrust on sight, became the least legible thing on
+                the image. On the overlay the chips are solid instead. */}
             <span
               className={cn(
-                'rounded-sm px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide',
-                CONFIDENCE_CLASS[census.confidence],
+                'rounded-sm px-2 py-0.5 text-micro font-bold uppercase tracking-wide',
+                CONFIDENCE_CLASS_ON_DARK[census.confidence],
               )}
             >
               {census.confidence}
             </span>
           </div>
-          <div className="pointer-events-none absolute bottom-1.5 right-1.5 rounded-sm border border-wait/40 bg-black/70 px-1.5 py-0.5 text-[10px] font-semibold text-wait">
+          {/* --wait (#a85a00) is tuned for dark-on-light and measures 4.13:1
+              against this plate -- just under the floor. The scene's age is
+              the single most important caveat on this panel, so it gets a
+              light amber that clears AA on black. */}
+          <div className="pointer-events-none absolute bottom-2 right-2 rounded-sm border border-[#f2b45c]/50 bg-black/75 px-2 py-0.5 text-caption font-semibold text-[#f2b45c]">
             {formatRelativeAge(census.acquired_at)} ({formatIsoShort(census.acquired_at.slice(0, 10))})
           </div>
         </div>

@@ -42,8 +42,8 @@ export function VoyageAssignmentsTable({
             {assigns.map((a) => (
               <tr key={`${a.vessel_id}-${a.parcel_id}`}>
                 <td className="font-semibold">{a.vessel_id}</td>
-                <td className="text-[11px] text-muted-foreground">{a.parcel_id}</td>
-                <td className="text-[11px]">{portName(a.dest_port)}</td>
+                <td className="text-body text-muted-foreground">{a.parcel_id}</td>
+                <td className="text-body">{portName(a.dest_port)}</td>
                 <td className="desk-num text-right">{hrs(a.arrival_hours)}</td>
                 <td className="desk-num text-right">{hrs(a.wait_hours)}</td>
                 <td className="desk-num text-right">{hrs(a.finish_hours)}</td>
@@ -54,17 +54,17 @@ export function VoyageAssignmentsTable({
           </tbody>
         </table>
       ) : (
-        <p className="px-2 py-3 text-[12px] text-muted-foreground">
+        <p className="px-2 py-3 text-lead text-muted-foreground">
           No vessel assigned to this cargo — supply a vessel and a cargo revenue figure to assign.
         </p>
       )}
 
       {repo.length > 0 && (
-        <div className="border-t border-border bg-surface-2 px-2 py-1.5">
-          <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+        <div className="border-t border-border bg-surface-2 px-2 py-2">
+          <div className="mb-1 text-caption font-bold uppercase tracking-wide text-muted-foreground">
             Repositioning
           </div>
-          <ul className="space-y-0.5 text-[11px]">
+          <ul className="space-y-0.5 text-body">
             {repo.map((r) => (
               <li key={r.vessel_id} className="flex justify-between gap-2">
                 <span>
@@ -95,7 +95,7 @@ export function VoyageAssignmentsTable({
       )}
 
       {rejected.length > 0 && (
-        <ul className="space-y-0.5 border-t border-border px-2 py-1.5 text-[10px] text-muted-foreground">
+        <ul className="space-y-0.5 border-t border-border px-2 py-2 text-caption text-muted-foreground">
           {rejected.map((r) => (
             <li key={`${r.vessel_id}-${r.parcel_id}`}>
               <span className="font-semibold">

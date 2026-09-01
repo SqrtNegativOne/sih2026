@@ -120,7 +120,7 @@ function App() {
             same reasoning: DOM order (the drawer renders after this <main>)
             keeps the drawer panel itself on top where it actually overlaps
             this element's right edge. */}
-        <main className="relative z-50 min-w-0 flex-1 overflow-y-auto p-1.5">
+        <main className="relative z-50 min-w-0 flex-1 overflow-y-auto p-2">
           {view === 'port-twin' ? (
             <PortTwinPage ports={ports} />
           ) : view === 'tonnage-field' ? (

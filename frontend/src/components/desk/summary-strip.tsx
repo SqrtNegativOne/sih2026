@@ -16,11 +16,11 @@ export function SummaryStrip({ quote, ports }: { quote: QuoteResult; ports: Port
     ['Laycan', `${formatIsoShort(quote.laycan_start)} to ${formatIsoShort(quote.laycan_end)}`],
   ]
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 rounded-[3px] border border-border bg-surface px-2 py-0.5">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 rounded-sm border border-border bg-surface px-2 py-0.5">
       {items.map(([label, value], i) => (
-        <div key={label} className="flex items-baseline gap-1.5">
+        <div key={label} className="flex items-baseline gap-2">
           {i > 0 && <span className="mr-2 h-3 w-px bg-border" />}
-          <span className="text-[9.5px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <span className="text-caption font-semibold uppercase tracking-wide text-muted-foreground">
             {label}
           </span>
           <span className="desk-num font-semibold text-foreground">{value}</span>

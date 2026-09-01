@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
-import { Panel } from '@/components/desk/panel'
+import { PageState, Panel } from '@/components/desk/panel'
 import { StatRow } from '@/components/desk/stat'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Combobox, type ComboOption } from '@/components/ui/combobox'
 import { Input } from '@/components/ui/input'
 import { fetchFragility } from '@/lib/api'
@@ -54,7 +55,7 @@ function CategoryBadge({ category }: { category: FragilityCategory }) {
   return (
     <Badge
       variant={category === 'FRAGILE' ? 'destructive' : category === 'STABLE' ? 'secondary' : 'outline'}
-      className="text-[9px]"
+      className="text-micro"
     >
       {category}
     </Badge>
@@ -110,7 +111,7 @@ function BerthTruthChips({ fp }: { fp: FlipPoint }) {
   return (
     <div className="mt-1 flex flex-wrap gap-1">
       {chips.map((c) => (
-        <span key={c} className="rounded-[2px] border border-border px-1 py-px font-mono text-[9px] text-muted-foreground">
+        <span key={c} className="rounded-sm border border-border px-1 py-px font-mono text-micro text-muted-foreground">
           {c}
         </span>
       ))}
@@ -122,27 +123,27 @@ function FindingRow({ fp }: { fp: FlipPoint }) {
   return (
     <div className="border-b border-border p-2 last:border-b-0">
       <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-1.5">
-          <span className="text-[11px] font-semibold">{VARIABLE_LABEL[fp.variable] ?? fp.variable}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-body font-semibold">{VARIABLE_LABEL[fp.variable] ?? fp.variable}</span>
           <CategoryBadge category={fp.fragility_category} />
           <span
-            className="text-[9px] uppercase tracking-wide text-muted-foreground"
+            className="text-micro uppercase tracking-wide text-muted-foreground"
             title={TIER_LABEL[fp.tier]?.hint}
           >
             {TIER_LABEL[fp.tier]?.label ?? fp.tier}
           </span>
           <span
-            className="text-[9px] uppercase tracking-wide text-muted-foreground"
+            className="text-micro uppercase tracking-wide text-muted-foreground"
             title={PROVENANCE_LABEL[fp.provenance]?.hint}
           >
             {PROVENANCE_LABEL[fp.provenance]?.label ?? fp.provenance}
           </span>
         </div>
         {fp.fragility_score != null && (
-          <span className="desk-num text-[10px] text-muted-foreground">score {formatNumber(fp.fragility_score, 1)}</span>
+          <span className="desk-num text-caption text-muted-foreground">score {formatNumber(fp.fragility_score, 1)}</span>
         )}
       </div>
-      <p className={cn('mt-0.5 text-[11px]', fp.fragility_category === 'FRAGILE' ? 'text-risk' : 'text-foreground')}>
+      <p className={cn('mt-0.5 text-body', fp.fragility_category === 'FRAGILE' ? 'text-risk' : 'text-foreground')}>
         {summarize(fp)}
       </p>
       <BerthTruthChips fp={fp} />
@@ -195,7 +196,7 @@ export function FragilityPage({ ports }: { ports: PortListing[] }) {
   }, [report])
 
   return (
-    <div className="flex h-full flex-col gap-1.5 overflow-hidden p-1.5" id="fragility">
+    <div className="flex h-full flex-col gap-2 overflow-hidden p-2" id="fragility">
       <Panel title="Decision Fragility" meta="How far is this recommendation from changing?">
         <div className="flex flex-wrap items-end gap-2 p-1">
           <div className="flex flex-col gap-0.5">
@@ -212,40 +213,67 @@ export function FragilityPage({ ports }: { ports: PortListing[] }) {
           </div>
           <div className="flex flex-col gap-0.5">
             <span className="stat-label">Cargo tonnes</span>
-            <Input className="h-7 w-24 text-[11px]" value={cargo} onChange={(e) => setCargo(e.target.value)} />
+            <Input className="h-7 w-24 text-body" value={cargo} onChange={(e) => setCargo(e.target.value)} />
           </div>
           <div className="flex flex-col gap-0.5">
             <span className="stat-label">Laycan start</span>
-            <Input type="date" className="h-7 w-36 text-[11px]" value={laycanStart} onChange={(e) => setLaycanStart(e.target.value)} />
+            <Input type="date" className="h-7 w-36 text-body" value={laycanStart} onChange={(e) => setLaycanStart(e.target.value)} />
           </div>
           <div className="flex flex-col gap-0.5">
             <span className="stat-label">Laycan end</span>
-            <Input type="date" className="h-7 w-36 text-[11px]" value={laycanEnd} onChange={(e) => setLaycanEnd(e.target.value)} />
+            <Input type="date" className="h-7 w-36 text-body" value={laycanEnd} onChange={(e) => setLaycanEnd(e.target.value)} />
           </div>
-          <button
-            type="button"
+          <Button
+            variant="primary"
+            size="md"
             onClick={runSweep}
             disabled={!origin || !dest || loading}
-            className="h-7 rounded-[3px] border border-market bg-market/10 px-3 text-[11px] font-semibold text-market disabled:opacity-40"
+            title={
+              loading
+                ? 'A real sweep is running.'
+                : !origin || !dest
+                  ? 'Pick an origin and a destination port first.'
+                  : 'Sweep the decision boundary'
+            }
           >
-            {loading ? 'Sweeping…' : 'Run sweep'}
-          </button>
+            {loading ? 'Sweeping…' : report ? 'Re-run sweep' : 'Run sweep'}
+          </Button>
           {elapsedMs != null && !loading && (
             <span className="stat-label">{(elapsedMs / 1000).toFixed(1)}s, {report?.evaluations_used} evaluations</span>
           )}
         </div>
       </Panel>
 
-      {error && <div className="p-2 text-sm text-risk">{error}</div>}
+      {error && (
+        <PageState
+          tone="error"
+          title="The fragility sweep failed"
+          hint={error}
+          action={
+            <Button variant="danger" size="sm" onClick={runSweep}>
+              Try again
+            </Button>
+          }
+        />
+      )}
 
-      {!report && !loading && (
-        <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-          Select an origin and destination, then run a sweep to see how fragile this recommendation is.
-        </div>
+      {loading && !error && (
+        <PageState
+          tone="busy"
+          title="Sweeping the decision boundary…"
+          hint="Re-solving the recommendation across perturbed inputs to find where the verdict flips. Every evaluation is a real solve, so this takes a few seconds."
+        />
+      )}
+
+      {!report && !loading && !error && (
+        <PageState
+          title="No sweep run yet"
+          hint="Pick an origin and a destination above, then run a sweep to see how far the inputs can move before this recommendation changes."
+        />
       )}
 
       {report && (
-        <div className="grid min-h-0 flex-1 grid-cols-1 gap-1.5 overflow-auto lg:grid-cols-3">
+        <div className="grid min-h-0 flex-1 auto-rows-min grid-cols-1 content-start gap-2 overflow-auto lg:grid-cols-3">
           <Panel title="Current Decision" className="lg:col-span-1">
             <div className="flex flex-col gap-1 p-1">
               <StatRow label="Lock action" value={report.current_decision.lock_action ?? '—'} />
@@ -275,7 +303,7 @@ export function FragilityPage({ ports }: { ports: PortListing[] }) {
           </Panel>
 
           <Panel title="Limitations" className="lg:col-span-3">
-            <ul className="list-disc space-y-1 p-1 pl-4 text-[10px] text-muted-foreground">
+            <ul className="list-disc space-y-1 p-1 pl-4 text-caption text-muted-foreground">
               {report.limitations.map((l) => (
                 <li key={l}>{l}</li>
               ))}
