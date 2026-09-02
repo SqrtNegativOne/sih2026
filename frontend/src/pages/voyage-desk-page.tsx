@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { BackhaulPanel } from '@/components/desk/backhaul-panel'
 import { AnchoragePanel } from '@/components/desk/anchorage-panel'
 import { CIIPanel } from '@/components/desk/cii-panel'
+import { DecisionHeadline } from '@/components/desk/decision-headline'
 import { FleetMixTable } from '@/components/desk/fleet-mix-table'
 import { FracturePanel } from '@/components/desk/fracture-panel'
 import { InfeasibilityPanel } from '@/components/desk/infeasibility-panel'
@@ -15,6 +16,7 @@ import { RouteMap } from '@/components/desk/route-map'
 import { SolveProgress } from '@/components/desk/solve-progress'
 import { SummaryStrip } from '@/components/desk/summary-strip'
 import { VerdictBlock } from '@/components/desk/verdict-block'
+import { VoyageTimeline } from '@/components/desk/voyage-timeline'
 import { WalkAwayCurve } from '@/components/desk/walk-away-curve'
 import { VoyageAssignmentsTable } from '@/components/desk/voyage-assignments-table'
 import { Button } from '@/components/ui/button'
@@ -157,6 +159,13 @@ export function VoyageDeskPage({
 
   return (
     <div className="flex flex-col gap-1">
+      {/* The answer, as a sentence, before any panel. The desk was twelve
+          boxes of equal weight, every figure correct and none of them saying
+          what to DO -- a reader had to assemble the verdict, the gap to the
+          walk-away line and the entry window out of four separate panels
+          before the screen meant anything. */}
+      <DecisionHeadline quote={quote} ports={ports} />
+
       <SummaryStrip quote={quote} ports={ports} />
 
       {isContingent && (
@@ -286,6 +295,14 @@ export function VoyageDeskPage({
         <div className="h-110 xl:col-span-4">
           <RouteList routes={quote.route_exploration} focusId={mapFocus} onFocus={setMapFocus} />
         </div>
+      </div>
+
+      {/* The timeline goes directly under the route because the two answer
+          halves of the same question -- the map says which way, this says how
+          long and when. Every figure in it was already on the desk as a bare
+          number in a different panel. */}
+      <div className="h-64">
+        <VoyageTimeline quote={quote} ports={ports} />
       </div>
 
       {/* 3. Fit & Schedule -- measured at ~151px (fleet mix) and ~165px

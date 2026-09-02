@@ -2675,3 +2675,59 @@ surface looks like the same piece of paper. Added, all as tokens so both themes 
 Verified unchanged after all of it: contrast in both themes still reports only the two disabled rail
 items; all five secondary pages and the desk PASS; zero console errors; `tsc` / `oxlint` / `build` /
 tripwire green. Bundle 751 KB / 246 KB gzip.
+
+#### F-75 — the desk now leads with an answer, and the voyage has a shape
+
+Two additions, both built from data that was already on the wire and already on the screen — just
+never in a form that answered a question.
+
+**The decision headline.** The desk was twelve panels of equal visual weight. Every figure on it was
+correct, and none of them said what to *do*: a reader had to assemble the verdict word, the gap to
+the walk-away line, the entry window and the expected edge out of four separate boxes before the
+screen meant anything. There is now one sentence at the top, in the words someone would say out loud
+— *"Wait before fixing. Today's $20,698/day is $3,436/day above the walk-away line, and the model
+expects the better entry between Aug 21 and Aug 24."* — with the three figures that carry the
+decision set at display size beside it. No new data, no different rounding; the same `lock_action`,
+`ceiling_usd_per_day`, `today_quote_usd_per_day` and `expected_savings_usd_total` the panels below
+show, composed into a claim.
+
+**The voyage timeline.** Five real fields existed on the desk as bare numbers in five different
+places: the lock window as a date range in the verdict's "Timing" column, the laycan as two dates in
+the summary strip, the two port waits as cells in a table, and `assumed_transit_days` — rendered
+*nowhere at all*. A reader had to hold all five in their head to answer "when does this ship actually
+get there", which is the first question anyone asks.
+
+On one time axis they answer it at a glance, and the shape starts carrying information the numbers
+never did — how much slack sits between deciding and loading, whether the port waits are a rounding
+error next to the transit or a real part of the voyage. For the reference route: 14 days before
+loading opens, 4.6 waiting to berth, 18.3 at sea, 3.6 waiting to discharge, 41 days end to end.
+
+Kept honest: every segment length is a real field, nothing is padded to look tidy, the lock window is
+drawn *above* the track rather than as a segment (it is a decision deadline, not a phase of the
+voyage — drawing it inline would imply the ship is doing something during it), and the end date is
+labelled a projection with its components named, because it is a sum rather than a field. When
+`assumed_transit_days` is null the panel says so instead of inventing a duration to keep the chart
+looking complete.
+
+Three bugs caught while building these, each by measuring rather than looking:
+
+- `assumed_transit_days` is nullable and the first draft did not handle it. Caught by the production
+  build's typecheck, which is stricter than `tsc --noEmit` under this repo's config — the second time
+  that distinction has mattered.
+- The "lock window" label was positioned with a negative offset off `top-0`, which put it outside its
+  container where the panel's `overflow` sheared its top off. Now the lane above the track is real
+  reserved space and nothing is positioned outside its parent.
+- The timeline panel clipped twice, at 14px and then 6px, as content was added. Sized from
+  measurement both times rather than by eye.
+
+**And a bug in the verification tooling itself.** The contrast auditor reported four new failures on
+the timeline in both themes. All four were `sr-only` labels — visually hidden text, clipped to a 1x1
+box, never painted, whose contrast is meaningless. A bare `!width || !height` test lets a 1px box
+through. The auditor now skips anything under 2px or carrying a clip, and the redundant `sr-only`
+spans were removed at the source too: the buttons already carry `aria-label`, and an element with
+`aria-label` ignores its own text content for naming, so the spans were dead weight a screen reader
+could announce twice.
+
+Verified: desk PASSES at 1280 / 1440 / 1920 in both themes, all five secondary pages PASS in both,
+zero console errors across every page and action, contrast back to only the two disabled rail items.
+Bundle 759 KB / 248 KB gzip against the 714 KB / 233 KB baseline — +15 KB gzip, no new dependencies.
