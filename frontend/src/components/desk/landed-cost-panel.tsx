@@ -5,6 +5,8 @@ import { Input } from '@/components/ui/input'
 import { fetchLandedCost } from '@/lib/api'
 import { formatNumber } from '@/lib/format'
 import type { DataProvenance, LandedCostBreakdown, PortCode, VesselClass } from '@/lib/types'
+import { componentLabel, humanizeReason, wasRewritten } from '@/lib/humanize'
+import { PROVENANCE, type ProvenanceKind } from '@/lib/vocabulary'
 import { cn } from '@/lib/utils'
 
 function ProvenanceBadge({ provenance }: { provenance: DataProvenance | null }) {
@@ -13,9 +15,17 @@ function ProvenanceBadge({ provenance }: { provenance: DataProvenance | null }) 
   // variant that reads as "you said this," never blended visually with the
   // real/derived tones (OBSERVED/MODEL_DERIVED/ESTIMATED/INFERRED).
   const variant = provenance === 'DECLARED' ? 'outline' : 'secondary'
+  // "your input" for DECLARED, otherwise the shared plain-English word from
+  // lib/vocabulary rather than a lowercased enum ("model derived"). The enum
+  // and the full definition stay in the tooltip.
+  const t = PROVENANCE[provenance as ProvenanceKind]
   return (
-    <Badge variant={variant} className="text-micro">
-      {provenance === 'DECLARED' ? 'your input' : provenance.toLowerCase().replace('_', ' ')}
+    <Badge
+      variant={variant}
+      className="cursor-help text-micro"
+      title={t ? `${t.definition} (${provenance})` : undefined}
+    >
+      {provenance === 'DECLARED' ? 'your input' : (t?.label ?? provenance.toLowerCase())}
     </Badge>
   )
 }
@@ -39,9 +49,20 @@ function ComponentRow({
         <span className="text-body font-medium text-foreground" title={title}>
           {label}
         </span>
+        {/* The API's own reason strings carry raw field names and endpoint
+            paths ("opex_usd_per_day is not available at the /quote level --
+            see POST /landed-cost"). The caveat is exactly right and stays; the
+            implementation vocabulary does not. Unmatched messages pass through
+            verbatim, and the original is always kept in the tooltip so the
+            precise wording stays auditable. Wrapped rather than truncated --
+            this is the text that says which parts of the total are real, so
+            clipping it mid-sentence defeats the point. */}
         {usdPerMt == null && (
-          <span className="truncate text-micro text-muted-foreground" title={reason}>
-            {reason}
+          <span
+            className="text-micro leading-relaxed text-muted-foreground"
+            title={wasRewritten(reason) ? reason : undefined}
+          >
+            {humanizeReason(reason)}
           </span>
         )}
       </div>
@@ -150,7 +171,7 @@ export function LandedCostPanel({
       className="h-full"
       title="Landed Cost"
       meta={`${shown.components_included.length}/5 components real`}
-      hint="freight + wait/delay + handling + demurrage + commodity price, each with its own provenance. Unavailable components show a reason, never a silent $0. Enter your own handling/demurrage/laytime/commodity assumptions below to fill the gaps -- POST /landed-cost, never a repo-invented default."
+      hint="What a tonne actually costs delivered: freight, waiting time, handling, demurrage and the commodity itself, each labelled with where its figure came from. A component that cannot be priced states why instead of quietly counting as zero. Fill in your own handling, demurrage, laytime and commodity assumptions below to complete the total — this desk will never substitute an invented default for a commercial term you have not given it."
       flush
     >
       <div>
@@ -194,7 +215,11 @@ export function LandedCostPanel({
           </span>
           {allMissing && (
             <span className="text-micro text-muted-foreground">
-              excludes: {shown.components_missing.join(', ')}
+              {/* The API returns these as field names (`handling_cost`,
+                  `war_risk`); COMPONENT_LABEL maps them to the same words the
+                  rows above use, so the exclusion list and the rows it refers
+                  to finally agree. Unknown keys fall through unchanged. */}
+              excludes: {shown.components_missing.map(componentLabel).join(', ')}
             </span>
           )}
         </div>

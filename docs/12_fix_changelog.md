@@ -2468,3 +2468,46 @@ One thing worth recording: `npx tsc --noEmit` passed while `npm run build` faile
 `Intl.NumberFormatOptions` not being assignable to NumberFlow's narrower `Format`. The build's
 typecheck is stricter than the bare one under this repo's config, so a green `tsc --noEmit` is not
 sufficient evidence before committing.
+
+#### F-67 — the language layer
+
+The standing complaint was that the data is hard to read. It was not the density: it was that the
+interface spoke in implementation vocabulary. `lib/vocabulary.ts` now draws the line explicitly.
+
+**Kept, and explained on demand:** the domain words of dry-bulk chartering — laycan, ballast,
+demurrage, COA, DWT, LOA, beam, draft, chokepoint, CII. These are the words the people using this
+tool actually use, and replacing them with "loading window" or "empty leg" would make the product
+read as though it were built for someone else. `components/desk/term.tsx` renders them as a real
+`<abbr>` with a dotted underline and `tabIndex` — the underline is the only affordance telling a
+sighted reader there is something to hover, and the tab stop is the only way a keyboard user reaches
+it. A bare `title` attribute is invisible and unreachable, which is how most of this desk's best
+explanatory text was hidden.
+
+**Replaced, with the original kept in the tooltip:**
+
+| Was | Now |
+|---|---|
+| `p10` / `p50` / `p90` | Low / Expected / High (percentile named in the tooltip) |
+| `MODEL_DERIVED`, `OBSERVED`, `DECLARED` … | modelled, measured, stated (definition **and** the enum in the tooltip) |
+| `$/mt (class÷transit)` | `$/tonne` — the parenthetical was the formula, which belongs in the explanation |
+| `opex_usd_per_day is not available at the /quote level -- see POST /landed-cost.` | "A daily operating cost is needed to price waiting time, and a quote does not carry one. Enter it in the assumptions below to include this." |
+| `no handling_rate_usd_per_mt supplied -- ... (opt.network.Port.handling_rate_tph is a throughput rate, not a price)` | "No handling tariff supplied. There is no per-tonne handling price on record to fall back on — the port data holds a throughput rate (tonnes per hour), which is a speed, not a price." |
+| `excludes: handling_cost, war_risk, commodity_price` | `excludes: handling, war risk, commodity price` |
+
+Those last three are **backend-authored strings**, and the backend is frozen, so `lib/humanize.ts`
+rewrites them at presentation time only. It is deliberately conservative: the rewrite must preserve
+the caveat exactly (nothing is softened, no "unavailable" becomes "unknown"), anything unmatched
+passes through **verbatim** so a future backend message can never be silently swallowed, and the
+original string is always kept in the `title` so the exact API wording stays auditable.
+
+The honesty markers were treated as a feature throughout, not clutter: "1/5 components real",
+"insufficient sample (n=0) — falls back to static baseline", "no fabricated rate shown", the relative
+-index banner on Tonnage Field and the "retrospective simulation" badge on the Ledger are all intact
+and, in the provenance chips' case, now *more* legible than before.
+
+Also fixed while here: the missing-component reasons were `truncate`d to one line. That is the text
+which says which parts of a total are real, so clipping it mid-sentence defeated its purpose; it now
+wraps.
+
+Verified after this pass: all five secondary pages PASS in **both** themes, desk clean, zero console
+errors, `tsc` / `build` / `ruff` / tripwire green, bundle 746 KB / 243 KB gzip.

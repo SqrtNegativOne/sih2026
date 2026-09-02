@@ -8,6 +8,8 @@ import { PageState, Panel, PanelError, PanelLoading } from '@/components/desk/pa
 import { StatRow } from '@/components/desk/stat'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { ProvenanceChip } from '@/components/desk/term'
+import type { ProvenanceKind } from '@/lib/vocabulary'
 import { fetchTonnageField, fetchTonnageFieldForward, fetchTonnageFieldValidation } from '@/lib/api'
 import { formatNumber } from '@/lib/format'
 import type {
@@ -25,26 +27,19 @@ const CLASS_ORDER = ['Handysize', 'Supramax', 'Panamax', 'Capesize']
 /** Every figure on this page is one of these -- shown as a small tag so a
  * reader never mistakes a model-derived signal for an observed fact. P3
  * requirement: "Provenance per figure: OBSERVED / ESTIMATED / MODEL_DERIVED /
- * DECLARED / INFERRED." */
-type Provenance = 'OBSERVED' | 'ESTIMATED' | 'MODEL_DERIVED' | 'DECLARED' | 'INFERRED'
+ * DECLARED / INFERRED." The union itself now lives in lib/vocabulary alongside
+ * the plain-English labels, so the two cannot drift apart. */
+type Provenance = ProvenanceKind
 
+/**
+ * Was a chip printing the raw enum -- "MODEL_DERIVED" -- which is a field
+ * value from src/data_builders/provenance.py, not something a charterer has
+ * any reason to decode. The shared ProvenanceChip shows the plain word
+ * ("modelled") and keeps both the definition and the original enum in its
+ * tooltip, so the credibility signal is louder and the jargon is gone.
+ */
 function ProvenanceTag({ kind }: { kind: Provenance }) {
-  return (
-    <span
-      className="rounded-sm border border-border px-1 py-px font-mono text-micro font-semibold uppercase tracking-wide text-muted-foreground"
-      title={PROVENANCE_HINT[kind]}
-    >
-      {kind}
-    </span>
-  )
-}
-
-const PROVENANCE_HINT: Record<Provenance, string> = {
-  OBSERVED: 'Read directly off a real source document or feed.',
-  ESTIMATED: 'A real computation over real data, with a documented method and disclosed uncertainty.',
-  MODEL_DERIVED: 'The output of a fitted or trained model, not a direct observation.',
-  DECLARED: 'Stated by an authoritative source as a fact (e.g. a port operator publication).',
-  INFERRED: 'A modelled read of observed evidence, not ground truth -- carries a confidence, not a probability.',
+  return <ProvenanceChip kind={kind} />
 }
 
 function IndexTypeBanner({ data }: { data: TonnageFieldResponse }) {

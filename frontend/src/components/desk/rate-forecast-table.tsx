@@ -1,6 +1,7 @@
 import { Minus, TrendingDown, TrendingUp } from 'lucide-react'
 import { Panel } from '@/components/desk/panel'
 import { Badge } from '@/components/ui/badge'
+import { PERCENTILE } from '@/lib/vocabulary'
 import { useElementSize } from '@/hooks/use-element-size'
 import { formatNumber } from '@/lib/format'
 import type { RateHorizon, RouteEvidence } from '@/lib/types'
@@ -126,7 +127,7 @@ export function RateForecastTable({
       className="h-full"
       id="forecast"
       title="Rate Forecast"
-      hint="Model-forecast time-charter rate by horizon. Shaded band is the p10–p90 range, line is p50, dashed line is today's quote. Dir compares p50 to today; Conf is model agreement."
+      hint="What the model expects this vessel class to cost per day, 7 / 30 / 90 days out. The shaded band is the low-to-high range, the line is the expected case, and the dashed line is today's rate. Dir compares the expected case against today; Conf is how strongly the model agrees on that direction."
       meta="TC $/day"
       actions={<RouteEvidenceBadge evidence={routeEvidence} />}
       flush
@@ -138,11 +139,26 @@ export function RateForecastTable({
         <thead>
           <tr>
             <th>Horizon</th>
-            <th className="text-right">p10</th>
-            <th className="text-right">p50</th>
-            <th className="text-right">p90</th>
-            <th className="text-right" title="class rate ÷ transit days -- a unit conversion, not itself a route-specific quote unless the badge above says Route-validated/Route-modelled. A different figure from the Fleet Mix panel's $/mt (the actual chosen vessel configuration) and the Landed Cost panel's Freight row (one component of a fuller delivered-cost breakdown).">
-              $/mt (class÷transit)
+            {/* "p10 / p50 / p90" is statistics shorthand, not a shipping
+                term. The percentile stays in the tooltip for anyone who reads
+                it natively -- "Low" alone is less precise than what they had --
+                but it is no longer the first thing to decode. */}
+            <th className="cursor-help text-right" title={PERCENTILE.p10.definition}>
+              {PERCENTILE.p10.label}
+            </th>
+            <th className="cursor-help text-right" title={PERCENTILE.p50.definition}>
+              {PERCENTILE.p50.label}
+            </th>
+            <th className="cursor-help text-right" title={PERCENTILE.p90.definition}>
+              {PERCENTILE.p90.label}
+            </th>
+            {/* Was "$/mt (class÷transit)" -- the parenthetical was the
+                formula, which belongs in the explanation, not the header. */}
+            <th
+              className="cursor-help text-right"
+              title="Freight per tonne, derived by dividing the class-wide day rate by the transit days -- a unit conversion, not itself a route-specific quote unless the badge above says route-validated. A different figure from the Fleet Mix panel's $/mt (the actual chosen vessel configuration) and the Landed Cost panel's Freight row (one component of a fuller delivered-cost breakdown)."
+            >
+              $/tonne
             </th>
             <th className="text-center">Dir</th>
             <th
