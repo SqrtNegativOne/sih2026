@@ -1,7 +1,8 @@
 import { ExplanationList } from '@/components/desk/explanation'
 import { Panel } from '@/components/desk/panel'
 import type { Explanation, OptimizerRecommendation, PortListing } from '@/lib/types'
-import { formatNumber, formatUsdCompact, prettyPort } from '@/lib/format'
+import { formatNumber, prettyPort } from '@/lib/format'
+import { useMoney } from '@/lib/money-context'
 
 const hrs = (h: number) => `${(h / 24).toFixed(1)}d`
 
@@ -19,6 +20,7 @@ export function VoyageAssignmentsTable({
   assignmentExplanations?: Explanation[] | null
   repositioningExplanations?: Explanation[] | null
 }) {
+  const { moneyCompact } = useMoney()
   const portName = (code: string) =>
     prettyPort(ports.find((p) => p.code === code)?.name ?? code)
   const { voyage_assignments: assigns, rejected_options: rejected, repositioning_actions: repo } = rec
@@ -29,7 +31,7 @@ export function VoyageAssignmentsTable({
       id="assignments"
       title="Voyage Assignments"
       hint="CP-SAT profit-maximising assignment of your supplied vessels to this cargo, plus repositioning advice for any idle vessel. Times are days from now; profit needs a cargo revenue figure in the quote form."
-      meta={`${assigns.length} assigned · total ${formatUsdCompact(rec.total_voyage_profit_usd)}`}
+      meta={`${assigns.length} assigned · total ${moneyCompact(rec.total_voyage_profit_usd)}`}
       flush
     >
       {assigns.length > 0 ? (
@@ -56,7 +58,7 @@ export function VoyageAssignmentsTable({
                 <td className="desk-num text-right">{hrs(a.wait_hours)}</td>
                 <td className="desk-num text-right">{hrs(a.finish_hours)}</td>
                 <td className="desk-num text-right text-muted-foreground">{hrs(a.ballast_hours)}</td>
-                <td className="desk-num text-right font-semibold">{formatUsdCompact(a.profit_usd)}</td>
+                <td className="desk-num text-right font-semibold">{moneyCompact(a.profit_usd)}</td>
               </tr>
             ))}
           </tbody>

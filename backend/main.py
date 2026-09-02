@@ -63,7 +63,12 @@ from opt.basis import basis_table_to_entries
 from opt.chokepoints import CHOKEPOINT_GEOMETRY, CHOKEPOINT_NAMES
 from opt.fracture import ChokepointFracture, route_fracture
 from opt.geography import UnknownPortPairError, distance_nm
-from opt.landed_cost import COMMODITY_SERIES, LandedCostRequest, compute_landed_cost
+from opt.landed_cost import (
+    COMMODITY_SERIES,
+    LandedCostRequest,
+    compute_landed_cost,
+    usd_inr_rate_as_of,
+)
 from opt.network import PortEnum, route_family_for_origin
 from opt.portfolio import efficient_frontier, optimize_portfolio_mix, spot_cost_stats
 from opt.quote import (
@@ -366,6 +371,39 @@ def meta() -> dict[str, str]:
     most recent date the real market data on disk covers, so a "charter as of"
     input can default and cap to it."""
     return {"latest_data_date": latest_available_date().isoformat()}
+
+
+@app.get("/fx")
+def fx_rate(as_of: date | None = None) -> dict[str, object]:
+    """The real USD/INR rate, so the desk can display rupees anywhere.
+
+    Rupee display used to be a single checkbox inside the landed-cost panel,
+    because that was the only code path that loaded a rate. Making currency a
+    desk-wide preference needs the rate desk-wide, and the only honest source
+    is the same real series landed_cost already reads: ``MACRO_USD_INR``, the
+    FRED DEXINUS observation, forward-filled to the most recent real value on
+    or before ``as_of`` and never fabricated before its first observation.
+
+    Returns ``inr_per_usd: null`` with a stated reason rather than a guess when
+    no real observation covers the requested date -- the frontend then keeps
+    showing dollars instead of inventing a conversion.
+    """
+    target = as_of or latest_available_date()
+    found = usd_inr_rate_as_of(target)
+    if found is None:
+        return {
+            "inr_per_usd": None,
+            "as_of": None,
+            "provenance": None,
+            "reason": f"no real MACRO_USD_INR observation on or before {target.isoformat()}",
+        }
+    rate, observed_on = found
+    return {
+        "inr_per_usd": rate,
+        "as_of": observed_on.isoformat(),
+        "provenance": "OBSERVED",
+        "reason": f"FRED DEXINUS, real observation as of {observed_on.isoformat()}",
+    }
 
 
 @app.get("/ports")

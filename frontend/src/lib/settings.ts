@@ -1,3 +1,4 @@
+import type { Currency } from '@/lib/format'
 import type { VesselClass } from '@/lib/types'
 
 /**
@@ -20,6 +21,12 @@ import type { VesselClass } from '@/lib/types'
  */
 
 export interface DeskSettings {
+  /** Display currency. Every figure is COMPUTED in USD -- freight is quoted
+   *  and settled in dollars -- so this is a presentation conversion applied at
+   *  render time from the real FRED USD/INR observation, never a second stored
+   *  copy of a number. If no real rate covers the pricing date the desk stays
+   *  in dollars regardless of this setting. */
+  currency: Currency
   /** Prefilled on a new quote. Empty means "no default, pick one". */
   defaultOriginPort: string
   defaultDestPort: string
@@ -37,6 +44,7 @@ export interface DeskSettings {
 }
 
 export const DEFAULT_SETTINGS: DeskSettings = {
+  currency: 'USD',
   defaultOriginPort: '',
   defaultDestPort: '',
   defaultCommodity: 'Thermal Coal',

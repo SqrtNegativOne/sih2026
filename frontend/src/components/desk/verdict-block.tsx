@@ -3,9 +3,10 @@ import { transition } from '@/lib/motion'
 import { ExplanationBlock } from '@/components/desk/explanation'
 import { Term } from '@/components/desk/term'
 import { Figure, FigureGroup } from '@/components/desk/figure'
-import { addDays, formatShortDate, formatUsd, formatUsdCompact } from '@/lib/format'
+import { addDays, formatShortDate } from '@/lib/format'
 import type { QuoteResult } from '@/lib/types'
 import { cn } from '@/lib/utils'
+import { useMoney } from '@/lib/money-context'
 
 /**
  * The headline. LOCK or WAIT is the loudest thing on the desk, on a full-bleed
@@ -14,6 +15,7 @@ import { cn } from '@/lib/utils'
  */
 export function VerdictBlock({ quote }: { quote: QuoteResult }) {
   const reduced = useReducedMotion()
+  const { money, moneyCompact } = useMoney()
   const isLock = quote.lock_action === 'LOCK'
   const term = quote.contract_term_days
   const rec = quote.full_recommendation
@@ -176,13 +178,13 @@ export function VerdictBlock({ quote }: { quote: QuoteResult }) {
               {edgeFavorsLock ? 'Locking beats always-spot by, expected' : 'Staying spot beats locking by, expected'}
             </span>
             <span className={cn('stat-value font-semibold', edgeFavorsLock ? 'text-go' : 'text-risk')}>
-              {formatUsd(Math.abs(edge))}
+              {money(Math.abs(edge))}
             </span>
           </div>
           <div className="stat-row">
             <span className="stat-label">Range across the term (P10 to P90)</span>
             <span className="stat-value text-caption text-muted-foreground">
-              {formatUsdCompact(p10Total)} to {formatUsdCompact(p90Total)}
+              {moneyCompact(p10Total)} to {moneyCompact(p90Total)}
             </span>
           </div>
           <div className="stat-row">
@@ -219,7 +221,7 @@ export function VerdictBlock({ quote }: { quote: QuoteResult }) {
             <p className="mt-2 rounded-sm border-l-2 border-market/50 bg-market-soft/50 px-2 py-2 text-caption leading-relaxed text-muted-foreground">
               The <strong className="font-semibold text-foreground">{quote.lock_action}</strong>{' '}
               verdict above already prices in the value of keeping the right to wait and lock later
-              instead ({formatUsd(optionValue)}/day) — that's why it can differ from the simple
+              instead ({money(optionValue)}/day) — that's why it can differ from the simple
               always-spot comparison above, which doesn't account for that option.
             </p>
           )}

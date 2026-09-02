@@ -1,9 +1,10 @@
 import { Panel } from '@/components/desk/panel'
-import { formatUsdCompact } from '@/lib/format'
+
 import { assignRouteColors } from '@/lib/route-colors'
 import type { SolverRoute } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { useMemo } from 'react'
+import { useMoney } from '@/lib/money-context'
 
 const STATUS_STYLE: Record<SolverRoute['status'], string> = {
   chosen: 'bg-go-soft text-go',
@@ -24,6 +25,7 @@ export function RouteList({
   focusId: string | null
   onFocus: (id: string | null) => void
 }) {
+  const { moneyCompact } = useMoney()
   const colors = useMemo(() => assignRouteColors(routes), [routes])
   const order = { chosen: 0, considered: 1, rejected: 2 }
   const sorted = [...routes].sort((a, b) => order[a.status] - order[b.status])
@@ -79,7 +81,7 @@ export function RouteList({
                 </span>
                 {r.metric_usd != null && (
                   <span className="desk-num shrink-0 pl-2">
-                    {r.metric_label} {formatUsdCompact(r.metric_usd)}
+                    {r.metric_label} {moneyCompact(r.metric_usd)}
                   </span>
                 )}
               </div>

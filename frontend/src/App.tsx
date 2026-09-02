@@ -5,7 +5,17 @@ import { IconRail } from '@/components/shell/icon-rail'
 import { SettingsDrawer } from '@/components/shell/settings-drawer'
 import { TopBar } from '@/components/shell/top-bar'
 import { loadSettings, type DeskSettings } from '@/lib/settings'
-import { ApiRequestError, fetchChokepoints, fetchMeta, fetchPorts, streamQuote } from '@/lib/api'
+import { PORT_CODE_TO_ANCHORAGE_PORT } from '@/lib/anchorage-ports'
+import { MoneyProvider } from '@/lib/money-context'
+import type { MoneyContext } from '@/lib/format'
+import {
+  ApiRequestError,
+  fetchChokepoints,
+  fetchFxRate,
+  fetchMeta,
+  fetchPorts,
+  streamQuote,
+} from '@/lib/api'
 import type {
   ChokepointReference,
   ProgressStage,
@@ -20,6 +30,11 @@ import { PortfolioPage } from '@/pages/portfolio-page'
 import { PortTwinPage } from '@/pages/port-twin-page'
 import { TonnageFieldPage } from '@/pages/tonnage-field-page'
 import { VoyageDeskPage } from '@/pages/voyage-desk-page'
+
+/** Ports with a processed Sentinel-1 scene, from lib/anchorage-ports. Real
+ *  coverage, stated in Settings rather than left for a reader to infer from
+ *  which panels appear. */
+const SATELLITE_PORT_COUNT = Object.keys(PORT_CODE_TO_ANCHORAGE_PORT).length
 
 export type DeskView = 'desk' | 'port-twin' | 'tonnage-field' | 'fragility' | 'ledger' | 'portfolio'
 
@@ -69,6 +84,12 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
   const [settings, setSettings] = useState<DeskSettings>(() => loadSettings())
+  // The real FRED USD/INR observation, fetched once. Null until it answers,
+  // and null forever if no real observation covers the pricing date -- in
+  // which case `money()` keeps returning dollars rather than inventing a
+  // conversion, whatever the currency preference says.
+  const [inrPerUsd, setInrPerUsd] = useState<number | null>(null)
+  const [fxAsOf, setFxAsOf] = useState<string | null>(null)
   const runId = useRef(0)
 
   useEffect(() => {
@@ -83,6 +104,12 @@ function App() {
     fetchChokepoints()
       .then(setChokepoints)
       .catch(() => setChokepoints([]))
+    fetchFxRate()
+      .then((f) => {
+        setInrPerUsd(f.inr_per_usd)
+        setFxAsOf(f.as_of)
+      })
+      .catch(() => setInrPerUsd(null))
   }, [])
 
   function handleSubmit(req: QuoteRequest) {
@@ -111,7 +138,13 @@ function App() {
     })
   }
 
+  const moneyCtx: MoneyContext = {
+    currency: settings.currency,
+    inrPerUsd,
+  }
+
   return (
+    <MoneyProvider value={moneyCtx}>
     <div className="flex h-full flex-col overflow-hidden">
       {/* First focusable thing in the document. Without it, reaching the
           desk's primary action by keyboard took a measured 19 tab presses --
@@ -186,9 +219,18 @@ function App() {
         ports={ports}
         settings={settings}
         onChange={setSettings}
+        fx={{ inrPerUsd, asOf: fxAsOf }}
+        system={{
+          latestDate,
+          portCount: ports.length,
+          // The five ports with a processed Sentinel-1 scene. Stated as a real
+          // count rather than implied by which panels happen to render.
+          satellitePorts: SATELLITE_PORT_COUNT,
+        }}
       />
       <HelpDrawer open={helpOpen} onClose={() => setHelpOpen(false)} />
     </div>
+    </MoneyProvider>
   )
 }
 

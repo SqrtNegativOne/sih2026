@@ -36,12 +36,19 @@ export function SettingsDrawer({
   ports,
   settings,
   onChange,
+  fx,
+  system,
 }: {
   open: boolean
   onClose: () => void
   ports: PortListing[]
   settings: DeskSettings
   onChange: (next: DeskSettings) => void
+  /** The real USD/INR observation, so the currency control can state its rate
+   *  and disable rupees outright when no real rate exists. */
+  fx: { inrPerUsd: number | null; asOf: string | null }
+  /** Facts about what is loaded, for the System & data section. */
+  system: { latestDate: string | null; portCount: number; satellitePorts: number }
 }) {
   const [theme, setThemeState] = useState<Theme>(() =>
     typeof document !== 'undefined' && document.documentElement.classList.contains('light')
@@ -85,7 +92,7 @@ export function SettingsDrawer({
             role="dialog"
             aria-modal="true"
             aria-label="Settings"
-            className="fixed right-0 top-0 z-50 flex h-full w-[360px] max-w-[92vw] flex-col border-l border-border bg-surface shadow-raised"
+            className="fixed right-0 top-0 z-50 flex h-full w-90 max-w-[92vw] flex-col border-l border-border bg-surface shadow-raised"
             initial={{ x: '100%' }}
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
@@ -105,6 +112,58 @@ export function SettingsDrawer({
             </div>
 
             <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-3">
+              <Section
+                title="Currency & numbers"
+                note="Every figure is computed in US dollars, because that is what dry-bulk freight is quoted and settled in. Rupees are a display conversion applied at render time."
+              >
+                <div
+                  role="group"
+                  aria-label="Display currency"
+                  className="inline-flex overflow-hidden rounded-sm border border-border"
+                >
+                  {(['USD', 'INR'] as const).map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      aria-pressed={settings.currency === c}
+                      disabled={c === 'INR' && fx.inrPerUsd == null}
+                      onClick={() => set('currency', c)}
+                      title={
+                        c === 'INR' && fx.inrPerUsd == null
+                          ? 'No real USD/INR observation covers the current pricing date, so rupees cannot be shown without inventing a rate.'
+                          : undefined
+                      }
+                      className={cn(
+                        'cursor-pointer border-r border-border px-3 py-1 text-caption font-semibold transition-colors last:border-r-0',
+                        'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring',
+                        'disabled:cursor-not-allowed disabled:opacity-45',
+                        settings.currency === c
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-surface text-muted-foreground hover:bg-surface-2 hover:text-foreground',
+                      )}
+                    >
+                      {c === 'USD' ? '$ USD' : '₹ INR'}
+                    </button>
+                  ))}
+                </div>
+                {/* The rate and its provenance, stated. A conversion the reader
+                    cannot audit is worth less than no conversion. */}
+                <p className="text-micro leading-relaxed text-muted-foreground">
+                  {fx.inrPerUsd != null ? (
+                    <>
+                      Rate <span className="desk-num text-foreground">₹{fx.inrPerUsd}</span> per USD
+                      {fx.asOf ? ` — real FRED DEXINUS observation of ${fx.asOf}.` : '.'} Rupee
+                      figures use Indian digit grouping and lakh/crore.
+                    </>
+                  ) : (
+                    <>
+                      No real USD/INR observation is available, so rupee display is unavailable —
+                      the desk will not invent a rate to satisfy a preference.
+                    </>
+                  )}
+                </p>
+              </Section>
+
               <Section
                 title="Appearance"
                 note="Dark is the desk's designed look. The choice is remembered on this browser."
@@ -219,6 +278,29 @@ export function SettingsDrawer({
                     <span>Risk-averse</span>
                   </div>
                 </Field>
+              </Section>
+
+              <Section
+                title="System & data"
+                note="What this desk is actually running on. Stated rather than implied, because the honest answer to 'how much of this is real?' is a list."
+              >
+                <dl className="space-y-1">
+                  {[
+                    ['Market data through', system.latestDate ?? '—'],
+                    ['Ports priced', String(system.portCount)],
+                    ['Satellite-covered ports', `${system.satellitePorts} of ${system.portCount}`],
+                    ['USD/INR rate', fx.inrPerUsd != null ? `₹${fx.inrPerUsd} (${fx.asOf})` : 'unavailable'],
+                  ].map(([k, v]) => (
+                    <div key={k} className="stat-row">
+                      <dt className="stat-label">{k}</dt>
+                      <dd className="stat-value">{v}</dd>
+                    </div>
+                  ))}
+                </dl>
+                <p className="text-micro leading-relaxed text-muted-foreground">
+                  Satellite vessel counts exist only for ports with a processed Sentinel-1 scene;
+                  the panel does not render for the others rather than showing an estimate.
+                </p>
               </Section>
 
               <Section

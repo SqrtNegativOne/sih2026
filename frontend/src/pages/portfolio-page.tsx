@@ -7,9 +7,10 @@ import { Combobox, type ComboOption } from '@/components/ui/combobox'
 import { Input } from '@/components/ui/input'
 import { useElementSize } from '@/hooks/use-element-size'
 import { fetchPortfolio } from '@/lib/api'
-import { formatNumber, formatPct, formatUsdCompact, prettyPort } from '@/lib/format'
+import { formatNumber, formatPct, prettyPort } from '@/lib/format'
 import type { PortCode, PortfolioMixResult, PortfolioResponse, PortListing, VesselClass } from '@/lib/types'
 import { cn } from '@/lib/utils'
+import { useMoney } from '@/lib/money-context'
 
 const VESSEL_CLASSES: VesselClass[] = ['Capesize', 'Panamax', 'Supramax', 'Handysize']
 
@@ -107,6 +108,7 @@ function FrontierChart({
   frontier: PortfolioMixResult[]
   recommended: PortfolioMixResult
 }) {
+  const { moneyCompact } = useMoney()
   const [box, ref] = useElementSize<HTMLDivElement>()
   const w = Math.max(box.width, 260)
 
@@ -146,7 +148,7 @@ function FrontierChart({
         </p>
         <p className="mt-1 max-w-[76ch] text-caption leading-relaxed text-muted-foreground">
           All {frontier.length} risk-aversion settings return the same expected cost (
-          {formatUsdCompact(xMax)}) and the same variance, so there is no cost-versus-risk curve to
+          {moneyCompact(xMax)}) and the same variance, so there is no cost-versus-risk curve to
           trace. That is a real finding, not a missing one: under these inputs one channel is
           cheaper <em>after</em> its risk penalty than any blend, so no amount of risk aversion
           changes the answer.
@@ -206,11 +208,11 @@ function FrontierChart({
             r={2.5}
             fill="var(--market)"
           >
-            <title>{`k=${m.risk_aversion_k}: ${formatUsdCompact(m.expected_cost_usd)}, std ${formatUsdCompact(m.cost_std_usd)}`}</title>
+            <title>{`k=${m.risk_aversion_k}: ${moneyCompact(m.expected_cost_usd)}, std ${moneyCompact(m.cost_std_usd)}`}</title>
           </circle>
         ))}
         <circle cx={x(recommended.expected_cost_usd)} cy={y(recommended.cost_std_usd)} r={4.5} fill="var(--primary)" stroke="white" strokeWidth={1.5}>
-          <title>{`Recommended (k=${recommended.risk_aversion_k}): ${formatUsdCompact(recommended.expected_cost_usd)}, std ${formatUsdCompact(recommended.cost_std_usd)}`}</title>
+          <title>{`Recommended (k=${recommended.risk_aversion_k}): ${moneyCompact(recommended.expected_cost_usd)}, std ${moneyCompact(recommended.cost_std_usd)}`}</title>
         </circle>
       </svg>
     </div>
@@ -230,6 +232,7 @@ function FrontierChart({
  * saying anything.
  */
 function SpotComparison({ result }: { result: PortfolioResponse }) {
+  const { moneyCompact } = useMoney()
   const rec = result.recommended
   const premium = rec.expected_cost_usd - result.spot_cost_usd
   const varianceRemoved = result.spot_cost_std_usd - rec.cost_std_usd
@@ -247,13 +250,13 @@ function SpotComparison({ result }: { result: PortfolioResponse }) {
         {cheaper ? (
           <>
             This mix is{' '}
-            <span className="font-semibold text-go">{formatUsdCompact(Math.abs(premium))}</span>{' '}
+            <span className="font-semibold text-go">{moneyCompact(Math.abs(premium))}</span>{' '}
             cheaper in expectation
           </>
         ) : (
           <>
             You pay{' '}
-            <span className="font-semibold text-wait">{formatUsdCompact(premium)}</span> more in
+            <span className="font-semibold text-wait">{moneyCompact(premium)}</span> more in
             expectation
           </>
         )}
@@ -262,7 +265,7 @@ function SpotComparison({ result }: { result: PortfolioResponse }) {
             {' '}
             and remove{' '}
             <span className="font-semibold text-go">
-              {formatUsdCompact(varianceRemoved)}
+              {moneyCompact(varianceRemoved)}
             </span>{' '}
             of cost swing (one standard deviation).
           </>
@@ -303,6 +306,7 @@ const DEFAULTS: FormState = {
 }
 
 export function PortfolioPage({ ports }: { ports: PortListing[] }) {
+  const { moneyCompact } = useMoney()
   const options: ComboOption[] = useMemo(
     () => ports.map((p) => ({ value: p.code, label: prettyPort(p.name), hint: p.code })),
     [ports],
@@ -481,14 +485,14 @@ export function PortfolioPage({ ports }: { ports: PortListing[] }) {
               <SpotComparison result={result} />
 
               <div className="mt-1 flex flex-col gap-1 border-t border-border pt-2">
-                <StatRow label="Expected cost" value={formatUsdCompact(result.recommended.expected_cost_usd)} />
-                <StatRow label="Cost std. dev." value={formatUsdCompact(result.recommended.cost_std_usd)} />
+                <StatRow label="Expected cost" value={moneyCompact(result.recommended.expected_cost_usd)} />
+                <StatRow label="Cost std. dev." value={moneyCompact(result.recommended.cost_std_usd)} />
                 <StatRow
                   label="Stockout probability"
                   value={formatPct(result.recommended.stockout_probability)}
                   tone={result.recommended.stockout_probability > 0.2 ? 'risk' : 'plain'}
                 />
-                <StatRow label="Stockout penalty (expected)" value={formatUsdCompact(result.recommended.stockout_penalty_usd)} />
+                <StatRow label="Stockout penalty (expected)" value={moneyCompact(result.recommended.stockout_penalty_usd)} />
               </div>
             </div>
           </Panel>
@@ -497,9 +501,9 @@ export function PortfolioPage({ ports }: { ports: PortListing[] }) {
             <div className="flex flex-col gap-1 p-1">
               <StatRow label="Vessel class" value={result.vessel_class} />
               <StatRow label="As of" value={result.as_of} />
-              <StatRow label="Today's TC quote" value={`${formatUsdCompact(result.today_quote_usd_per_day)}/day`} />
-              <StatRow label="Pure-spot cost (this term)" value={formatUsdCompact(result.spot_cost_usd)} />
-              <StatRow label="Pure-spot cost std. dev." value={formatUsdCompact(result.spot_cost_std_usd)} />
+              <StatRow label="Today's TC quote" value={`${moneyCompact(result.today_quote_usd_per_day)}/day`} />
+              <StatRow label="Pure-spot cost (this term)" value={moneyCompact(result.spot_cost_usd)} />
+              <StatRow label="Pure-spot cost std. dev." value={moneyCompact(result.spot_cost_std_usd)} />
               <div className="stat-row">
                 <span className="stat-label">Rate basis</span>
                 <Badge variant={result.route_basis_applied ? 'secondary' : 'outline'} className="text-micro">
@@ -544,8 +548,8 @@ export function PortfolioPage({ ports }: { ports: PortListing[] }) {
                         <td className="desk-num text-right text-market">{formatPct(m.spot_fraction)}</td>
                         <td className="desk-num text-right text-go">{formatPct(m.tc_fraction)}</td>
                         <td className="desk-num text-right text-wait">{formatPct(m.coa_fraction)}</td>
-                        <td className="desk-num text-right">{formatUsdCompact(m.expected_cost_usd)}</td>
-                        <td className="desk-num text-right text-muted-foreground">{formatUsdCompact(m.cost_std_usd)}</td>
+                        <td className="desk-num text-right">{moneyCompact(m.expected_cost_usd)}</td>
+                        <td className="desk-num text-right text-muted-foreground">{moneyCompact(m.cost_std_usd)}</td>
                         <td className="desk-num text-right text-muted-foreground">{formatNumber(m.stockout_probability * 100, 1)}%</td>
                       </tr>
                     ))}

@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import landRaw from '@/assets/ne_110m_land.json'
 import { Panel } from '@/components/desk/panel'
 import { useElementSize } from '@/hooks/use-element-size'
-import { formatUsdCompact, prettyPort } from '@/lib/format'
+import { prettyPort } from '@/lib/format'
 import { assignRouteColors } from '@/lib/route-colors'
 import type {
   ChokepointReference,
@@ -17,6 +17,7 @@ import type {
   SolverRouteKind,
 } from '@/lib/types'
 import { cn } from '@/lib/utils'
+import { useMoney } from '@/lib/money-context'
 
 const land = landRaw as unknown as FeatureCollection
 const graticule = geoGraticule().step([10, 10])()
@@ -85,6 +86,7 @@ export function RouteMap({
 }) {
   const [box, ref] = useElementSize<HTMLDivElement>()
   const reduceMotion = useReducedMotion()
+  const { moneyCompact } = useMoney()
   const [hidden, setHidden] = useState<Set<SolverRouteKind>>(new Set())
   const [showRejected, setShowRejected] = useState(false)
   const [hoverId, setHoverId] = useState<string | null>(null)
@@ -584,7 +586,7 @@ export function RouteMap({
               <span className="uppercase tracking-wide">{tip.route.status}</span>
               {tip.route.metric_usd != null && (
                 <span className="desk-num">
-                  {tip.route.metric_label}: {formatUsdCompact(tip.route.metric_usd)}
+                  {tip.route.metric_label}: {moneyCompact(tip.route.metric_usd)}
                 </span>
               )}
             </div>

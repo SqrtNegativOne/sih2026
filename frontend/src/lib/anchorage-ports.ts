@@ -13,7 +13,7 @@ import type { AnchoragePortCode, PortCode } from '@/lib/types'
 // this session's own vite dev-server log as repeated "Could not Fast
 // Refresh (anchoragePortForQuotePort export is incompatible)" warnings). A
 // plain .ts file has no such boundary to break.
-const PORT_CODE_TO_ANCHORAGE_PORT: Partial<Record<PortCode, AnchoragePortCode>> = {
+export const PORT_CODE_TO_ANCHORAGE_PORT: Partial<Record<PortCode, AnchoragePortCode>> = {
   PARADIP: 'PARADIP',
   VIZAG: 'VISAKHAPATNAM',
   NEWCASTLE_AU: 'NEWCASTLE_AU',

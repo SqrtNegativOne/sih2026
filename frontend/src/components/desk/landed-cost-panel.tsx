@@ -101,7 +101,6 @@ interface Assumptions {
   demurrageUsdPerDay: string
   laytimeAllowanceDays: string
   commodity: '' | 'iron_ore' | 'coal'
-  convertToInr: boolean
 }
 
 const EMPTY_ASSUMPTIONS: Assumptions = {
@@ -109,7 +108,6 @@ const EMPTY_ASSUMPTIONS: Assumptions = {
   demurrageUsdPerDay: '',
   laytimeAllowanceDays: '',
   commodity: '',
-  convertToInr: false,
 }
 
 export function LandedCostPanel({
@@ -130,8 +128,7 @@ export function LandedCostPanel({
     assumptions.handlingRateUsdPerMt !== '' ||
     assumptions.demurrageUsdPerDay !== '' ||
     assumptions.laytimeAllowanceDays !== '' ||
-    assumptions.commodity !== '' ||
-    assumptions.convertToInr
+    assumptions.commodity !== ''
 
   function recompute() {
     if (voyageDays == null) return
@@ -147,7 +144,6 @@ export function LandedCostPanel({
       demurrage_usd_per_day: assumptions.demurrageUsdPerDay ? Number(assumptions.demurrageUsdPerDay) : undefined,
       laytime_allowance_days: assumptions.laytimeAllowanceDays ? Number(assumptions.laytimeAllowanceDays) : undefined,
       commodity: assumptions.commodity || undefined,
-      convert_to_inr: assumptions.convertToInr,
     })
       .then(setRecomputed)
       .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Recompute failed.'))
@@ -281,14 +277,12 @@ export function LandedCostPanel({
               <option value="coal">Coal</option>
             </select>
           </label>
-          <label className="flex items-center gap-1 self-end pb-0.5">
-            <input
-              type="checkbox"
-              checked={assumptions.convertToInr}
-              onChange={(e) => setAssumptions((a) => ({ ...a, convertToInr: e.target.checked }))}
-            />
-            <span className="text-caption text-muted-foreground">show ₹ (real FX)</span>
-          </label>
+          {/* The "show ₹" checkbox that used to live here is gone. Currency is
+              a desk-wide preference now (Settings → Currency & numbers), served
+              by the same real FRED USD/INR observation this panel was already
+              using -- so rupees apply to every figure on every screen instead of
+              to one panel's total. A per-panel currency control would let two
+              parts of the same page disagree about what currency they are in. */}
           <button
             type="button"
             onClick={recompute}

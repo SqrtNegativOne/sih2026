@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import { Panel } from '@/components/desk/panel'
 import { fetchBackhaul } from '@/lib/api'
-import { formatNumber, formatUsdCompact, prettyPort } from '@/lib/format'
+import { formatNumber, prettyPort } from '@/lib/format'
 import type { BackhaulOpportunityScore, PortCode, VesselInput } from '@/lib/types'
 import { cn } from '@/lib/utils'
+import { useMoney } from '@/lib/money-context'
 
 function ResultRow({ r }: { r: BackhaulOpportunityScore }) {
   const ev = r.pairing_evidence
+  const { moneyCompact } = useMoney()
   return (
     <div className="border-b border-border p-2 last:border-b-0">
       <div className="flex items-center justify-between gap-2">
@@ -19,7 +21,7 @@ function ResultRow({ r }: { r: BackhaulOpportunityScore }) {
             )}
             title="P(cargo) x today's real TC quote x window - real ballast fuel cost. Same class-level rate at every port -- see the panel hint."
           >
-            {formatUsdCompact(r.score_usd)}
+            {moneyCompact(r.score_usd)}
           </span>
         ) : (
           <span
@@ -32,7 +34,7 @@ function ResultRow({ r }: { r: BackhaulOpportunityScore }) {
       </div>
       <div className="mt-0.5 flex flex-wrap gap-1">
         <span className="rounded-sm border border-border px-1 py-px font-mono text-micro text-muted-foreground">
-          {formatNumber(r.ballast_days, 1)}d ballast · {formatUsdCompact(r.ballast_cost_usd)} fuel
+          {formatNumber(r.ballast_days, 1)}d ballast · {moneyCompact(r.ballast_cost_usd)} fuel
         </span>
         <span className="rounded-sm border border-border px-1 py-px font-mono text-micro text-muted-foreground">
           P(cargo) {formatNumber(r.cargo_probability, 2)}

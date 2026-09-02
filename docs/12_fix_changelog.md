@@ -96,6 +96,8 @@ the number/behaviour changed, not just that code was edited.
 | F-80 | Major | No Settings: every quote restarted from hardcoded literals, so the six most-retyped fields could not be defaulted | ✅ done |
 | F-81 | Minor | No Help: the glossary and the desk's data-honesty rules existed only as inline tooltips, unreachable on purpose | ✅ done |
 | F-82 | Moderate | Synthetic-data allowlist pinned an exception by line number, breaking the build on any edit above it (third occurrence) | ✅ done |
+| F-83 | Major | Rupee display was one checkbox in one panel, for an Indian PSU — and no real FX rate was reachable outside the landed-cost path | ✅ done |
+| F-84 | Minor | Settings had no ordering rationale and no answer to "what data is actually loaded?" | ✅ done |
 
 Legend: ⬜ not started · 🔶 in progress · ✅ done · ⏸️ deferred (with reason) · ➖ no action needed
 
@@ -2888,3 +2890,56 @@ Verified: all five secondary pages PASS in both themes, desk PASSES, **contrast 
 themes**, zero console errors, Settings persists across reload and reaches the quote form (set term
 to 45, reloaded, form opened at 45), Help renders 15 glossary terms, both drawers close on Escape and
 on backdrop click. `tsc` / `oxlint` / `build` / `ruff` / tripwire green.
+
+#### F-83 — currency was a checkbox in one panel; it is now a desk preference
+
+Reviewing the new Settings panel against what the product can actually do surfaced the obvious gap:
+**rupee display existed, and it was one checkbox two scrolls down the Landed Cost panel.** SAIL is an
+Indian PSU. Whether the desk speaks dollars or rupees is the most global display preference this
+product has, and it was the most buried.
+
+**The honest constraint first.** Every figure here is *computed* in USD, because that is what dry-bulk
+freight is quoted and settled in. Rupee display is therefore a presentation conversion at render
+time — there is never a second stored copy of a number. That needs a real rate available desk-wide,
+and the only honest source is the `MACRO_USD_INR` series (FRED DEXINUS) that `landed_cost` already
+read. It was reachable only inside the landed-cost path, so this adds:
+
+- `opt.landed_cost.usd_inr_rate_as_of()` — a public read of the same series, returning `None` rather
+  than a fallback when no real observation covers the date.
+- `GET /fx` — serves that rate with its provenance and observation date, or `inr_per_usd: null` with
+  a stated reason.
+
+**This is the first backend change since the design pass began**, and it is deliberate: a global
+currency preference cannot be built honestly on the frontend alone, and the alternative — a hardcoded
+rate in the client — is exactly what this codebase forbids. The failure mode is built in: if `/fx`
+has no real observation, the ₹ option is *disabled* in Settings with the reason stated, and every
+figure stays in dollars regardless of the preference.
+
+**Indian formatting, not a currency swap.** `groupIndian` implements last-three-then-pairs grouping
+(32917550 → 3,29,17,550) and `formatInrCompact` uses lakh/crore. Verified live: the decision headline
+reads `$20,698/day` in USD and `₹19,81,006/day` in INR — note the grouping, not ₹1,981,006. Rendering
+international grouping under a ₹ symbol would be a currency swap wearing local clothes.
+
+Applied across all **56 money call sites in 9 components** through a `MoneyProvider` context and a
+`useMoney()` hook, so no part of a page can disagree with another about what currency it is in. The
+per-panel checkbox is gone for that reason.
+
+Two things caught while doing it, both from the build's stricter typecheck rather than `tsc --noEmit`:
+a hook placed inside JSX props, and a hook placed in `ariaSummary` — a *plain function*, where a hook
+is illegal. That one now takes the formatter as an argument.
+
+#### F-84 — Settings restructured, and a System & data section
+
+Reordered to **Currency & numbers · Appearance · New quote defaults · System & data · Storage**, with
+currency first because it changes every figure on every screen.
+
+The System & data section states what the desk is actually running on: market data through
+2026-08-20, 16 ports priced, **5 of 16 satellite-covered**, and the live USD/INR rate with its
+observation date. That last set of facts previously had no home — a reader could only infer satellite
+coverage from which panels happened to render. "How much of this is real?" deserves a list, not an
+inference.
+
+Verified: all five secondary pages PASS in both themes, desk PASSES, **contrast 0 failures in both
+themes**, zero console errors, currency switches live across the whole desk with correct Indian
+grouping, `/fx` returns a real observation (₹95.71, 2026-08-20). `ruff check .` clean, `tsc` clean,
+build clean, tripwire green.

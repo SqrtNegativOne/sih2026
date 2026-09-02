@@ -419,3 +419,21 @@ export async function fetchFracture(req: {
   })
   return parseOrThrow<FractureResponse>(res)
 }
+
+// ---------------------------------------------------------------------------
+// FX -- the real USD/INR rate, for desk-wide rupee display.
+// ---------------------------------------------------------------------------
+
+export interface FxRate {
+  /** Null when no real observation covers the date -- the desk then stays in
+   *  dollars rather than inventing a conversion. */
+  inr_per_usd: number | null
+  as_of: string | null
+  provenance: string | null
+  reason: string
+}
+
+export async function fetchFxRate(): Promise<FxRate> {
+  const res = await fetch(`${BASE_URL}/fx`)
+  return parseOrThrow<FxRate>(res)
+}

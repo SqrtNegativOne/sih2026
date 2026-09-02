@@ -2,7 +2,8 @@ import { Panel } from '@/components/desk/panel'
 import { ExplanationBlock } from '@/components/desk/explanation'
 import { Grade, scoreToGrade } from '@/components/desk/grade'
 import type { Explanation, FleetConfiguration, FleetMixFrontier } from '@/lib/types'
-import { formatNumber, formatUsdCompact } from '@/lib/format'
+import { formatNumber } from '@/lib/format'
+import { useMoney } from '@/lib/money-context'
 
 function Row({
   c,
@@ -14,6 +15,7 @@ function Row({
   rejected?: boolean
 }) {
   const usdPerMt = requirementDwt > 0 ? c.cost_p50_usd / requirementDwt : null
+  const { moneyCompact } = useMoney()
   return (
     <tr className={rejected ? 'opacity-55' : undefined}>
       <td className="font-semibold">{c.vessel_class}</td>
@@ -26,13 +28,13 @@ function Row({
         {rejected ? '—' : c.voyage_days_per_vessel.toFixed(1)}
       </td>
       <td className="desk-num text-right font-semibold">
-        {rejected ? '—' : formatUsdCompact(c.cost_p50_usd)}
+        {rejected ? '—' : moneyCompact(c.cost_p50_usd)}
       </td>
       <td className="desk-num text-right">
         {rejected || usdPerMt == null ? '—' : `$${usdPerMt.toFixed(2)}`}
       </td>
       <td className="desk-num text-right text-caption text-muted-foreground">
-        {rejected ? '—' : `${formatUsdCompact(c.cost_p10_usd)}–${formatUsdCompact(c.cost_p90_usd)}`}
+        {rejected ? '—' : `${moneyCompact(c.cost_p10_usd)}–${moneyCompact(c.cost_p90_usd)}`}
       </td>
       <td className="text-center">
         {rejected ? (

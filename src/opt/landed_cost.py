@@ -99,6 +99,22 @@ class _MacroPoint:
     observation_date: date
 
 
+def usd_inr_rate_as_of(as_of: date) -> tuple[float, date] | None:
+    """Real USD/INR rate on or before ``as_of``, or ``None``.
+
+    A public read of the same ``MACRO_USD_INR`` series this module already uses
+    when converting a landed cost to rupees. Exposed because rupee display is a
+    desk-wide preference rather than a landed-cost-only option, and the
+    alternative -- letting the frontend carry its own rate -- would mean a
+    hardcoded number standing in for a real observation.
+
+    Returns ``None`` rather than a fallback when no real observation covers the
+    date, so a caller shows dollars instead of inventing a conversion.
+    """
+    point = _macro_value_as_of("MACRO_USD_INR", as_of)
+    return None if point is None else (float(point.value), point.observation_date)
+
+
 def _macro_value_as_of(series_id: str, as_of: date, macro_long: pl.DataFrame | None = None) -> _MacroPoint | None:
     """Real value of ``series_id`` as of ``as_of``, forward-filled to the
     most recent real observation on or before that date -- the same

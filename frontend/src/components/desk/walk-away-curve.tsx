@@ -1,9 +1,10 @@
 import { motion, useReducedMotion } from 'motion/react'
 import { Panel, PanelEmpty } from '@/components/desk/panel'
 import { useElementSize } from '@/hooks/use-element-size'
-import { addDays, formatShortDate, formatUsd } from '@/lib/format'
+import { addDays, formatShortDate } from '@/lib/format'
 import { drawPath, transition } from '@/lib/motion'
 import type { QuoteResult } from '@/lib/types'
+import { useMoney } from '@/lib/money-context'
 
 const H = 168
 const PAD = { t: 14, r: 12, b: 20, l: 52 }
@@ -32,6 +33,7 @@ const PAD = { t: 14, r: 12, b: 20, l: 52 }
  */
 export function WalkAwayCurve({ quote }: { quote: QuoteResult }) {
   const [box, ref] = useElementSize<HTMLDivElement>()
+  const { money } = useMoney()
   const reduced = useReducedMotion()
   const stopping = quote.full_recommendation.stopping_result
 
@@ -140,7 +142,7 @@ export function WalkAwayCurve({ quote }: { quote: QuoteResult }) {
     >
       <div className="flex h-full flex-col">
         <div ref={ref} className="w-full px-2 pt-2">
-          <svg width={w} height={H} className="block" role="img" aria-label={ariaSummary(today, decisionLine, isAbove, troughValue, troughDate)}>
+          <svg width={w} height={H} className="block" role="img" aria-label={ariaSummary(money, today, decisionLine, isAbove, troughValue, troughDate)}>
             {/* Gap band: how far today's rate still has to fall. */}
             {isAbove && (
               // Opacity is the animated property AND the final look, so it has
@@ -200,16 +202,16 @@ export function WalkAwayCurve({ quote }: { quote: QuoteResult }) {
                 textAnchor={troughAnchor}
                 className="fill-muted-foreground text-micro"
               >
-                lowest {formatUsd(troughValue)}
+                lowest {money(troughValue)}
               </text>
             </motion.g>
 
             {/* Y bounds and the horizon tick. */}
             <text x={PAD.l - 6} y={PAD.t + 4} textAnchor="end" className="fill-muted-foreground text-micro">
-              {formatUsd(Math.round(yMax / 100) * 100)}
+              {money(Math.round(yMax / 100) * 100)}
             </text>
             <text x={PAD.l - 6} y={H - PAD.b} textAnchor="end" className="fill-muted-foreground text-micro">
-              {formatUsd(Math.round(yMin / 100) * 100)}
+              {money(Math.round(yMin / 100) * 100)}
             </text>
             <text x={PAD.l} y={H - 4} className="fill-muted-foreground text-micro">
               today
@@ -223,7 +225,7 @@ export function WalkAwayCurve({ quote }: { quote: QuoteResult }) {
         <div className="mt-auto space-y-1 border-t border-border px-2 py-2">
           <div className="stat-row">
             <span className="stat-label">Walk-away line today</span>
-            <span className="stat-value font-semibold text-go">{formatUsd(decisionLine)}</span>
+            <span className="stat-value font-semibold text-go">{money(decisionLine)}</span>
           </div>
           {/* When the weather buffer moves the line, say so and by how much --
               otherwise the figure above silently disagrees with the curve's
@@ -234,7 +236,7 @@ export function WalkAwayCurve({ quote }: { quote: QuoteResult }) {
                 of which weather buffer {weatherLift > 0 ? 'raises it by' : 'lowers it by'}
               </span>
               <span className="stat-value text-caption text-muted-foreground">
-                {formatUsd(Math.abs(weatherLift))}
+                {money(Math.abs(weatherLift))}
               </span>
             </div>
           )}
@@ -243,26 +245,26 @@ export function WalkAwayCurve({ quote }: { quote: QuoteResult }) {
               {isAbove ? "Today's rate is above it by" : "Today's rate is below it by"}
             </span>
             <span className={`stat-value font-semibold ${isAbove ? 'text-wait' : 'text-go'}`}>
-              {formatUsd(Math.abs(gap))}
+              {money(Math.abs(gap))}
             </span>
           </div>
           <p className="pt-1 text-caption leading-relaxed text-muted-foreground">
             {isAbove ? (
               <>
-                At {formatUsd(today)} today you are paying more than the model thinks this charter is
+                At {money(today)} today you are paying more than the model thinks this charter is
                 worth locking at, so it says <strong className="text-foreground">wait</strong>. The line
-                is lowest around {troughDate} at {formatUsd(troughValue)}.
+                is lowest around {troughDate} at {money(troughValue)}.
               </>
             ) : (
               <>
-                At {formatUsd(today)} today you are inside the line, so it says{' '}
+                At {money(today)} today you are inside the line, so it says{' '}
                 <strong className="text-foreground">lock</strong>. Waiting is not expected to beat this.
               </>
             )}{' '}
             {hasWeatherLift && (
               <>
                 The green curve is the raw model boundary; the weather buffer moves today&apos;s
-                decision line to {formatUsd(decisionLine)}, which is the figure the verdict uses.{' '}
+                decision line to {money(decisionLine)}, which is the figure the verdict uses.{' '}
               </>
             )}
             The final point is where the horizon ends, not a forecast — with no time left to wait, the
@@ -276,6 +278,7 @@ export function WalkAwayCurve({ quote }: { quote: QuoteResult }) {
 
 /** Charts need a text equivalent; this is what a screen reader is told. */
 function ariaSummary(
+  money: (usd: number) => string,
   today: number,
   decisionLine: number,
   isAbove: boolean,
@@ -283,8 +286,8 @@ function ariaSummary(
   troughDate: string,
 ): string {
   return (
-    `Walk-away line. Today's rate ${formatUsd(today)} is ` +
-    `${isAbove ? 'above' : 'at or below'} today's walk-away line of ${formatUsd(decisionLine)}. ` +
-    `The line reaches its lowest point of ${formatUsd(trough)} around ${troughDate}.`
+    `Walk-away line. Today's rate ${money(today)} is ` +
+    `${isAbove ? 'above' : 'at or below'} today's walk-away line of ${money(decisionLine)}. ` +
+    `The line reaches its lowest point of ${money(trough)} around ${troughDate}.`
   )
 }

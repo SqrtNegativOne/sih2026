@@ -1,9 +1,10 @@
 import { motion, useReducedMotion } from 'motion/react'
 import { Figure } from '@/components/desk/figure'
-import { addDays, formatShortDate, formatUsd, prettyPort } from '@/lib/format'
+import { addDays, formatShortDate, prettyPort } from '@/lib/format'
 import { transition } from '@/lib/motion'
 import type { PortListing, QuoteResult } from '@/lib/types'
 import { cn } from '@/lib/utils'
+import { useMoney } from '@/lib/money-context'
 
 /**
  * The answer, as a sentence, above everything else.
@@ -27,6 +28,7 @@ export function DecisionHeadline({
   ports: PortListing[]
 }) {
   const reduced = useReducedMotion()
+  const { money } = useMoney()
   const isLock = quote.lock_action === 'LOCK'
   const portName = (c: string) => prettyPort(ports.find((p) => p.code === c)?.name ?? c)
 
@@ -69,13 +71,13 @@ export function DecisionHeadline({
             {isLock ? (
               <>
                 <span className="font-bold text-go">Lock this charter now.</span> Today&apos;s{' '}
-                {formatUsd(quote.today_quote_usd_per_day)}/day is inside the walk-away line, and
+                {money(quote.today_quote_usd_per_day)}/day is inside the walk-away line, and
                 waiting is not expected to beat it.
               </>
             ) : (
               <>
                 <span className="font-bold text-wait">Wait before fixing.</span> Today&apos;s{' '}
-                {formatUsd(quote.today_quote_usd_per_day)}/day is {formatUsd(gap)}/day above the
+                {money(quote.today_quote_usd_per_day)}/day is {money(gap)}/day above the
                 walk-away line
                 {hasWindow ? (
                   <>
