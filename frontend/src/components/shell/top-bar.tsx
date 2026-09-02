@@ -1,4 +1,4 @@
-import { Bell, CircleHelp, Search, Settings, Ship } from 'lucide-react'
+import { CircleHelp, Settings, Ship } from 'lucide-react'
 import { ThemeToggle } from '@/components/shell/theme-toggle'
 
 const SECTIONS = [
@@ -11,13 +11,40 @@ const SECTIONS = [
 
 interface TopBarProps {
   onNewQuote: () => void
+  onOpenSettings: () => void
+  onOpenHelp: () => void
+}
+
+/** A live icon control on the navy bar. Every one of these does something —
+ *  there is no disabled variant, because the top bar no longer carries any
+ *  control that is not implemented. */
+function IconButton({
+  label,
+  onClick,
+  icon: Icon,
+}: {
+  label: string
+  onClick: () => void
+  icon: typeof Settings
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={label}
+      aria-label={label}
+      className="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-sm text-navbar-muted transition-colors hover:bg-white/10 hover:text-navbar-foreground focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white"
+    >
+      <Icon className="h-4 w-4" aria-hidden="true" />
+    </button>
+  )
 }
 
 function scrollTo(id: string) {
   document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
-export function TopBar({ onNewQuote }: TopBarProps) {
+export function TopBar({ onNewQuote, onOpenSettings, onOpenHelp }: TopBarProps) {
   return (
     // relative z-50: same fix as icon-rail.tsx -- without an explicit
     // z-index this static header sat behind the New Quote drawer's `fixed
@@ -53,31 +80,30 @@ export function TopBar({ onNewQuote }: TopBarProps) {
       </div>
 
       <div className="flex items-center gap-2">
-        {/* F-35: search/notifications/settings have no backend behind them
-         * at all -- rendering them as live-looking controls that silently
-         * do nothing on click read as broken, not "coming soon". Disabled
-         * with an honest tooltip, the same treatment the icon rail already
-         * gives TC In/TC Out for the identical reason. */}
-        {/* Measured at a 1:1 contrast ratio before this change: a half-opacity
-            muted foreground on a half-opacity white pill, over navy, came out
-            genuinely unreadable rather than merely quiet. A disabled control
-            is exempt from the AA floor, but "not implemented" is the whole
-            point of showing it — if the label cannot be read, the control just
-            looks broken. Now it sits on the navbar's own tone with its real
-            muted colour. */}
-        <div className="relative hidden sm:block" title="Search — not implemented">
-          <Search
-            aria-hidden="true"
-            className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-navbar-muted"
-          />
-          <input
-            type="text"
-            disabled
-            aria-label="Search — not implemented"
-            placeholder="Search — not implemented"
-            className="w-44 cursor-not-allowed rounded-sm border border-white/15 bg-white/5 py-1 pl-7 pr-2 text-lead text-navbar-muted placeholder:text-navbar-muted focus:outline-none"
-          />
-        </div>
+        {/*
+          F-35 disabled Search / Notifications / Settings / Help with honest
+          "not implemented" tooltips, which was the right call at the time: a
+          live-looking control that silently does nothing reads as broken.
+
+          But a control that announces its own absence is still a control that
+          announces its own absence, and four of them across the top bar make a
+          finished product look like a prototype. So each one is now resolved
+          rather than labelled:
+
+            Settings  -> built (lib/settings + SettingsDrawer)
+            Help      -> built (HelpDrawer: what the desk does, the glossary,
+                         and how it treats its own numbers)
+            Search    -> REMOVED. There is no cross-entity search to run: ports
+                         are one click away on Port Twin, and a box that only
+                         filters a 16-row list is furniture.
+            Bell      -> REMOVED. Alerts need somewhere to persist and someone
+                         to notify; both arrive with the account system, and
+                         until then the icon promises a capability that does
+                         not exist anywhere in the stack.
+
+          Nothing in the top bar says "not implemented" any more, because
+          nothing in it is unimplemented.
+        */}
         <button
           type="button"
           onClick={onNewQuote}
@@ -92,30 +118,8 @@ export function TopBar({ onNewQuote }: TopBarProps) {
           New Quote
         </button>
         <ThemeToggle onDark />
-        <button
-          type="button"
-          disabled
-          title="Notifications — not implemented"
-          className="cursor-not-allowed rounded p-1 text-navbar-muted/40"
-        >
-          <Bell className="h-4 w-4" />
-        </button>
-        <button
-          type="button"
-          disabled
-          title="Settings — not implemented"
-          className="cursor-not-allowed rounded p-1 text-navbar-muted/40"
-        >
-          <Settings className="h-4 w-4" />
-        </button>
-        <button
-          type="button"
-          disabled
-          title="Help — not implemented"
-          className="cursor-not-allowed rounded p-1 text-navbar-muted/40"
-        >
-          <CircleHelp className="h-4 w-4" />
-        </button>
+        <IconButton label="Settings" onClick={onOpenSettings} icon={Settings} />
+        <IconButton label="Help" onClick={onOpenHelp} icon={CircleHelp} />
       </div>
     </header>
   )

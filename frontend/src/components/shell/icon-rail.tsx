@@ -7,8 +7,6 @@ import {
   Gauge,
   Globe,
   LayoutGrid,
-  LogIn,
-  LogOut,
   type LucideIcon,
   PieChart,
   ScrollText,
@@ -49,8 +47,16 @@ const ITEMS: RailItem[] = [
   { icon: Zap, label: 'Fragility', view: 'fragility' },
   { icon: ScrollText, label: 'Ledger', view: 'ledger' },
   { icon: PieChart, label: 'Portfolio', view: 'portfolio' },
-  { icon: LogIn, label: 'TC In', notImplemented: true },
-  { icon: LogOut, label: 'TC Out', notImplemented: true },
+  // TC In / TC Out were listed here as visibly disabled "not implemented"
+  // items (P7). That was the honest treatment for a real chartering concept
+  // this system does not implement -- but two greyed rows at the bottom of
+  // the rail read, to anyone who has not read the tooltip, as a product with
+  // missing pieces rather than one with a deliberate scope. Time-charter
+  // contract book-keeping is genuinely out of scope: everything here is
+  // voyage and spot decision support, and there is no backend, data source or
+  // model behind TC contract management to expose. A capability that is not
+  // planned should not occupy permanent screen space; if it is ever built it
+  // can be added back in one line.
 ]
 
 function scrollTo(id?: string) {

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import { Combobox, type ComboOption } from '@/components/ui/combobox'
 import { prettyPort } from '@/lib/format'
+import type { DeskSettings } from '@/lib/settings'
 import type { PortListing, QuoteRequest, VesselClass, VesselInput } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
@@ -14,6 +15,9 @@ interface QuoteDrawerProps {
   latestDate: string | null
   submitting: boolean
   onSubmit: (req: QuoteRequest) => void
+  /** Starting values for this form, from Settings. Never used to compute a
+   *  quote -- only to prefill fields the user then edits and submits. */
+  settings: DeskSettings
 }
 
 const VESSEL_CLASSES: VesselClass[] = ['Capesize', 'Panamax', 'Supramax', 'Handysize']
@@ -46,9 +50,26 @@ interface VesselDraft {
   ballastFuel: string
 }
 
+/**
+ * Monotonic source of React list keys for vessel rows.
+ *
+ * This used to be `Date.now()` plus a PRNG suffix, which needed a reviewed
+ * exception in tests/test_no_synthetic_frontend_data.py -- a tripwire that
+ * fails the build on any hash- or PRNG-derived value under frontend/src. The
+ * exception was correct (a DOM key is not a data value) but it was pinned BY
+ * LINE NUMBER, so any edit above this point broke the build twice over: once
+ * on the offender scan, once on the stale-entry scan. It fired three times.
+ *
+ * A counter is also simply the better key. Nothing here needs randomness --
+ * it needs uniqueness within one mounted list, which an incrementing integer
+ * guarantees outright, where two PRNG draws only make a collision unlikely.
+ */
+let vesselKeySeq = 0
+
 function newVesselDraft(n: number, availableFrom: string): VesselDraft {
+  vesselKeySeq += 1
   return {
-    key: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    key: `vessel-${vesselKeySeq}`,
     vesselId: `SAIL_${n}`,
     vesselClass: 'Panamax',
     port: '',
@@ -87,6 +108,7 @@ export function QuoteDrawer({
   latestDate,
   submitting,
   onSubmit,
+  settings,
 }: QuoteDrawerProps) {
   const addDaysIso = (iso: string, days: number) =>
     new Date(new Date(`${iso}T00:00:00Z`).getTime() + days * 86_400_000)
@@ -107,15 +129,27 @@ export function QuoteDrawer({
   const fallback = useRef(latestDate ?? new Date().toISOString().slice(0, 10)).current
   const anchorDate = latestDate ?? fallback
 
-  const [cargoVolume, setCargoVolume] = useState('75000')
-  const [originPort, setOriginPort] = useState('')
-  const [destPort, setDestPort] = useState('')
+  // Frozen at mount, like `fallback` above and for the same reason: the F-02
+  // resync below compares a field against "the offset it was seeded with", so
+  // that offset must not move if Settings changes while the drawer is open.
+  const lead = useRef(settings.laycanLeadDays).current
+  const width = useRef(settings.laycanWindowDays).current
+
+  // Seeded from Settings rather than from literals. These are STARTING values
+  // for a form the user then edits and submits -- the quote is always computed
+  // from what was actually submitted, never from a stored preference, so a
+  // default can shorten the typing without ever changing a result.
+  const [cargoVolume, setCargoVolume] = useState(settings.defaultCargoVolumeDwt)
+  const [originPort, setOriginPort] = useState(settings.defaultOriginPort)
+  const [destPort, setDestPort] = useState(settings.defaultDestPort)
   const [asOf, setAsOf] = useState(fallback)
-  const [laycanStart, setLaycanStart] = useState(addDaysIso(fallback, 14))
-  const [laycanEnd, setLaycanEnd] = useState(addDaysIso(fallback, 21))
-  const [contractTermDays, setContractTermDays] = useState('30')
-  const [commodity, setCommodity] = useState('Thermal Coal')
-  const [riskTolerance, setRiskTolerance] = useState('0')
+  const [laycanStart, setLaycanStart] = useState(addDaysIso(fallback, lead))
+  const [laycanEnd, setLaycanEnd] = useState(
+    addDaysIso(fallback, lead + width),
+  )
+  const [contractTermDays, setContractTermDays] = useState(settings.defaultContractTermDays)
+  const [commodity, setCommodity] = useState(settings.defaultCommodity)
+  const [riskTolerance, setRiskTolerance] = useState(settings.defaultRiskTolerance)
   const [vessels, setVessels] = useState<VesselDraft[]>([])
   const [revenueUsd, setRevenueUsd] = useState('')
 
@@ -135,8 +169,12 @@ export function QuoteDrawer({
     if (resynced.current || !latestDate) return
     resynced.current = true
     setAsOf((prev) => (prev === fallback ? latestDate : prev))
-    setLaycanStart((prev) => (prev === addDaysIso(fallback, 14) ? addDaysIso(latestDate, 14) : prev))
-    setLaycanEnd((prev) => (prev === addDaysIso(fallback, 21) ? addDaysIso(latestDate, 21) : prev))
+    setLaycanStart((prev) =>
+      prev === addDaysIso(fallback, lead) ? addDaysIso(latestDate, lead) : prev,
+    )
+    setLaycanEnd((prev) =>
+      prev === addDaysIso(fallback, lead + width) ? addDaysIso(latestDate, lead + width) : prev,
+    )
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [latestDate])
 

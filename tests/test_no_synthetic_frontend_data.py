@@ -45,11 +45,19 @@ _SUSPECT_PATTERNS: Final[tuple[re.Pattern[str], ...]] = tuple(
 
 #: (relative path, line number, reason) -- reviewed exceptions, not a blanket
 #: file exemption. Any new match anywhere else fails the test.
-_ALLOWLIST: Final[frozenset[tuple[str, int]]] = frozenset(
-    {
-        ("components/desk/quote-drawer.tsx", 51),  # React list key, not a data value
-    }
-)
+#:
+#: Deliberately EMPTY. The single entry this ever held was the PRNG-derived
+#: React list key in quote-drawer's newVesselDraft(); that is now a monotonic
+#: counter, which is both a better key (uniqueness guaranteed rather than
+#: merely likely) and no longer a match for any suspect pattern.
+#:
+#: Keep it empty if you can. Pinning an exception by LINE NUMBER means any
+#: edit above it breaks the build on BOTH tests below -- the offender scan and
+#: the stale-entry scan -- for a reason that has nothing to do with synthetic
+#: data. That happened three separate times while the frontend was being
+#: reworked. If a genuine non-data use ever needs an exception, prefer
+#: removing the pattern (as here) over recording its coordinates.
+_ALLOWLIST: Final[frozenset[tuple[str, int]]] = frozenset()
 
 
 def _frontend_source_files() -> list[Path]:

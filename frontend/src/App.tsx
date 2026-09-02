@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { QuoteDrawer } from '@/components/desk/quote-drawer'
+import { HelpDrawer } from '@/components/shell/help-drawer'
 import { IconRail } from '@/components/shell/icon-rail'
+import { SettingsDrawer } from '@/components/shell/settings-drawer'
 import { TopBar } from '@/components/shell/top-bar'
+import { loadSettings, type DeskSettings } from '@/lib/settings'
 import { ApiRequestError, fetchChokepoints, fetchMeta, fetchPorts, streamQuote } from '@/lib/api'
 import type {
   ChokepointReference,
@@ -59,6 +62,13 @@ function App() {
   // its own explicit "New Charter Quote" button for a user who wants to
   // open it.
   const [drawerOpen, setDrawerOpen] = useState(false)
+  // Settings and Help replace two of the four "not implemented" controls the
+  // top bar used to carry. Both default closed, for the same F-53 reason the
+  // quote drawer does: a modal that mounts open puts a click-eating backdrop
+  // over the whole app before the user has done anything.
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
+  const [settings, setSettings] = useState<DeskSettings>(() => loadSettings())
   const runId = useRef(0)
 
   useEffect(() => {
@@ -110,7 +120,11 @@ function App() {
       <a href="#desk-main" className="skip-link">
         Skip to the desk
       </a>
-      <TopBar onNewQuote={() => setDrawerOpen(true)} />
+      <TopBar
+        onNewQuote={() => setDrawerOpen(true)}
+        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenHelp={() => setHelpOpen(true)}
+      />
       <div className="flex min-h-0 flex-1">
         <IconRail active={VIEW_LABEL[view]} onSelectView={setView} />
         {/* F-52: the icon-rail/top-bar z-50 fix (F-48) only restored the
@@ -164,7 +178,16 @@ function App() {
         latestDate={latestDate}
         submitting={solving}
         onSubmit={handleSubmit}
+        settings={settings}
       />
+      <SettingsDrawer
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        ports={ports}
+        settings={settings}
+        onChange={setSettings}
+      />
+      <HelpDrawer open={helpOpen} onClose={() => setHelpOpen(false)} />
     </div>
   )
 }
