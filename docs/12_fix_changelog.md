@@ -2731,3 +2731,62 @@ could announce twice.
 Verified: desk PASSES at 1280 / 1440 / 1920 in both themes, all five secondary pages PASS in both,
 zero console errors across every page and action, contrast back to only the two disabled rail items.
 Bundle 759 KB / 248 KB gzip against the 714 KB / 233 KB baseline — +15 KB gzip, no new dependencies.
+
+#### F-76 — the ⓘ buttons did nothing (a real tooltip)
+
+Reported as "all the info buttons are non-working", and that was accurate in every way that matters.
+They carried a native `title` attribute, which waits about a second before appearing, renders in OS
+chrome unrelated to the product, never opens on keyboard focus, and never opens at all on touch. The
+desk's best explanatory writing lived behind them — every panel's one-line "what question does this
+answer", every column caveat, every provenance definition — so in practice the icons read as
+decorative and none of it was reachable.
+
+`components/ui/tooltip.tsx` replaces it: opens immediately on hover **and on focus**, dismissable
+with Escape, styled in the desk's own surface tokens, and portaled to `<body>` with fixed coordinates
+so it escapes the `overflow: auto` on every Panel body — the same trap, and the same fix, the
+Combobox dropdown already needed. Applied to the panel ⓘ, the glossary terms and the provenance
+chips. Verified live: **22 anchors**, hover opens a tooltip with real content, leaving closes it, and
+keyboard focus opens it too.
+
+#### F-77 — the voyage timeline, made worth looking at
+
+The first version was a bar with a legend underneath, which is a chart of a table. Rebuilt so the
+track carries its own meaning: each phase now has an icon and its own inline label and day count
+where it is wide enough, so the common case needs no legend and no pointer at all. Hovering previews
+a phase and clicking pins it — pinning matters because the detail text is long enough to want to read
+without holding a pointer still, and it is the only way to reach it on a touch screen. The legend is
+replaced by a single detail area that swaps with the active phase.
+
+With nothing selected that area answers the question the numbers never did: **"45% of this voyage is
+spent moving — 18.3d at sea · 8.2d queueing."** Eight days of this voyage are a berth queue, which
+was previously two unrelated cells in a different table.
+
+One real bug caught in the process: the inline labels used `text-background`, which is keyed to the
+page and therefore fails on a mid-tone fill in *both* themes at once — measured 2.57:1 on dark and
+1.67:1 on light. Each tone now carries its own `onBar` foreground token, reusing the fill/foreground
+pairs already proven elsewhere on the desk.
+
+#### F-78 — Portfolio: 100% at every setting, and why that is a finding
+
+Reported as "all showing 100 score, derive some information from it". The optimiser was not broken:
+probing the API directly shows it returns **7-8 distinct mixes** as soon as the inputs move. What is
+wrong is that *the page's own defaults sit in the degenerate corner* — at a spot sourcing rate of
+0.05/day a stockout takes ~20 days to resolve, and at a $250,000 stockout cost that makes any spot
+share ruinous before risk aversion is even considered, so 100% period TC wins at every k.
+
+Two changes, both making the screen informative rather than making the numbers prettier:
+
+- **A spot comparison on the recommended mix.** Both figures were already on the page in a different
+  panel as unlinked rows, so a reader had to subtract them by hand and then judge the result. Stated
+  as a trade it is the single most useful sentence this page can produce: *"You pay $90.4K more in
+  expectation and remove $734.5K of cost swing (one standard deviation). That is 0.12 paid per dollar
+  of swing removed."* It stays informative exactly when the frontier collapses, which is when the
+  rest of the screen stops saying anything.
+- **The degenerate-frontier message now names the dominant channel and the lever.** "100% period TC
+  wins at every risk setting" plus which two inputs price spot exposure and why 0.05/day is what
+  makes spot expensive. A flat frontier is a real finding — one channel is cheaper *after* its risk
+  penalty than any blend — and it now reads as one instead of as a broken chart.
+
+Verified: desk PASSES at 1280 / 1440 / 1920 in both themes, all five secondary pages PASS, contrast
+clean in both themes (only the two WCAG-exempt disabled rail items), zero console errors across every
+page and action, tripwire green, bundle 765 KB / 250 KB gzip.

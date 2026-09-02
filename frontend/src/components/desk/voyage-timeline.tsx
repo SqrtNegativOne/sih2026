@@ -1,5 +1,6 @@
+import { Anchor, Clock, Ship } from 'lucide-react'
 import { motion, useReducedMotion } from 'motion/react'
-import { useState } from 'react'
+import { useState, type ComponentType } from 'react'
 import { Panel, PanelEmpty } from '@/components/desk/panel'
 import { Term } from '@/components/desk/term'
 import { addDays, formatShortDate, prettyPort } from '@/lib/format'
@@ -25,31 +26,47 @@ import { cn } from '@/lib/utils'
  * Honesty, since this composes figures rather than reading one off:
  *  - Every segment length is a real field. Nothing is padded to look tidy.
  *  - The end date is DERIVED by summing them, so it is labelled "projected" and
- *    the panel says which components it is a sum of. It is not a commitment,
- *    and it is not presented as one.
+ *    the panel says which components it is a sum of. It is not a commitment.
  *  - Port waits are expected values from the same data the Port Constraints
- *    panel shows, carrying that panel's own caveats.
+ *    panel shows, and carry that panel's caveats.
  */
 
 interface Segment {
   key: string
   label: string
-  /** Days from `as_of`. */
+  short: string
   start: number
   days: number
-  fill: string
+  tone: 'idle' | 'wait' | 'sea'
+  icon: ComponentType<{ className?: string }>
   detail: string
 }
 
-export function VoyageTimeline({
-  quote,
-  ports,
-}: {
-  quote: QuoteResult
-  ports: PortListing[]
-}) {
+/**
+ * Each tone carries its bar fill, the label colour that sits ON that fill, and
+ * the text colour for the same tone on the panel's own background.
+ *
+ * `onBar` is a paired token, not `text-background`: the fills here are
+ * mid-tone, so a label keyed to the page background fails in both themes at
+ * once -- measured 2.57:1 on dark and 1.67:1 on light before this. The wait and
+ * sea rows reuse the same fill/foreground pairs already proven elsewhere on the
+ * desk, and the idle row uses a light enough tint that the normal foreground
+ * reads on it.
+ */
+const TONE: Record<Segment['tone'], { bar: string; onBar: string; text: string }> = {
+  idle: { bar: 'bg-muted-foreground/25', onBar: 'text-foreground', text: 'text-muted-foreground' },
+  wait: { bar: 'bg-wait', onBar: 'text-wait-fg', text: 'text-wait-on-soft' },
+  sea: { bar: 'bg-primary', onBar: 'text-primary-foreground', text: 'text-primary' },
+}
+
+export function VoyageTimeline({ quote, ports }: { quote: QuoteResult; ports: PortListing[] }) {
   const reduced = useReducedMotion()
+  // Click to pin a segment open; hover previews it. Pinning matters because
+  // the detail text is long enough to want to read without holding a pointer
+  // still, and it is the only way to reach it on a touch screen.
+  const [pinned, setPinned] = useState<string | null>(null)
   const [hover, setHover] = useState<string | null>(null)
+  const active = hover ?? pinned
 
   const portName = (code: string) =>
     prettyPort(ports.find((p) => p.code === code)?.name ?? code)
@@ -71,10 +88,9 @@ export function VoyageTimeline({
   const dischargeWait = quote.dest_port_check.expected_wait_days
   const weather = quote.transit_buffer?.expected_delay_days ?? 0
 
-  // `assumed_transit_days` is genuinely nullable -- the backend returns null
-  // when it has no real transit estimate for the route. Without it there is no
-  // voyage to lay on an axis, and inventing a duration to keep the chart
-  // looking complete is exactly what this codebase forbids. Say so instead.
+  // Genuinely nullable: the backend returns null when it has no real transit
+  // estimate. Inventing a duration to keep the chart looking complete is
+  // exactly what this codebase forbids.
   const transit = quote.assumed_transit_days
   if (transit == null) {
     return (
@@ -87,58 +103,66 @@ export function VoyageTimeline({
     )
   }
 
-  // The vessel can only start loading once it is inside the laycan window, so
-  // the voyage clock starts at laycan_start -- not at "now" and not at the end
-  // of the lock window.
-  const loadStart = laycanStart
-  const sail = loadStart + loadWait
+  const sail = laycanStart + loadWait
   const arrive = sail + transit + weather
   const free = arrive + dischargeWait
-  const horizon = Math.max(free, laycanEnd) * 1.02
+  const horizon = Math.max(free, laycanEnd) || 1
 
   const lockStart = quote.optimal_entry_window_start_day
   const lockEnd = quote.optimal_entry_window_end_day
-  const hasLockWindow = lockStart != null && lockEnd != null
+  const hasLock = lockStart != null && lockEnd != null
 
   const segments: Segment[] = [
     {
-      key: 'wait-laycan',
+      key: 'idle',
       label: 'Before loading opens',
+      short: 'Pre-laycan',
       start: 0,
       days: laycanStart,
-      fill: 'var(--muted-foreground)',
-      detail: `${laycanStart} days from today until the laycan window opens on ${formatShortDate(addDays(quote.as_of, laycanStart))}.`,
+      tone: 'idle' as const,
+      icon: Clock,
+      detail: `${laycanStart} days from today until the laycan window opens on ${formatShortDate(addDays(quote.as_of, laycanStart))}. Nothing is committed during this time — it is the gap between deciding and being able to load.`,
     },
     {
-      key: 'load-wait',
-      label: 'Waiting to berth',
-      start: loadStart,
+      key: 'load',
+      label: `Waiting to berth at ${portName(quote.origin_port)}`,
+      short: 'Load queue',
+      start: laycanStart,
       days: loadWait,
-      fill: 'var(--wait)',
-      detail: `${loadWait.toFixed(1)} days expected queueing at ${portName(quote.origin_port)} before loading can start. Expected value from the same port data the Port Constraints panel shows.`,
+      tone: 'wait' as const,
+      icon: Anchor,
+      detail: `${loadWait.toFixed(1)} days of expected queueing before loading can start. This is an expected value from the same port data the Port Constraints panel shows, not a booked slot.`,
     },
     {
-      key: 'transit',
-      label: 'At sea',
+      key: 'sea',
+      label: `At sea, ${portName(quote.origin_port)} to ${portName(quote.dest_port)}`,
+      short: 'At sea',
       start: sail,
       days: transit + weather,
-      fill: 'var(--structure)',
+      tone: 'sea' as const,
+      icon: Ship,
       detail:
         `${transit.toFixed(1)} days of transit` +
-        (weather > 0 ? `, plus ${weather.toFixed(1)} days of expected weather delay` : '') +
-        `, ${portName(quote.origin_port)} to ${portName(quote.dest_port)}.`,
+        (weather > 0
+          ? `, plus ${weather.toFixed(1)} days of expected weather delay from the marine forecast and cyclone climatology.`
+          : ', with no weather delay expected on this route and date.'),
     },
     {
-      key: 'discharge-wait',
-      label: 'Waiting to discharge',
+      key: 'discharge',
+      label: `Waiting to discharge at ${portName(quote.dest_port)}`,
+      short: 'Discharge queue',
       start: arrive,
       days: dischargeWait,
-      fill: 'var(--wait)',
-      detail: `${dischargeWait.toFixed(1)} days expected queueing at ${portName(quote.dest_port)} before discharge can start.`,
+      tone: 'wait' as const,
+      icon: Anchor,
+      detail: `${dischargeWait.toFixed(1)} days of expected queueing at the discharge end before the vessel is free. This is what the vessel is paid for but not moving.`,
     },
   ].filter((s) => s.days > 0.05)
 
-  const pct = (d: number) => `${Math.max(0, Math.min(100, (d / horizon) * 100))}%`
+  const pct = (d: number) => (d / horizon) * 100
+  const shown = segments.find((s) => s.key === active) ?? null
+  const seaDays = transit + weather
+  const waitDays = loadWait + dischargeWait
 
   return (
     <Panel
@@ -146,42 +170,36 @@ export function VoyageTimeline({
       id="timeline"
       title="Voyage Timeline"
       hint={hint}
-      meta={`${Math.round(free)} days from today to free at ${portName(quote.dest_port)}`}
+      meta={`${Math.round(free)} days to free at ${portName(quote.dest_port)}`}
     >
-      <div className="flex h-full flex-col gap-3">
-        {/* The axis */}
-        {/* pt-7 reserves a real 28px lane above the track for the lock-window
-            marker and its label. They used to be positioned with a negative
-            offset off `top-0`, which put the label outside the container and
-            the panel's own `overflow` clipped it -- visible in a screenshot as
-            a half-height "lock window" with its top sheared off. Nothing is
-            positioned outside its parent here any more. */}
-        <div className="relative pt-7">
-          {/* The lock window sits ABOVE the track, not inside it: it is a
-              decision deadline, not a phase of the voyage, and drawing it as a
-              segment would imply the ship is doing something during it. */}
-          {hasLockWindow && (
-            <>
-              <div
-                className="absolute top-0 whitespace-nowrap text-micro font-semibold text-go"
-                style={{ left: pct(lockStart) }}
-              >
-                lock window
-              </div>
-              <div
-                className="absolute top-4 h-1.5 rounded-full bg-go/70"
-                style={{ left: pct(lockStart), width: pct(lockEnd - lockStart) }}
-                title={`The model's preferred entry window: ${formatShortDate(addDays(quote.as_of, lockStart))} to ${formatShortDate(addDays(quote.as_of, lockEnd))}.`}
-              />
-            </>
+      <div className="flex h-full flex-col gap-2">
+        {/* Lane above the track for the decision window. It is a deadline, not
+            a phase of the voyage -- drawing it as a segment would imply the
+            ship is doing something during it. */}
+        <div className="relative h-4">
+          {hasLock && (
+            <div
+              className="absolute inset-y-0 flex items-center gap-1.5"
+              style={{ left: `${pct(lockStart)}%` }}
+            >
+              <span className="h-1.5 rounded-full bg-go" style={{ width: `${Math.max(pct(lockEnd - lockStart), 1)}vw` }} />
+              <span className="whitespace-nowrap text-micro font-semibold text-go">
+                lock window · {formatShortDate(addDays(quote.as_of, lockStart))}–
+                {formatShortDate(addDays(quote.as_of, lockEnd))}
+              </span>
+            </div>
           )}
+        </div>
 
-          <div className="flex h-6 w-full overflow-hidden rounded-sm border border-border bg-surface-2">
-            {/* No sr-only label inside these: `aria-label` already supplies the
-                accessible name, and an element with aria-label ignores its own
-                text content for naming -- the extra span was dead weight a
-                screen reader could announce twice. */}
-            {segments.map((s, i) => (
+        {/* The track. Segments are separated by real gaps and carry their own
+            label inline when wide enough, so the common case needs no legend
+            and no pointer at all. */}
+        <div className="flex h-9 w-full items-stretch gap-0.5">
+          {segments.map((s, i) => {
+            const w = pct(s.days)
+            const isActive = active === s.key
+            const Icon = s.icon
+            return (
               <motion.button
                 key={s.key}
                 type="button"
@@ -189,78 +207,101 @@ export function VoyageTimeline({
                 onMouseLeave={() => setHover(null)}
                 onFocus={() => setHover(s.key)}
                 onBlur={() => setHover(null)}
-                title={s.detail}
+                onClick={() => setPinned((p) => (p === s.key ? null : s.key))}
+                aria-pressed={pinned === s.key}
                 aria-label={`${s.label}: ${s.days.toFixed(1)} days`}
                 className={cn(
-                  'relative h-full cursor-help border-r border-background/40 last:border-r-0',
-                  'transition-opacity focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring',
-                  hover && hover !== s.key ? 'opacity-45' : 'opacity-100',
+                  'group relative flex min-w-0 items-center justify-center overflow-hidden rounded-sm',
+                  'cursor-pointer transition-[opacity,filter] duration-150',
+                  'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring',
+                  TONE[s.tone].bar,
+                  active && !isActive ? 'opacity-40' : 'opacity-100',
+                  isActive && 'brightness-110',
                 )}
-                style={{ width: pct(s.days), background: s.fill }}
-                initial={reduced ? false : { scaleX: 0 }}
+                style={{ width: `${w}%` }}
+                initial={reduced ? false : { scaleX: 0, originX: 0 }}
                 animate={{ scaleX: 1 }}
-                transition={
-                  reduced ? { duration: 0 } : { ...transition.base, delay: 0.1 + i * 0.07 }
-                }
-              />
-            ))}
-          </div>
-
-          {/* Milestones */}
-          <div className="relative mt-1 h-8">
-            {[
-              { d: 0, label: 'today' },
-              { d: laycanStart, label: formatShortDate(addDays(quote.as_of, laycanStart)) },
-              { d: arrive, label: `arrive ${formatShortDate(addDays(quote.as_of, Math.round(arrive)))}` },
-            ].map((m, i) => (
-              <div
-                key={m.label}
-                className={cn(
-                  'absolute top-0 text-micro text-muted-foreground',
-                  i === 2 ? '-translate-x-full' : i === 1 ? '-translate-x-1/2' : '',
-                )}
-                style={{ left: pct(m.d) }}
+                transition={reduced ? { duration: 0 } : { ...transition.base, delay: 0.08 + i * 0.07 }}
               >
-                <span className="block h-1.5 w-px bg-border" aria-hidden="true" />
-                <span className="whitespace-nowrap">{m.label}</span>
-              </div>
-            ))}
-          </div>
+                {w > 9 && (
+                  <span
+                    className={cn(
+                      'flex min-w-0 items-center gap-1 px-1.5 text-micro font-bold',
+                      TONE[s.tone].onBar,
+                    )}
+                  >
+                    <Icon className="h-3 w-3 shrink-0" />
+                    {w > 16 && <span className="truncate">{s.short}</span>}
+                    <span className="shrink-0 tabular-nums">{s.days.toFixed(1)}d</span>
+                  </span>
+                )}
+              </motion.button>
+            )
+          })}
         </div>
 
-        {/* Legend doubles as the readout: hovering a segment dims the others,
-            and each row states its own real figure so the panel is fully
-            readable without any pointer interaction at all. */}
-        <ul className="mt-auto space-y-1">
-          {segments.map((s) => (
-            <li
-              key={s.key}
+        {/* Milestones, tied to the same axis. */}
+        <div className="relative h-7">
+          {[
+            { d: 0, label: 'today', align: 'start' as const },
+            { d: laycanStart, label: formatShortDate(addDays(quote.as_of, laycanStart)), align: 'mid' as const },
+            { d: arrive, label: formatShortDate(addDays(quote.as_of, Math.round(arrive))), align: 'end' as const },
+          ].map((m) => (
+            <div
+              key={m.label}
               className={cn(
-                'flex items-baseline justify-between gap-2 transition-opacity',
-                hover && hover !== s.key ? 'opacity-45' : 'opacity-100',
+                'absolute top-0 flex flex-col',
+                m.align === 'mid' && '-translate-x-1/2 items-center',
+                m.align === 'end' && '-translate-x-full items-end',
               )}
+              style={{ left: `${pct(m.d)}%` }}
             >
-              <span className="flex items-center gap-2 text-caption text-muted-foreground">
-                <span
-                  className="h-2 w-2 shrink-0 rounded-xs"
-                  style={{ background: s.fill }}
-                  aria-hidden="true"
-                />
-                {s.label}
-              </span>
-              <span className="desk-num text-caption text-foreground">
-                {s.days.toFixed(1)}d
-              </span>
-            </li>
+              <span className="h-2 w-px bg-border" aria-hidden="true" />
+              <span className="whitespace-nowrap text-micro text-muted-foreground">{m.label}</span>
+            </div>
           ))}
-        </ul>
+        </div>
 
-        <p className="border-t border-border pt-2 text-micro leading-relaxed text-muted-foreground">
-          Projected end date is the sum of the segments above — the{' '}
-          <Term term="laycan">laycan</Term> opening, the expected berth queue at each end, transit and
-          the weather buffer. It is a computed projection from real inputs, not a schedule anyone has
-          committed to.
-        </p>
+        {/* One detail area that swaps with the active segment, instead of a
+            static legend repeating what the track already says. Falls back to
+            the summary a reader most wants when nothing is selected: how much
+            of this voyage is actually spent moving. */}
+        <div className="mt-auto flex min-h-14 flex-1 flex-col justify-center rounded-sm border border-border bg-surface-2 px-2 py-2">
+          {shown ? (
+            <motion.div
+              key={shown.key}
+              initial={reduced ? false : { opacity: 0, y: 3 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={reduced ? { duration: 0 } : transition.fast}
+            >
+              <div className="flex items-baseline justify-between gap-2">
+                <span className={cn('text-caption font-bold', TONE[shown.tone].text)}>
+                  {shown.label}
+                </span>
+                <span className="desk-num shrink-0 text-caption font-semibold text-foreground">
+                  {shown.days.toFixed(1)} days
+                </span>
+              </div>
+              <p className="mt-1 text-micro leading-relaxed text-muted-foreground">{shown.detail}</p>
+            </motion.div>
+          ) : (
+            <div>
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="text-caption font-semibold text-foreground">
+                  {Math.round((seaDays / free) * 100)}% of this voyage is spent moving
+                </span>
+                <span className="desk-num shrink-0 text-caption text-muted-foreground">
+                  {seaDays.toFixed(1)}d at sea · {waitDays.toFixed(1)}d queueing
+                </span>
+              </div>
+              <p className="mt-1 text-micro leading-relaxed text-muted-foreground">
+                Hover or click a segment for what it is. Projected end is the sum of the segments —
+                the <Term term="laycan">laycan</Term> opening, both berth queues, transit and the
+                weather buffer. A computed projection from real inputs, not a committed schedule.
+              </p>
+            </div>
+          )}
+        </div>
       </div>
     </Panel>
   )

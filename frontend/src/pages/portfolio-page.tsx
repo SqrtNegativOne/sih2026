@@ -130,15 +130,33 @@ function FrontierChart({
   const riskSpread = Math.max(...ys) - Math.min(...ys)
   const isDegenerate = costSpread < Math.abs(xMax) * 1e-6 && riskSpread < 1
   if (isDegenerate) {
+    // Naming the dominant channel and the lever that would change it turns a
+    // dead chart into a finding. The cause is always the same shape: one
+    // channel's risk-adjusted cost beats the others by more than any k can
+    // close, and with this page's own defaults that channel is period TC,
+    // because spot's stockout exposure is priced high enough to rule it out
+    // before risk aversion is even considered.
+    const r = recommended
+    const dominant =
+      r.tc_fraction >= 0.99 ? 'period TC' : r.spot_fraction >= 0.99 ? 'spot' : r.coa_fraction >= 0.99 ? 'COA' : null
     return (
-      <div className="flex flex-col items-center justify-center gap-2 rounded-sm border border-dashed border-border bg-surface-2/60 px-4 py-6 text-center">
+      <div className="rounded-sm border border-dashed border-border bg-surface-2/60 px-4 py-4">
         <p className="text-body font-semibold text-foreground">
-          No trade-off to plot — every mix on this frontier is identical.
+          {dominant ? `100% ${dominant} wins at every risk setting.` : 'Every mix on this frontier is identical.'}
         </p>
-        <p className="max-w-[62ch] text-caption leading-relaxed text-muted-foreground">
-          Across all {frontier.length} risk-aversion settings the optimiser returns the same expected
-          cost ({formatUsdCompact(xMax)}) and the same variance, so there is no cost-versus-risk
-          curve to trace. One coverage channel dominates at every k under these inputs.
+        <p className="mt-1 max-w-[76ch] text-caption leading-relaxed text-muted-foreground">
+          All {frontier.length} risk-aversion settings return the same expected cost (
+          {formatUsdCompact(xMax)}) and the same variance, so there is no cost-versus-risk curve to
+          trace. That is a real finding, not a missing one: under these inputs one channel is
+          cheaper <em>after</em> its risk penalty than any blend, so no amount of risk aversion
+          changes the answer.
+        </p>
+        <p className="mt-2 max-w-[76ch] text-caption leading-relaxed text-muted-foreground">
+          <span className="font-semibold text-foreground">To see a real trade-off,</span> move the
+          two inputs that price spot exposure: raise the spot sourcing rate (how fast you can
+          actually find tonnage) or lower the stockout cost. At a sourcing rate of 0.05/day a
+          stockout takes about {formatNumber(1 / 0.05, 0)} days to resolve, which makes any spot
+          share expensive before risk aversion is considered.
         </p>
       </div>
     )
@@ -195,6 +213,69 @@ function FrontierChart({
           <title>{`Recommended (k=${recommended.risk_aversion_k}): ${formatUsdCompact(recommended.expected_cost_usd)}, std ${formatUsdCompact(recommended.cost_std_usd)}`}</title>
         </circle>
       </svg>
+    </div>
+  )
+}
+
+/**
+ * What the recommended mix buys you against the obvious alternative: putting
+ * every voyage on the spot market.
+ *
+ * Both figures were already on the page, in a different panel, as unlinked
+ * rows — a reader had to subtract "Pure-spot cost" from "Expected cost" by
+ * hand and then decide whether the difference was worth it. Stated as a
+ * trade ("you pay X more to remove Y of swing") it is the single most useful
+ * sentence this page can produce, and it stays useful even when the frontier
+ * collapses to one point, which is exactly when the rest of the screen stops
+ * saying anything.
+ */
+function SpotComparison({ result }: { result: PortfolioResponse }) {
+  const rec = result.recommended
+  const premium = rec.expected_cost_usd - result.spot_cost_usd
+  const varianceRemoved = result.spot_cost_std_usd - rec.cost_std_usd
+  const cheaper = premium < 0
+
+  // Only meaningful when the mix actually differs from pure spot.
+  if (Math.abs(premium) < 1 && Math.abs(varianceRemoved) < 1) return null
+
+  return (
+    <div className="rounded-sm border border-border bg-surface-2 px-2 py-2">
+      <div className="text-micro font-semibold uppercase tracking-wide text-muted-foreground">
+        Versus buying every voyage on the spot market
+      </div>
+      <p className="mt-1 text-caption leading-relaxed text-foreground">
+        {cheaper ? (
+          <>
+            This mix is{' '}
+            <span className="font-semibold text-go">{formatUsdCompact(Math.abs(premium))}</span>{' '}
+            cheaper in expectation
+          </>
+        ) : (
+          <>
+            You pay{' '}
+            <span className="font-semibold text-wait">{formatUsdCompact(premium)}</span> more in
+            expectation
+          </>
+        )}
+        {varianceRemoved > 0 ? (
+          <>
+            {' '}
+            and remove{' '}
+            <span className="font-semibold text-go">
+              {formatUsdCompact(varianceRemoved)}
+            </span>{' '}
+            of cost swing (one standard deviation).
+          </>
+        ) : (
+          <> , with no reduction in cost swing.</>
+        )}
+      </p>
+      {!cheaper && varianceRemoved > 0 && (
+        <p className="mt-1 text-micro leading-relaxed text-muted-foreground">
+          That is {formatNumber(premium / varianceRemoved, 2)} paid per dollar of swing removed —
+          the price of certainty under your stated stockout cost and sourcing rate.
+        </p>
+      )}
     </div>
   )
 }
@@ -382,11 +463,24 @@ export function PortfolioPage({ ports }: { ports: PortListing[] }) {
 
       {result && (
         <div className="grid min-h-0 flex-1 auto-rows-min grid-cols-1 content-start gap-2 overflow-auto lg:grid-cols-2">
-          <Panel title="Recommended Mix" meta={`k = ${result.recommended.risk_aversion_k}`} className="lg:col-span-1">
+          <Panel
+            title="Recommended Mix"
+            meta={`k = ${result.recommended.risk_aversion_k}`}
+            hint="The coverage split the optimiser picks at your current risk-aversion setting, and what it costs relative to simply buying every voyage on the spot market."
+            className="lg:col-span-1"
+          >
             <div className="flex flex-col gap-2 p-1">
               <MixBar mix={result.recommended} />
               <MixLegend />
-              <div className="mt-1 flex flex-col gap-1">
+
+              {/* The comparison against pure spot is the information this page
+                  exists to produce, and it was previously two unlinked rows in
+                  a different panel that a reader had to subtract by hand. It
+                  is the only part of the screen that stays informative when
+                  the frontier itself is degenerate. */}
+              <SpotComparison result={result} />
+
+              <div className="mt-1 flex flex-col gap-1 border-t border-border pt-2">
                 <StatRow label="Expected cost" value={formatUsdCompact(result.recommended.expected_cost_usd)} />
                 <StatRow label="Cost std. dev." value={formatUsdCompact(result.recommended.cost_std_usd)} />
                 <StatRow

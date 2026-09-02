@@ -1,5 +1,6 @@
 import { Info, TriangleAlert } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { Tooltip } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
 interface PanelProps {
@@ -64,14 +65,19 @@ export function Panel({ title, meta, hint, actions, className, flush, children, 
           <h2 className="truncate text-caption font-bold uppercase tracking-[0.04em] text-primary">
             {title}
           </h2>
+          {/* A real tooltip, not `title`. Every panel's one-line "what
+              question does this answer" lived behind the native attribute,
+              which waits ~1s, renders in OS chrome, never opens on keyboard
+              focus and never opens on touch -- so the ⓘ read as decorative and
+              the best explanatory text on the desk was effectively invisible. */}
           {hint && (
-            <span
-              className="shrink-0 cursor-help text-muted-foreground transition-colors hover:text-primary"
-              title={hint}
-              aria-label={hint}
+            <Tooltip
+              content={hint}
+              className="shrink-0 text-muted-foreground transition-colors hover:text-primary"
             >
               <Info className="h-3 w-3" aria-hidden="true" />
-            </span>
+              <span className="sr-only">What this panel shows</span>
+            </Tooltip>
           )}
           {meta != null && (
             <span className="truncate text-micro uppercase tracking-wide text-muted-foreground">

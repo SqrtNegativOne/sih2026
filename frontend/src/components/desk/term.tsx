@@ -1,15 +1,16 @@
+import { Tooltip } from '@/components/ui/tooltip'
 import { GLOSSARY, PROVENANCE, type ProvenanceKind } from '@/lib/vocabulary'
 import { cn } from '@/lib/utils'
 
 /**
  * A domain term with its definition available on demand.
  *
- * Rendered as a real `<abbr>` with a dotted underline rather than a bare
- * `title` on a span: `<abbr>` is what assistive technology announces as "has a
- * definition", the underline is the only affordance telling a sighted reader
- * there is something to hover, and `tabIndex` means a keyboard user can reach
- * it at all. A `title` attribute alone is invisible and unreachable — which is
- * how most of this desk's best explanatory text was hidden.
+ * The dotted underline is the only affordance telling a sighted reader there
+ * is something here to ask about, and going through the shared Tooltip means
+ * the definition opens on hover AND on keyboard focus, in the desk's own
+ * surface rather than OS chrome. A bare `title` attribute is invisible,
+ * slow and unreachable by keyboard — which is how most of this desk's best
+ * explanatory text stayed hidden.
  *
  * Domain vocabulary is explained, never replaced. "Laycan" is the correct word
  * and the people using this tool use it; the goal is that someone new is not
@@ -30,18 +31,19 @@ export function Term({
   if (!definition) return <>{children}</>
 
   return (
-    <abbr
-      title={definition}
-      tabIndex={0}
-      className={cn(
-        'cursor-help underline decoration-dotted decoration-muted-foreground/60 underline-offset-2',
-        'transition-colors hover:decoration-foreground focus-visible:outline-2',
-        'focus-visible:outline-offset-1 focus-visible:outline-ring',
-        className,
-      )}
+    <Tooltip
+      content={
+        <>
+          <span className="font-semibold text-foreground">{children}</span>
+          <span className="mt-1 block">{definition}</span>
+        </>
+      }
+      className={cn('align-baseline', className)}
     >
-      {children}
-    </abbr>
+      <span className="underline decoration-dotted decoration-muted-foreground/60 underline-offset-2 transition-colors hover:decoration-foreground">
+        {children}
+      </span>
+    </Tooltip>
   )
 }
 
@@ -63,11 +65,16 @@ export function ProvenanceChip({
   const t = PROVENANCE[kind]
   if (!t) return null
   return (
-    <span
-      className={cn('desk-chip desk-chip-neutral cursor-help', className)}
-      title={`${t.definition} (${kind})`}
+    <Tooltip
+      content={
+        <>
+          <span className="font-semibold text-foreground">{t.label}</span>
+          <span className="mt-1 block">{t.definition}</span>
+          <span className="mt-1 block font-mono text-micro text-muted-foreground">{kind}</span>
+        </>
+      }
     >
-      {t.label}
-    </span>
+      <span className={cn('desk-chip desk-chip-neutral', className)}>{t.label}</span>
+    </Tooltip>
   )
 }
