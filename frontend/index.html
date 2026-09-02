@@ -4,7 +4,35 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="theme-color" content="#080c11" />
     <title>Chartering — Voyage Desk</title>
+    <!--
+      Runs before first paint, so the correct palette is on <html> by the time
+      anything renders. Applying the theme from a React effect instead would
+      paint one frame of the wrong palette, and between #0b0f14 and #e9edf2
+      that is a full-screen white flash on every load. Kept inline and tiny on
+      purpose: an external file would be a second round-trip before paint.
+      Mirrors lib/theme.ts -- dark is the default, a stored choice wins, and
+      only `.light` is ever added.
+    -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('desk-theme')
+          var light =
+            stored === 'light' ||
+            (stored !== 'dark' &&
+              window.matchMedia('(prefers-color-scheme: light)').matches)
+          if (light) {
+            document.documentElement.classList.add('light')
+            document.documentElement.style.colorScheme = 'light'
+          }
+        } catch (e) {
+          /* storage blocked -- fall through to the dark default */
+        }
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

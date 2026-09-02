@@ -29,9 +29,30 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
  * (period TC: locked in, no price risk left), wait (COA: the disclosed
  * documented middle ground, opt.portfolio's own term for it). */
 const CHANNEL = {
-  spot: { key: 'spot_fraction' as const, label: 'Spot', bar: 'bg-market', text: 'text-market' },
-  tc: { key: 'tc_fraction' as const, label: 'Period TC', bar: 'bg-go', text: 'text-go' },
-  coa: { key: 'coa_fraction' as const, label: 'COA', bar: 'bg-wait', text: 'text-wait' },
+  spot: {
+    key: 'spot_fraction' as const,
+    label: 'Spot',
+    bar: 'bg-market',
+    // The percentage sits ON the filled segment, so it needs the foreground
+    // paired with that fill rather than a fixed white -- the dark theme's
+    // semantics are light inks.
+    on: 'text-market-fg',
+    text: 'text-market',
+  },
+  tc: {
+    key: 'tc_fraction' as const,
+    label: 'Period TC',
+    bar: 'bg-go',
+    on: 'text-go-fg',
+    text: 'text-go',
+  },
+  coa: {
+    key: 'coa_fraction' as const,
+    label: 'COA',
+    bar: 'bg-wait',
+    on: 'text-wait-fg',
+    text: 'text-wait',
+  },
 }
 
 function MixBar({ mix, className }: { mix: PortfolioMixResult; className?: string }) {
@@ -49,7 +70,7 @@ function MixBar({ mix, className }: { mix: PortfolioMixResult; className?: strin
             title={`${c.label} ${formatPct(frac)}`}
           >
             {frac >= 0.12 && (
-              <span className="text-micro font-bold uppercase tracking-wide text-white/90">
+              <span className={cn('text-micro font-bold uppercase tracking-wide', c.on)}>
                 {formatPct(frac)}
               </span>
             )}

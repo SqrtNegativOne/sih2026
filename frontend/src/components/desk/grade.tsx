@@ -2,17 +2,18 @@ import { cn } from '@/lib/utils'
 
 export type GradeLetter = 'A' | 'B' | 'C' | 'D' | 'E'
 
-// The letter is set on the band's own colour, so each pairing has to clear AA
-// on its own. B and C already used a dark letter for that reason; D did not,
-// and white on --grade-d (#d9741f) measured 3.25:1 -- under the 4.5:1 floor
-// for a 10px glyph, and the one grade a reader most needs to distinguish from
-// E beside it. A dark letter on the same orange clears it comfortably.
+// The letter sits on the band's own colour, so each pairing has to clear AA on
+// its own -- and which letter colour does that differs by BAND and by THEME
+// (white works on light's dark-green A but not on its mid-orange D, where it
+// measured 3.25:1). Both halves are therefore tokens, defined per theme in
+// index.css, rather than literals here: a component cannot know which theme it
+// is rendering into, so it must not be the thing that decides.
 const GRADE_CLASS: Record<GradeLetter, string> = {
-  A: 'bg-grade-a text-white',
-  B: 'bg-grade-b text-[#12250c]',
-  C: 'bg-grade-c text-[#3a2c02]',
-  D: 'bg-grade-d text-[#3a1c02]',
-  E: 'bg-grade-e text-white',
+  A: 'bg-grade-a text-grade-a-fg',
+  B: 'bg-grade-b text-grade-b-fg',
+  C: 'bg-grade-c text-grade-c-fg',
+  D: 'bg-grade-d text-grade-d-fg',
+  E: 'bg-grade-e text-grade-e-fg',
 }
 
 /** Map a 0–1 quality fraction (1 = best) onto the A–E scale. */

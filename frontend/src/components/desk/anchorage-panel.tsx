@@ -9,17 +9,17 @@ import { cn } from '@/lib/utils'
 // confidence reads go, a rough-sea/low-confidence count reads risk, so a
 // reader distrusts a low-confidence count on sight, not just from the label.
 const CONFIDENCE_CLASS: Record<AnchorageConfidence, string> = {
-  high: 'bg-go/15 text-go',
-  medium: 'bg-wait/15 text-wait',
-  low: 'bg-risk/15 text-risk',
+  high: 'bg-go/15 text-go-on-soft',
+  medium: 'bg-wait/15 text-wait-on-soft',
+  low: 'bg-risk/15 text-risk-on-soft',
 }
 
 /** The same three tones as CONFIDENCE_CLASS, re-cut as solid fills for the
  *  dark SAR overlay, where a 15%-alpha tint on black reads as black. */
 const CONFIDENCE_CLASS_ON_DARK: Record<AnchorageConfidence, string> = {
-  high: 'bg-go text-white',
-  medium: 'bg-wait text-white',
-  low: 'bg-risk text-white',
+  high: 'bg-go text-go-fg',
+  medium: 'bg-wait text-wait-fg',
+  low: 'bg-risk text-risk-fg',
 }
 
 const ZOOM_MIN = 1

@@ -20,9 +20,17 @@ import { cn } from '@/lib/utils'
 const land = landRaw as unknown as FeatureCollection
 const graticule = geoGraticule().step([10, 10])()
 
-const SEA = '#e4edf6'
-const LAND = '#f0ede3'
-const COAST = '#c4cdd8'
+// Theme tokens, not literals. These used to be hardcoded light-theme hexes,
+// so on the dark theme the map stayed a cream-and-pale-blue world sitting in
+// the middle of an otherwise dark page. SVG paint attributes accept custom
+// properties, so the same markup renders correctly in both themes with no
+// per-theme branching here at all.
+const SEA = 'var(--map-sea)'
+const LAND = 'var(--map-land)'
+const COAST = 'var(--map-coast)'
+const GRATICULE = 'var(--map-graticule)'
+const PORT_DOT = 'var(--map-port)'
+const PORT_HALO = 'var(--map-port-halo)'
 
 const KIND_LABEL: Record<SolverRouteKind, string> = {
   fleet_mix: 'Fleet mix',
@@ -377,7 +385,7 @@ export function RouteMap({
             <path
               d={pathGen(graticule) ?? ''}
               fill="none"
-              stroke={COAST}
+              stroke={GRATICULE}
               strokeWidth={0.5}
               opacity={0.6}
             />
@@ -467,13 +475,13 @@ export function RouteMap({
               const above = i % 2 === 0
               return (
                 <g key={p.code} transform={`translate(${xy[0]},${xy[1]})`}>
-                  <circle r={3} fill="#1c2b3a" stroke="#fff" strokeWidth={1} />
+                  <circle r={3} fill={PORT_DOT} stroke={PORT_HALO} strokeWidth={1} />
                   <text
                     x={5}
                     y={above ? -5 : 12}
                     className="text-micro font-semibold"
-                    fill="#1c2b3a"
-                    stroke="#fff"
+                    fill={PORT_DOT}
+                    stroke={PORT_HALO}
                     strokeWidth={3}
                     paintOrder="stroke"
                   >

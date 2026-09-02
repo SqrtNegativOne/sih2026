@@ -1,4 +1,5 @@
 import { Bell, CircleHelp, Search, Settings, Ship } from 'lucide-react'
+import { ThemeToggle } from '@/components/shell/theme-toggle'
 
 const SECTIONS = [
   { id: 'forecast', label: 'Forecast' },
@@ -80,10 +81,17 @@ export function TopBar({ onNewQuote }: TopBarProps) {
         <button
           type="button"
           onClick={onNewQuote}
-          className="rounded bg-white px-2 py-1 text-lead font-semibold text-primary transition-colors hover:bg-white/90"
+          // Was a white pill with --primary text. That reads well against the
+          // light theme's navy bar, but --primary on dark is a light blue
+          // (#4d9fff) and the same pill measured 2.72:1 -- the screen's main
+          // call to action, under the AA floor. The primary fill carries its
+          // own paired foreground token in both themes, so the pairing cannot
+          // drift like that again.
+          className="cursor-pointer rounded-sm bg-primary px-2 py-1 text-lead font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white"
         >
           New Quote
         </button>
+        <ThemeToggle onDark />
         <button
           type="button"
           disabled

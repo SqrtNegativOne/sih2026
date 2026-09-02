@@ -9,10 +9,10 @@ import { cn } from '@/lib/utils'
 // wait-toned since neither is a real all-clear, 'critical' is the one band
 // that gets the solid risk treatment.
 const BAND_CLASS: Record<FractureBand, string> = {
-  calm: 'bg-go/15 text-go',
-  watch: 'bg-wait/15 text-wait',
-  elevated: 'bg-wait/30 text-wait',
-  critical: 'bg-risk/20 text-risk',
+  calm: 'bg-go/15 text-go-on-soft',
+  watch: 'bg-wait/15 text-wait-on-soft',
+  elevated: 'bg-wait/30 text-wait-on-soft',
+  critical: 'bg-risk/20 text-risk-on-soft',
 }
 
 const BAND_LABEL: Record<FractureBand, string> = {

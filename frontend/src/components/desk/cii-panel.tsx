@@ -8,11 +8,11 @@ import { cn } from '@/lib/utils'
 // convention CONGESTION_CLASS (port-checks-table.tsx) already uses, reused
 // rather than adding a new color scale.
 const RATING_CLASS: Record<CIIRating, string> = {
-  A: 'bg-go/15 text-go',
-  B: 'bg-go/15 text-go',
-  C: 'bg-wait/15 text-wait',
-  D: 'bg-risk/15 text-risk',
-  E: 'bg-risk/15 text-risk',
+  A: 'bg-go/15 text-go-on-soft',
+  B: 'bg-go/15 text-go-on-soft',
+  C: 'bg-wait/15 text-wait-on-soft',
+  D: 'bg-risk/15 text-risk-on-soft',
+  E: 'bg-risk/15 text-risk-on-soft',
 }
 
 function RatingChip({ rating }: { rating: CIIRating }) {

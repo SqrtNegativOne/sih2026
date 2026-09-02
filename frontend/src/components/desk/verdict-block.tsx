@@ -57,12 +57,15 @@ export function VerdictBlock({ quote }: { quote: QuoteResult }) {
       */}
       <div
         className={cn(
-          'flex items-center justify-between gap-3 px-3 py-2 text-white',
-          isLock ? 'bg-go' : 'bg-wait',
+          'flex items-center justify-between gap-3 px-3 py-2',
+          // Paired foreground token, not text-white: on the dark theme --go
+          // and --wait are LIGHT inks, and white on them put the loudest
+          // element on the desk at roughly 2:1.
+          isLock ? 'bg-go text-go-fg' : 'bg-wait text-wait-fg',
         )}
       >
         <div>
-          <div className="text-micro font-semibold uppercase tracking-[0.18em] text-white/85">
+          <div className="text-micro font-semibold uppercase tracking-[0.18em] opacity-75">
             Verdict
           </div>
           <div className="mt-0.5 font-mono text-display font-extrabold tracking-tight">
@@ -73,7 +76,7 @@ export function VerdictBlock({ quote }: { quote: QuoteResult }) {
           <div className="text-caption font-bold uppercase tracking-wide">
             {quote.target_vessel_class}
           </div>
-          <div className="mt-0.5 text-micro text-white/85">{term}-day charter</div>
+          <div className="mt-0.5 text-micro opacity-75">{term}-day charter</div>
         </div>
       </div>
 

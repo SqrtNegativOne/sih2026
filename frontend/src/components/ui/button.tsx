@@ -35,7 +35,7 @@ const button = cva(
       variant: {
         primary: 'bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/95',
         action:
-          'border border-market/50 bg-market/10 text-market hover:border-market hover:bg-market/20',
+          'border border-market/50 bg-market/10 text-market-on-soft hover:border-market hover:bg-market/20',
         danger: 'border border-risk/40 bg-risk-soft text-risk hover:border-risk hover:bg-risk/15',
         ghost: 'text-muted-foreground hover:bg-accent hover:text-foreground',
         onDark: 'bg-white text-primary hover:bg-white/90',

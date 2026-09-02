@@ -10,9 +10,19 @@
  * Voyage Decision Desk. Function before finish: the LOCK / WAIT verdict is the
  * loudest thing on screen, every number carries a visible label and unit, and
  * colour is semantic (go / caution / risk / market / structure), never
- * decoration. Flat surfaces, hairline borders, no hover elevation anywhere.
- * IBM Plex Sans for everything read as words; JetBrains Mono for numerics only.
- * Light mode only.
+ * decoration. IBM Plex Sans for everything read as words; JetBrains Mono for
+ * numerics only.
+ *
+ * Dark is the primary theme; light is a full, first-class alternate. Both are
+ * defined as complete parallel sets of the SAME raw custom properties below --
+ * `:root` carries dark, `.light` overrides every one of them. No component
+ * anywhere carries a `dark:` variant or a literal colour, so a component
+ * cannot be correct in one theme and wrong in the other.
+ *
+ * The semantic scale is re-tuned per theme rather than shared. --go/--wait/
+ * --risk on light are chosen to be read as dark ink on white; the same values
+ * on a #0d1117 surface read as mud, so dark gets lighter, less saturated
+ * siblings at the same semantic meaning.
  */
 @theme inline {
     --font-heading: 'IBM Plex Sans Variable', 'IBM Plex Sans', system-ui, sans-serif;
@@ -55,12 +65,25 @@
     --color-market: var(--market);
     --color-market-soft: var(--market-soft);
     --color-structure: var(--structure);
+    --color-go-fg: var(--go-fg);
+    --color-wait-fg: var(--wait-fg);
+    --color-risk-fg: var(--risk-fg);
+    --color-market-fg: var(--market-fg);
+    --color-go-on-soft: var(--go-on-soft);
+    --color-wait-on-soft: var(--wait-on-soft);
+    --color-risk-on-soft: var(--risk-on-soft);
+    --color-market-on-soft: var(--market-on-soft);
 
     --color-grade-a: var(--grade-a);
     --color-grade-b: var(--grade-b);
     --color-grade-c: var(--grade-c);
     --color-grade-d: var(--grade-d);
     --color-grade-e: var(--grade-e);
+    --color-grade-a-fg: var(--grade-a-fg);
+    --color-grade-b-fg: var(--grade-b-fg);
+    --color-grade-c-fg: var(--grade-c-fg);
+    --color-grade-d-fg: var(--grade-d-fg);
+    --color-grade-e-fg: var(--grade-e-fg);
 
     --color-sidebar: var(--sidebar);
     --color-sidebar-foreground: var(--sidebar-foreground);
@@ -109,20 +132,135 @@
     --text-display--line-height: 1;
 
     /*
-     * Elevation. The desk's rule is still "hierarchy comes from borders and
-     * tone, not from lift" -- these are hairlines, not drop shadows: `panel`
-     * is a single 1px shade that separates a white panel from the #e9edf2
-     * ground it sits on (the border alone reads flat at this density), and
-     * `raised` is reserved for genuinely floating surfaces (the quote drawer,
-     * popovers) where a user needs to see that something is over the page
-     * rather than in it.
+     * Elevation, indirected through --elev-* so each theme defines its own.
+     * The rule stays "hierarchy comes from borders and tone, not from lift" --
+     * on light that means one hairline shade separating a white panel from the
+     * grey ground; on dark a cast shadow is invisible, so `panel` becomes a 1px
+     * top-edge highlight instead and the tonal ladder does the work. `raised`
+     * is reserved for genuinely floating surfaces (the quote drawer, popovers)
+     * where a user must see that something is over the page rather than in it.
      */
-    --shadow-panel: 0 1px 2px 0 rgb(18 32 46 / 0.05);
-    --shadow-raised:
-        0 8px 24px -6px rgb(18 32 46 / 0.16), 0 2px 6px -2px rgb(18 32 46 / 0.08);
+    --shadow-panel: var(--elev-1);
+    --shadow-raised: var(--elev-2);
 }
 
+/*
+ * DARK -- the primary theme.
+ *
+ * Not black: a cool near-neutral ground (#0b0f14) with panels one step up
+ * (#121820) and headers one step above that. Depth comes from that tonal
+ * ladder, not from drop shadows, which do not read on a dark ground -- so
+ * --elev-1 is a hairline top-edge highlight here rather than a cast shadow.
+ * Borders are LIGHTER than the surface they bound, the inverse of the light
+ * theme, because on dark a darker line reads as a gap rather than an edge.
+ */
 :root {
+    color-scheme: dark;
+
+    --navbar: #080c11;
+    --navbar-foreground: #e6ecf3;
+    --navbar-muted: #8494a6;
+
+    --background: #0b0f14;
+    --foreground: #e6ecf3;
+    --surface: #121820;
+    --surface-2: #19212b;
+    --card: #121820;
+    --card-foreground: #e6ecf3;
+    --popover: #161d26;
+    --popover-foreground: #e6ecf3;
+    --primary: #4d9fff;
+    --primary-foreground: #04121f;
+    --secondary: #1c2734;
+    --secondary-foreground: #d7e0ea;
+    --muted: #19212b;
+    --muted-foreground: #93a1b3;
+    --accent: #1b2735;
+    --accent-foreground: #7ab8ff;
+    --destructive: #ff7a70;
+    --destructive-foreground: #1a0d0c;
+    --border: #26313d;
+    --input: #303c4a;
+    --ring: #4d9fff;
+    --radius: 0.25rem;
+
+    /* Semantic scale, re-tuned for a dark ground. Same meanings, lighter and
+       less saturated so they clear AA as text on #121820 rather than sinking
+       into it the way the light theme's inks do. */
+    --structure: #4d9fff;
+    --go: #3fd07f;
+    --go-soft: #0e2419;
+    --wait: #f0ad4f;
+    --wait-soft: #2a1e0d;
+    --risk: #ff7a70;
+    --risk-soft: #2c1614;
+    --market: #a78bfa;
+    --market-soft: #1d1830;
+
+    /* Foreground for text sitting ON a solid fill of each semantic colour.
+       This has to be a token, not `text-white` in the component: the dark
+       theme's semantics are LIGHT inks, so white on them is unreadable --
+       the LOCK/WAIT verdict, the single loudest thing on the desk, rendered
+       white-on-#f0ad4f at roughly 2:1 before these existed. */
+    --go-fg: #04180d;
+    --wait-fg: #1e1204;
+    --risk-fg: #240705;
+    --market-fg: #12082b;
+
+    /* Text on a SOFT (15%-tint) background of the same semantic -- the band,
+       rating and congestion chips. On dark the tint is dark and the ink is
+       light, so the ink itself already clears AA and these are just aliases;
+       they exist so the chip classes can be written once for both themes. */
+    --go-on-soft: var(--go);
+    --wait-on-soft: var(--wait);
+    --risk-on-soft: var(--risk);
+    --market-on-soft: var(--market);
+
+    /* Grade chips are filled, so each needs a foreground that clears AA on its
+       own fill -- carried as a token per grade instead of hardcoded in
+       grade.tsx, which is what let the light theme ship a 3.25:1 "D". */
+    --grade-a: #1f7a4d;
+    --grade-a-fg: #ffffff;
+    --grade-b: #4d7a24;
+    --grade-b-fg: #ffffff;
+    --grade-c: #8a6410;
+    --grade-c-fg: #ffffff;
+    --grade-d: #9c4d14;
+    --grade-d-fg: #ffffff;
+    --grade-e: #a8322d;
+    --grade-e-fg: #ffffff;
+
+    --sidebar: #0e141b;
+    --sidebar-foreground: #e6ecf3;
+    --sidebar-primary: #4d9fff;
+    --sidebar-primary-foreground: #04121f;
+    --sidebar-accent: #1b2735;
+    --sidebar-accent-foreground: #7ab8ff;
+    --sidebar-border: #202a35;
+    --sidebar-ring: #4d9fff;
+
+    --elev-1: inset 0 1px 0 0 rgb(255 255 255 / 0.04);
+    --elev-2: 0 16px 40px -12px rgb(0 0 0 / 0.7), 0 4px 12px -4px rgb(0 0 0 / 0.5);
+
+    /* Route map. These were literals in route-map.tsx, which is why the map
+       stayed a cream-and-pale-blue world sitting in the middle of an
+       otherwise dark page -- the single most jarring thing about the first
+       dark build. Sea sits just above the panel it lives in so the map reads
+       as a distinct surface; land is a desaturated slate that lets the route
+       colours stay the brightest thing on it. */
+    --map-sea: #0e1720;
+    --map-land: #1c2733;
+    --map-coast: #2f3d4d;
+    --map-graticule: #18222d;
+    --map-port: #e6ecf3;
+    --map-port-halo: #0b0f14;
+}
+
+/* LIGHT -- the full alternate. Every property above is redefined here; none is
+   inherited from the dark block, so neither theme can be half-defined. */
+.light {
+    color-scheme: light;
+
     --navbar: #00294d;
     --navbar-foreground: #eef4fc;
     --navbar-muted: #93b4d6;
@@ -160,11 +298,36 @@
     --market: #6a3fa0;
     --market-soft: #efe7f8;
 
+    /* Light's semantics are dark inks, so white sits on all four. */
+    --go-fg: #ffffff;
+    --wait-fg: #ffffff;
+    --risk-fg: #ffffff;
+    --market-fg: #ffffff;
+
+    /* On light, a 15% tint lifts the chip's ground to roughly #f2e6d9, and the
+       base inks land at 4.14:1 (wait) and 4.27:1 (go) against it -- just under
+       AA, on the band and congestion chips that exist precisely to be read at
+       a glance. These are one step darker so the same chips clear the floor
+       without changing the tint or the meaning. */
+    --go-on-soft: #166634;
+    --wait-on-soft: #8a4a00;
+    --risk-on-soft: #a81f1d;
+    --market-on-soft: #5c3590;
+
+    /* Foregrounds carried as tokens for the same reason as dark: each fill
+       needs a letter colour that clears AA on it, and B/C/D genuinely differ
+       from A/E here. White on --grade-d measured 3.25:1 when this was
+       hardcoded in the component. */
     --grade-a: #1c7c3c;
+    --grade-a-fg: #ffffff;
     --grade-b: #6faa3f;
+    --grade-b-fg: #12250c;
     --grade-c: #d9a218;
+    --grade-c-fg: #3a2c02;
     --grade-d: #d9741f;
+    --grade-d-fg: #3a1c02;
     --grade-e: #c02826;
+    --grade-e-fg: #ffffff;
 
     --sidebar: #eef2f7;
     --sidebar-foreground: #12202e;
@@ -174,6 +337,17 @@
     --sidebar-accent-foreground: #0b5cad;
     --sidebar-border: #ccd5df;
     --sidebar-ring: #0b5cad;
+
+    --elev-1: 0 1px 2px 0 rgb(18 32 46 / 0.05);
+    --elev-2:
+        0 8px 24px -6px rgb(18 32 46 / 0.16), 0 2px 6px -2px rgb(18 32 46 / 0.08);
+
+    --map-sea: #e4edf6;
+    --map-land: #f0ede3;
+    --map-coast: #c4cdd8;
+    --map-graticule: #c4cdd8;
+    --map-port: #1c2b3a;
+    --map-port-halo: #ffffff;
 }
 
 @layer base {

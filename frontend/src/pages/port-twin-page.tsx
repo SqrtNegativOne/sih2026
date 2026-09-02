@@ -40,10 +40,12 @@ function VerdictBadge({ verdict }: { verdict: PortRealityReport['verdict'] }) {
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-2 rounded-sm px-2 py-1 font-mono text-lead font-extrabold uppercase tracking-wide text-white',
-        tone === 'go' && 'bg-go',
-        tone === 'risk' && 'bg-risk',
-        tone === 'wait' && 'bg-wait',
+        'inline-flex items-center gap-2 rounded-sm px-2 py-1 font-mono text-lead font-extrabold uppercase tracking-wide',
+        // Paired foreground per fill -- the dark theme's semantics are light
+        // inks, so `text-white` would sink this badge into its own background.
+        tone === 'go' && 'bg-go text-go-fg',
+        tone === 'risk' && 'bg-risk text-risk-fg',
+        tone === 'wait' && 'bg-wait text-wait-fg',
       )}
     >
       {verdict.replace('_', ' ')}

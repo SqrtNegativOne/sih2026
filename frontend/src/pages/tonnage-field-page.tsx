@@ -271,7 +271,7 @@ function ForwardTightnessPanel({ forward }: { forward: TonnageFieldForwardRespon
                 'cursor-pointer border-r border-border px-2 py-1 text-caption font-semibold transition-colors last:border-r-0',
                 'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring',
                 cls === c
-                  ? 'bg-market text-white'
+                  ? 'bg-market text-market-fg'
                   : 'bg-surface text-muted-foreground hover:bg-surface-2 hover:text-foreground',
               )}
             >

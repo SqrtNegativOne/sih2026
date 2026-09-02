@@ -4,9 +4,9 @@ import { formatNumber, prettyPort } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 const CONGESTION_CLASS: Record<CongestionLabel, string> = {
-  LOW: 'bg-go/15 text-go',
-  MODERATE: 'bg-wait/15 text-wait',
-  HIGH: 'bg-risk/15 text-risk',
+  LOW: 'bg-go/15 text-go-on-soft',
+  MODERATE: 'bg-wait/15 text-wait-on-soft',
+  HIGH: 'bg-risk/15 text-risk-on-soft',
 }
 
 function num(v: number | null, digits = 0, suffix = ''): string {
