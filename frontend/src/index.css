@@ -254,6 +254,23 @@
     --map-graticule: #18222d;
     --map-port: #e6ecf3;
     --map-port-halo: #0b0f14;
+
+    /*
+     * Ambient depth.
+     *
+     * A flat #0b0f14 field behind flat #121820 boxes is *correct* and reads as
+     * cheap -- there is no light in the room, so every surface looks like the
+     * same piece of paper. These give the page a light source: a cool wash
+     * from the top-left where the verdict lives, a fainter one from the right,
+     * both far too weak to compete with any data. `--panel-edge` is the
+     * top-edge highlight that makes a panel read as a raised surface rather
+     * than a hole cut in the background.
+     */
+    --ambient:
+        radial-gradient(ellipse 80% 55% at 12% -10%, rgb(77 159 255 / 0.10), transparent 60%),
+        radial-gradient(ellipse 60% 50% at 100% 0%, rgb(167 139 250 / 0.06), transparent 55%);
+    --panel-edge: rgb(255 255 255 / 0.06);
+    --hairline: rgb(255 255 255 / 0.07);
 }
 
 /* LIGHT -- the full alternate. Every property above is redefined here; none is
@@ -348,6 +365,14 @@
     --map-graticule: #c4cdd8;
     --map-port: #1c2b3a;
     --map-port-halo: #ffffff;
+
+    /* The light theme's ground is already bright; a wash on top of it muddies
+       rather than lifts, so it gets the faintest possible tint and no edge
+       highlight (a white top-edge on a white panel is invisible anyway). */
+    --ambient:
+        radial-gradient(ellipse 80% 55% at 12% -10%, rgb(11 92 173 / 0.05), transparent 60%);
+    --panel-edge: transparent;
+    --hairline: rgb(18 32 46 / 0.06);
 }
 
 @layer base {
@@ -363,6 +388,12 @@
     @apply bg-background text-foreground font-sans antialiased;
     font-size: 12px;
     line-height: 1.45;
+    /* The light source. Fixed so it stays put while panels scroll past it --
+       a wash that scrolls with the content reads as a gradient painted on the
+       page; one that stays put reads as the room the page is sitting in. */
+    background-image: var(--ambient);
+    background-attachment: fixed;
+    background-repeat: no-repeat;
   }
 
   /*

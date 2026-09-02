@@ -19,12 +19,11 @@
     <script>
       (function () {
         try {
+          // Dark unless the user explicitly picked light. The OS preference
+          // deliberately gets no vote here -- see resolveTheme() in
+          // lib/theme.ts for why.
           var stored = localStorage.getItem('desk-theme')
-          var light =
-            stored === 'light' ||
-            (stored !== 'dark' &&
-              window.matchMedia('(prefers-color-scheme: light)').matches)
-          if (light) {
+          if (stored === 'light') {
             document.documentElement.classList.add('light')
             document.documentElement.style.colorScheme = 'light'
           }

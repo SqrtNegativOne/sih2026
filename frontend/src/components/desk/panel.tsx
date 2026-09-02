@@ -40,7 +40,13 @@ export function Panel({ title, meta, hint, actions, className, flush, children, 
         // not absent. Panel now sizes to its own content by default; callers
         // that genuinely need it to fill a fixed-height box opt in with
         // `className="h-full"` explicitly (see the desk/* components that do).
-        'flex min-h-0 flex-col overflow-hidden rounded-md border border-border bg-surface shadow-panel',
+        'flex min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-surface shadow-panel',
+        // The top-edge highlight. One inset hairline is what separates "a
+        // raised surface catching light from above" from "a rectangle of a
+        // slightly different grey" -- on a dark ground a cast shadow does
+        // nothing, so this is the whole depth cue.
+        'ring-1 ring-inset ring-(--panel-edge)',
+        'transition-colors duration-200 hover:border-[color-mix(in_oklab,var(--border)_60%,var(--foreground))]',
         className,
       )}
     >
@@ -50,6 +56,11 @@ export function Panel({ title, meta, hint, actions, className, flush, children, 
           every header read as cramped against the 8px body padding below it. */}
       <header className="flex h-7 shrink-0 items-center justify-between gap-2 border-b border-border bg-surface-2 px-2">
         <div className="flex min-w-0 items-center gap-2">
+          {/* A 2px accent stub before the title. Costs nothing, and it gives
+              every header a fixed optical starting point, so a column of
+              panels reads as one set rather than as separate boxes that happen
+              to be stacked. */}
+          <span aria-hidden="true" className="h-3 w-0.5 shrink-0 rounded-full bg-primary/70" />
           <h2 className="truncate text-caption font-bold uppercase tracking-[0.04em] text-primary">
             {title}
           </h2>

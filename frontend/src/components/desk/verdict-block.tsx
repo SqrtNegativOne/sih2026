@@ -1,3 +1,5 @@
+import { motion, useReducedMotion } from 'motion/react'
+import { transition } from '@/lib/motion'
 import { ExplanationBlock } from '@/components/desk/explanation'
 import { Term } from '@/components/desk/term'
 import { Figure, FigureGroup } from '@/components/desk/figure'
@@ -11,6 +13,7 @@ import { cn } from '@/lib/utils'
  * locking today and waiting for the projected trough.
  */
 export function VerdictBlock({ quote }: { quote: QuoteResult }) {
+  const reduced = useReducedMotion()
   const isLock = quote.lock_action === 'LOCK'
   const term = quote.contract_term_days
   const rec = quote.full_recommendation
@@ -50,7 +53,17 @@ export function VerdictBlock({ quote }: { quote: QuoteResult }) {
   const p90Total = rec.p90_savings_usd_per_day * term
 
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-md border border-border bg-surface shadow-panel">
+    <div
+      className={cn(
+        'flex h-full flex-col overflow-hidden rounded-lg border bg-surface shadow-panel',
+        'ring-1 ring-inset ring-(--panel-edge)',
+        // The verdict panel is the only one on the desk that takes its border
+        // from its own answer. A LOCK reads green-edged and a WAIT amber-edged
+        // from across the room, before a single figure has been read -- which
+        // is the whole job of this panel.
+        isLock ? 'border-go/40' : 'border-wait/40',
+      )}
+    >
       {/*
         The single dominant element on the desk. Everything else on this
         screen is caption-to-body sized; this is the one display-scale figure,
@@ -59,20 +72,34 @@ export function VerdictBlock({ quote }: { quote: QuoteResult }) {
       */}
       <div
         className={cn(
-          'flex items-center justify-between gap-3 px-3 py-2',
+          'relative flex items-center justify-between gap-3 overflow-hidden px-3 py-2',
           // Paired foreground token, not text-white: on the dark theme --go
           // and --wait are LIGHT inks, and white on them put the loudest
           // element on the desk at roughly 2:1.
           isLock ? 'bg-go text-go-fg' : 'bg-wait text-wait-fg',
         )}
       >
-        <div>
+        {/* A soft sheen across the fill. Pure decoration, and the only
+            decoration on the desk -- it exists so the one element that carries
+            the answer looks lit rather than printed. Kept under 10% so it can
+            never affect the contrast of the word sitting on it. */}
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 bg-linear-to-br from-white/12 via-transparent to-black/10"
+        />
+        <div className="relative">
           <div className="text-micro font-semibold uppercase tracking-[0.18em] opacity-75">
             Verdict
           </div>
-          <div className="mt-0.5 font-mono text-display font-extrabold tracking-tight">
+          <motion.div
+            key={quote.lock_action}
+            initial={reduced ? false : { opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={reduced ? { duration: 0 } : transition.deliberate}
+            className="mt-0.5 font-mono text-display font-extrabold tracking-tight"
+          >
             {quote.lock_action}
-          </div>
+          </motion.div>
         </div>
         <div className="text-right">
           <div className="text-caption font-bold uppercase tracking-wide">

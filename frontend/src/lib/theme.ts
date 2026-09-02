@@ -31,13 +31,24 @@ export function storedTheme(): Theme | null {
   }
 }
 
-/** What the OS asks for. Dark when it has no opinion. */
+/** What the OS asks for. Read only for reporting — see resolveTheme. */
 export function systemTheme(): Theme {
   return window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
 }
 
+/**
+ * Dark unless the user has explicitly chosen light. The OS preference does
+ * NOT get a vote.
+ *
+ * This used to fall back to `systemTheme()`, and it meant anyone on a
+ * light-mode machine — the majority — opened the product and saw the light
+ * theme, having never been shown the one it was designed around. "Dark is the
+ * primary experience" and "defer to the OS" are contradictory instructions,
+ * and deferring silently won. A product with a deliberate look ships that look
+ * first and lets people opt out; the toggle is right there in the top bar.
+ */
 export function resolveTheme(): Theme {
-  return storedTheme() ?? systemTheme()
+  return storedTheme() ?? 'dark'
 }
 
 export function applyTheme(theme: Theme): void {
@@ -56,20 +67,11 @@ export function setTheme(theme: Theme): void {
 }
 
 /**
- * Follow the OS while the user has not chosen explicitly. Returns an
- * unsubscribe. Once a choice is stored this becomes inert, which is the
- * behaviour people expect: an explicit toggle should not be silently undone
- * when the machine flips to night mode.
+ * Kept as a no-op subscription so callers keep a stable API, but the desk no
+ * longer follows the OS at all: dark is the product's look, and a machine
+ * flipping to day mode should not repaint a tool someone is mid-decision in.
+ * The toggle is the only thing that changes the theme.
  */
-export function watchSystemTheme(onChange: (t: Theme) => void): () => void {
-  const mq = window.matchMedia?.('(prefers-color-scheme: light)')
-  if (!mq) return () => {}
-  const handler = () => {
-    if (storedTheme() !== null) return
-    const next = systemTheme()
-    applyTheme(next)
-    onChange(next)
-  }
-  mq.addEventListener('change', handler)
-  return () => mq.removeEventListener('change', handler)
+export function watchSystemTheme(_onChange: (t: Theme) => void): () => void {
+  return () => {}
 }

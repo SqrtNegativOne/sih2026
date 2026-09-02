@@ -2628,3 +2628,50 @@ a 714 KB / 233 KB baseline (+12 KB gzip, no new dependencies).
 - **No `Figure` on every money value.** It is on the verdict's three rates, where a changing quote is
   the thing worth noticing. Extending it to every static figure on the secondary pages would add
   shadow-DOM elements and `sr-only` duplicates for numbers that never change between renders.
+
+---
+
+### 2026-09-02 (later) — F-73: nobody had actually seen the dark theme
+
+**The theme resolution deferred to the OS, and that silently undid the entire design pass.**
+
+`resolveTheme()` was written as `storedTheme() ?? systemTheme()`, so on a machine set to light
+appearance — which this one is, and which most are — a first-time visitor got the **light** theme.
+The dark build shipped, verified, screenshotted and committed across six commits, and the person it
+was built for had never once been shown it. Every report of "this still looks outdated, this white
+doesn't look good" was accurate: they were looking at the light theme.
+
+"Dark is the primary experience" and "defer to the OS preference" are contradictory instructions, and
+the deferral won without anyone noticing, because every automated check either forced a theme
+explicitly or ran in a headless browser whose own preference happened to differ from the reviewer's
+machine. Verifying "the dark theme renders correctly" is not the same as verifying "a new user sees
+the dark theme", and only the first was ever tested.
+
+Now: **dark unless the user explicitly picks light.** The OS gets no vote, in `lib/theme.ts` and in
+the pre-paint script both. `watchSystemTheme` is a no-op — a machine flipping to day mode should not
+repaint a tool someone is mid-decision in. Verified the way it should have been the first time: with
+`localStorage` cleared and the browser emulating a light-mode OS, the class at document-commit is
+dark and the body paints `rgb(11,15,20)`.
+
+#### F-74 — ambient depth
+
+Flat panels on a flat field are correct and read as cheap: there is no light in the room, so every
+surface looks like the same piece of paper. Added, all as tokens so both themes stay coherent:
+
+- `--ambient`, a fixed radial wash from the top-left (where the verdict sits) and a fainter one from
+  the right. Fixed rather than scrolling, so it reads as the room the page sits in rather than a
+  gradient painted onto it. Under 10% opacity; the light theme gets a far weaker version, since a
+  wash on an already-bright ground muddies instead of lifting.
+- `--panel-edge`, a 1px inset top highlight on every panel. On a dark ground a cast shadow does
+  nothing, so this is the entire depth cue — it is what separates "a raised surface catching light"
+  from "a rectangle of slightly different grey".
+- A 2px accent stub before every panel title, giving each header a fixed optical starting point so a
+  column of panels reads as one set.
+- The verdict panel now takes its **border colour from its own answer** — green-edged for LOCK,
+  amber-edged for WAIT, readable across a room before any figure is — plus one soft sheen across the
+  fill, the only decoration on the desk, kept under 12% so it cannot touch the contrast of the word
+  sitting on it. The verdict word itself now animates in on change.
+
+Verified unchanged after all of it: contrast in both themes still reports only the two disabled rail
+items; all five secondary pages and the desk PASS; zero console errors; `tsc` / `oxlint` / `build` /
+tripwire green. Bundle 751 KB / 246 KB gzip.
