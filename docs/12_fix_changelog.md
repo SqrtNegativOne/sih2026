@@ -74,6 +74,24 @@ the number/behaviour changed, not just that code was edited.
 | F-58 | Moderate | Backdrop-click could not dismiss the quote drawer: `<main>`'s F-52 `z-50` painted above the `z-40` backdrop | ✅ done |
 | F-59 | Minor | Five AA contrast failures: grade-D chip, risk-feed separator and "vs", empty-state hint, satellite age badge and confidence chip on the dark SAR plate | ✅ done |
 | F-60 | Minor | Portfolio's efficient-frontier chart drew a degenerate (all-identical) frontier as an empty box with one corner dot | ✅ done |
+| F-61 | Moderate | Ledger panels compressed below their own content once the append-only log outgrew the viewport (`flex-shrink` on a flex column) | ✅ done |
+| F-62 | Major | Light-only theme; no dark palette, and no fill carried a paired foreground so solid/tinted/grade chips each failed contrast somewhere | ✅ done |
+| F-63 | Minor | No shared motion vocabulary — durations and easing invented per call site | ✅ done |
+| F-64 | Major | Figures snapped between quotes; NumberFlow ships unreadable to assistive tech and its compact format disagrees with `formatUsdCompact` | ✅ done |
+| F-65 | Major | `exercise_boundary_usd_per_day` — 90 real numbers per quote, the actual decision rule — was typed in the frontend and rendered by zero components | ✅ done |
+| F-66 | Major | Four of five `explanations` (`savings`, `fleet_mix`, `voyage_assignments`, `repositioning`) were fetched on every quote and discarded | ✅ done |
+| F-67 | Major | Interface spoke in implementation terms: raw enums, percentile shorthand, endpoint paths and `snake_case` field names on screen | ✅ done |
+| F-68 | Blocker | Walk-away curve contradicted the verdict above it — compared against the raw `boundary[0]` instead of the weather-adjusted `ceiling_usd_per_day` | ✅ done |
+| F-69 | Moderate | The glossary shipped as dead code: `term.tsx` and `GLOSSARY` were wired into nothing, live `abbr[title]` count was 0 | ✅ done |
+| F-70 | Moderate | 19 tab presses to reach the primary action — the whole chrome preceded `<main>` in DOM order | ✅ done |
+| F-71 | Minor | Charts and map had no arrival motion; chokepoint bands carried no attention cue | ✅ done |
+| F-72 | Minor | Walk-away panel sized against the shorter variant, clipping the weather-buffer row by 25px | ✅ done |
+| F-73 | Blocker | Theme resolution deferred to the OS, so every light-mode machine — i.e. most — never saw the dark theme at all | ✅ done |
+| F-74 | Minor | Flat panels on a flat field: no ambient light, no panel edge, no depth cue anywhere | ✅ done |
+| F-75 | Major | Twelve panels of equal weight and no stated answer; five real timeline fields scattered as bare numbers, `assumed_transit_days` rendered nowhere | ✅ done |
+| F-76 | Major | The ⓘ buttons did nothing usable — native `title`, so ~1s delay, OS chrome, no keyboard focus, no touch | ✅ done |
+| F-77 | Moderate | Voyage timeline was a bar plus a legend (a chart of a table); inline labels used `text-background` and failed contrast in both themes | ✅ done |
+| F-78 | Moderate | Portfolio returned 100% at every risk setting and derived nothing from it — the page's own defaults sit in the degenerate corner | ✅ done |
 
 Legend: ⬜ not started · 🔶 in progress · ✅ done · ⏸️ deferred (with reason) · ➖ no action needed
 
