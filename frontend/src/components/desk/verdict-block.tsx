@@ -1,4 +1,5 @@
-import { Disclosure } from '@/components/desk/disclosure'
+import { ExplanationBlock } from '@/components/desk/explanation'
+import { Figure, FigureGroup } from '@/components/desk/figure'
 import { addDays, formatShortDate, formatUsd, formatUsdCompact } from '@/lib/format'
 import type { QuoteResult } from '@/lib/types'
 import { cn } from '@/lib/utils'
@@ -82,6 +83,7 @@ export function VerdictBlock({ quote }: { quote: QuoteResult }) {
 
       {/* Lock vs wait, in money */}
       <div className="flex-1 overflow-auto p-2">
+        <FigureGroup>
         <table className="desk-table">
           <thead>
             <tr>
@@ -92,26 +94,37 @@ export function VerdictBlock({ quote }: { quote: QuoteResult }) {
             </tr>
           </thead>
           <tbody>
+            {/* The three rates roll to their new values rather than snapping.
+                A quote replaces every figure on this screen at once, and a
+                hard swap gives no signal about which numbers moved -- the
+                delta between "lock today" and "wait for trough" is the whole
+                comparison, and motion makes it legible peripherally while the
+                eye is still on the verdict. Grouped so the digit columns time
+                together instead of shuffling independently. */}
             <tr className={isLock ? 'bg-go-soft' : undefined}>
               <td className="font-semibold">Lock today</td>
-              <td className="desk-num text-right">{formatUsd(lockRate)}</td>
-              <td className="desk-num text-right font-semibold">{formatUsdCompact(lockTerm)}</td>
+              <td className="desk-num text-right">
+                <Figure value={lockRate} kind="usd" />
+              </td>
+              <td className="desk-num text-right font-semibold">
+                <Figure value={lockTerm} kind="usdCompact" />
+              </td>
               <td className="text-right text-body text-muted-foreground">now</td>
             </tr>
             <tr className={!isLock ? 'bg-wait-soft' : undefined}>
               <td className="font-semibold">Wait for trough</td>
               <td className="desk-num text-right">
-                {waitRate != null ? formatUsd(waitRate) : '—'}
+                {waitRate != null ? <Figure value={waitRate} kind="usd" /> : '—'}
               </td>
               <td className="desk-num text-right font-semibold">
-                {waitTerm != null ? formatUsdCompact(waitTerm) : '—'}
+                {waitTerm != null ? <Figure value={waitTerm} kind="usdCompact" /> : '—'}
               </td>
               <td className="text-right text-body text-muted-foreground">{windowText}</td>
             </tr>
             <tr>
               <td className="font-semibold">Ceiling</td>
               <td className="desk-num text-right text-muted-foreground">
-                {formatUsd(quote.ceiling_usd_per_day)}
+                <Figure value={quote.ceiling_usd_per_day} kind="usd" />
               </td>
               <td
                 className={cn(
@@ -125,6 +138,7 @@ export function VerdictBlock({ quote }: { quote: QuoteResult }) {
             </tr>
           </tbody>
         </table>
+        </FigureGroup>
 
         <div className="mt-2 space-y-1 border-t border-border pt-2">
           <div className="stat-row">
@@ -201,22 +215,15 @@ export function VerdictBlock({ quote }: { quote: QuoteResult }) {
            * previously computed on every quote and never rendered
            * anywhere. Collapsed by default so it doesn't compete with the
            * headline numbers above; one click away instead of hidden. */}
-          <Disclosure label="Why this verdict">
-            <ul className="space-y-1 text-caption leading-relaxed text-muted-foreground">
-              {quote.explanations.lock_wait.factors.map((f, i) => (
-                <li key={i} className="flex gap-2">
-                  <span
-                    className="mt-2 h-1 w-1 shrink-0 rounded-full bg-market"
-                    aria-hidden="true"
-                  />
-                  <span>{f}</span>
-                </li>
-              ))}
-              <li className="border-t border-border/60 pt-1 italic">
-                {quote.explanations.lock_wait.method}
-              </li>
-            </ul>
-          </Disclosure>
+          {/* Both of these are backend-written rationales that already ride on
+              every quote. `lock_wait` was the only one of the five ever
+              rendered; `savings` explains the expected-savings figure a few
+              rows above and was being fetched and discarded. */}
+          <ExplanationBlock explanation={quote.explanations.lock_wait} label="Why this verdict" />
+          <ExplanationBlock
+            explanation={quote.explanations.savings}
+            label="How the savings were estimated"
+          />
         </div>
       </div>
     </div>

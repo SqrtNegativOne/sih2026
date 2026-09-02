@@ -2366,3 +2366,105 @@ pages **PASS** (every panel > 50px, zero clipped, no horizontal scroll), the des
 1440 / 1920, and zero console errors, zero page exceptions and zero failed requests across every page
 and every compute action. `ruff check .` clean · `tsc` clean · `oxlint` 5 pre-existing warnings ·
 `npm run build` clean · `pytest` 1297 passed, 3 skipped.
+
+---
+
+### 2026-09-02 — Visual transformation: dark theme, motion, and the two discarded signals
+
+A frontend-only transformation pass. Zero files touched under `backend/`, `src/` or `tests/`; no
+endpoint, request shape or response handling altered; no displayed value's meaning, units, rounding
+or provenance changed. `ruff check .` stays clean, `pytest` stays at 1297 passed / 3 skipped.
+
+#### Dark as the primary theme (F-62)
+
+The desk was light-only and read like an internal admin form. Dark is now the default and light is a
+full first-class alternate. Both are complete parallel sets of the *same* raw custom properties --
+`:root` carries dark, `.light` overrides every one of them -- so no component carries a `dark:`
+variant or a literal colour, and neither theme can be half-defined. Selection is stored-choice, then
+OS preference, then dark, applied by a pre-paint inline script in `index.html`; doing it in a React
+effect flashes a full white frame between these two palettes.
+
+Three classes of colour-pairing bug fell out, each fixed with a token so it cannot recur per
+component:
+
+| Bug | Where it showed | Fix |
+|---|---|---|
+| Solid fills had no paired foreground | `text-white` on the dark theme's light `--wait` put the LOCK/WAIT verdict at roughly 2:1 | `--go-fg` / `--wait-fg` / `--risk-fg` / `--market-fg` |
+| Tinted (15%) chips had no paired foreground | on light the tint lifts the ground enough that the base inks land at 4.14:1 (wait) and 4.27:1 (go) -- under AA on the band/rating/congestion chips that exist to be read at a glance | `--*-on-soft` |
+| Grade chips hardcoded their letter colour | per-band *and* per-theme; white on light's `--grade-d` was 3.25:1 | `--grade-*-fg`, removing the last literal hexes from `grade.tsx` |
+
+The route map's sea/land/coast were literal light-theme hexes, so it stayed a cream world in the
+middle of a dark page -- now `--map-*`. The top bar's New Quote button was a white pill with
+`--primary` text, which measures 2.72:1 once `--primary` is dark-theme blue.
+
+**A note on how these were found.** The first contrast auditor reported 23 failures on the dark desk,
+nearly all phantom: Tailwind v4 serialises opacity modifiers as `oklab(L a b / a)`, and recovering a
+straight colour from `getImageData` by dividing alpha back out produced channel values above 255. The
+rewritten checker never inspects a translucent colour directly -- it paints the resolved opaque base
+onto a 1x1 canvas, paints the colour over it, and reads back the composite, which is the same
+operation the browser performs. Both themes now report only the two disabled TC In/TC Out rail items,
+which WCAG 1.4.3 exempts.
+
+#### A motion vocabulary (F-63)
+
+`lib/motion.ts` holds the duration scale, one ease-out curve, and the shared variants (`enterUp`,
+`staggerChildren`, `drawPath`, `fadeBand`). Durations are deliberately short: this is a tool someone
+uses for hours, and anything that reads as "premium" on a landing page reads as *slow* by the
+twentieth quote of the day. Every animation has to answer one of *where did this come from*, *what
+just changed*, *what is loading*, *what did I just do*; anything else is decoration and did not ship.
+No entrance animation on page load, nothing that loops, no artificial latency.
+
+#### Numbers that transition (F-64)
+
+`Figure` wraps `@number-flow/react` so every rate and money figure rolls to its new value. Two real
+problems had to be solved first, both found by reading the rendered DOM rather than assuming:
+
+- **NumberFlow is inaccessible as shipped.** It renders into a shadow root, and it renders *every*
+  digit 0-9 stacked per column so it can animate by translation. Inspected live, that content carries
+  no `aria-hidden`, no `role` and no label: its text is literally `01234567890123456789,012...`, so a
+  screen reader walks it and reads digit soup -- and nothing outside the shadow root can read the
+  value at all, making the figure unselectable and uncopyable. On a desk where people lift rates into
+  an email that is a regression, not a nicety. The animated element is now `aria-hidden` and the real
+  formatted value rides alongside it as `sr-only` text.
+- **Intl's compact notation does not match this codebase's formatter.** `formatUsdCompact` switches
+  precision by magnitude and does its own thresholding, so $620,940 is "$620.9K" (Intl said
+  "$620.94K") and 999,999 is "$1000.0K" (Intl said "$1.0M", and grouping added a comma). `resolve()`
+  now mirrors the helper's branching and scales the value itself; verified equal on 21 magnitudes
+  including both threshold boundaries and negatives.
+
+#### The two signals that were already paid for (F-65, F-66)
+
+**F-65 -- the walk-away curve.** `stopping_result.exercise_boundary_usd_per_day` is 90 real numbers
+per quote -- the Longstaff-Schwartz optimal-stopping boundary, the highest rate at which locking
+still beats waiting, for each day to the horizon. It was typed in the frontend and rendered by *zero*
+components. It is not an illustration of the verdict, it *is* the verdict: the solver's own rule is
+`LOCK if today_quote <= boundary[0] + weather`, and `boundary[0] + weather` is exactly the single
+"Ceiling" figure the verdict panel already showed. The curve now sits full-width directly under the
+verdict, with today's rate drawn against it and the gap between them shaded -- the distance the
+market has to travel before locking becomes correct. The terminal point is labelled as a boundary
+condition rather than a forecast and excluded from "where the line bottoms", because at the horizon
+there is no waiting left and the line meets the strike by construction.
+
+**F-66 -- four discarded explanations.** `quote.explanations` has five members; only `lock_wait` was
+rendered. `savings`, `fleet_mix`, `voyage_assignments[]` and `repositioning[]` were fetched on every
+quote and thrown away -- backend-written, plain-English rationales, which is precisely the material
+the "hard to understand" complaint was about. All five now surface through the desk's single
+Disclosure, next to the figures they explain. Verified by opening each and measuring the revealed
+height: 283px/1102 chars (verdict), 109px/320 chars (savings), 133px/574 chars (fleet mix), plus the
+assignment rationale confirmed populating against a quote with a real vessel.
+
+#### Verification
+
+Geometry, not text presence. All five secondary pages **PASS in both themes** -- every panel > 50px,
+zero clipped, no horizontal scroll -- and the desk passes at 1280 / 1440 / 1920. Zero console errors,
+zero page exceptions and zero failed requests across every page and every compute action. Contrast
+audited in both themes on the empty state, the drawer and a fully populated desk.
+
+`tsc` clean · `oxlint` 1 pre-existing warning · `npm run build` clean · `ruff check .` clean ·
+tripwire green · bundle 744 KB / 242 KB gzip against a 714 KB / 233 KB baseline (+9.5 KB gzip, the
+NumberFlow runtime; budget was +150 KB) · no new dependencies.
+
+One thing worth recording: `npx tsc --noEmit` passed while `npm run build` failed, on
+`Intl.NumberFormatOptions` not being assignable to NumberFlow's narrower `Format`. The build's
+typecheck is stricter than the bare one under this repo's config, so a green `tsc --noEmit` is not
+sufficient evidence before committing.

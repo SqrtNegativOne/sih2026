@@ -15,6 +15,7 @@ import { RouteMap } from '@/components/desk/route-map'
 import { SolveProgress } from '@/components/desk/solve-progress'
 import { SummaryStrip } from '@/components/desk/summary-strip'
 import { VerdictBlock } from '@/components/desk/verdict-block'
+import { WalkAwayCurve } from '@/components/desk/walk-away-curve'
 import { VoyageAssignmentsTable } from '@/components/desk/voyage-assignments-table'
 import { Button } from '@/components/ui/button'
 import { anchoragePortForQuotePort } from '@/lib/anchorage-ports'
@@ -243,6 +244,22 @@ export function VoyageDeskPage({
         </div>
       </div>
 
+      {/* 1b. Why that verdict.
+          The optimal-stopping boundary was computed on every quote, typed in
+          the frontend, and rendered nowhere -- 90 real numbers per quote,
+          discarded. It is the actual decision rule (the solver's own test is
+          `LOCK if today_quote <= boundary[0] + weather`), so it belongs
+          immediately under the verdict it produces rather than filed with the
+          supporting panels. Full width because 90 points need it to be
+          readable, and because the shape of the line -- where it troughs, how
+          far today sits above it -- is the single most informative object on
+          the page once you can actually see it. */}
+      {/* 304px measured, not guessed: the 168px chart plus its axis padding
+          and the four-line reading beneath it come to 291px of real content. */}
+      <div className="h-76">
+        <WalkAwayCurve quote={quote} />
+      </div>
+
       {/* 2. The Route -- the map is the wider of the two on purpose: it's
           the single most immediately legible panel on the desk, and sitting
           right under the decision means a screenshot of the page's top
@@ -273,7 +290,7 @@ export function VoyageDeskPage({
       <div className="grid grid-cols-1 gap-1 xl:grid-cols-12">
         <div className="h-60 xl:col-span-6">
           {quote.fleet_mix ? (
-            <FleetMixTable frontier={quote.fleet_mix} />
+            <FleetMixTable frontier={quote.fleet_mix} explanation={quote.explanations.fleet_mix} />
           ) : (
             <EmptyPanel
               label="No fleet-mix frontier"
@@ -290,7 +307,12 @@ export function VoyageDeskPage({
         </div>
         <div className="h-60 xl:col-span-3">
           {hasAssignments ? (
-            <VoyageAssignmentsTable rec={rec} ports={ports} />
+            <VoyageAssignmentsTable
+              rec={rec}
+              ports={ports}
+              assignmentExplanations={quote.explanations.voyage_assignments}
+              repositioningExplanations={quote.explanations.repositioning}
+            />
           ) : (
             <EmptyPanel
               label="Nothing scheduled"

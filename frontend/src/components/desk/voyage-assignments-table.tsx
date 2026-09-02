@@ -1,5 +1,6 @@
+import { ExplanationList } from '@/components/desk/explanation'
 import { Panel } from '@/components/desk/panel'
-import type { OptimizerRecommendation, PortListing } from '@/lib/types'
+import type { Explanation, OptimizerRecommendation, PortListing } from '@/lib/types'
 import { formatNumber, formatUsdCompact, prettyPort } from '@/lib/format'
 
 const hrs = (h: number) => `${(h / 24).toFixed(1)}d`
@@ -7,9 +8,16 @@ const hrs = (h: number) => `${(h / 24).toFixed(1)}d`
 export function VoyageAssignmentsTable({
   rec,
   ports,
+  assignmentExplanations,
+  repositioningExplanations,
 }: {
   rec: OptimizerRecommendation
   ports: PortListing[]
+  /** `quote.explanations.voyage_assignments` and `.repositioning` -- one
+   *  plain-English rationale per decision the scheduler made. Both were
+   *  computed on every quote and discarded before this. */
+  assignmentExplanations?: Explanation[] | null
+  repositioningExplanations?: Explanation[] | null
 }) {
   const portName = (code: string) =>
     prettyPort(ports.find((p) => p.code === code)?.name ?? code)
@@ -106,6 +114,15 @@ export function VoyageAssignmentsTable({
           ))}
         </ul>
       )}
+      {(assignmentExplanations?.length || repositioningExplanations?.length) ? (
+        <div className="space-y-1 border-t border-border px-2 pb-2">
+          <ExplanationList explanations={assignmentExplanations} label="Why these assignments" />
+          <ExplanationList
+            explanations={repositioningExplanations}
+            label="Why these repositioning moves"
+          />
+        </div>
+      ) : null}
     </Panel>
   )
 }

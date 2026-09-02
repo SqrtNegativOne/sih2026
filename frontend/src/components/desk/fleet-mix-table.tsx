@@ -1,6 +1,7 @@
 import { Panel } from '@/components/desk/panel'
+import { ExplanationBlock } from '@/components/desk/explanation'
 import { Grade, scoreToGrade } from '@/components/desk/grade'
-import type { FleetConfiguration, FleetMixFrontier } from '@/lib/types'
+import type { Explanation, FleetConfiguration, FleetMixFrontier } from '@/lib/types'
 import { formatNumber, formatUsdCompact } from '@/lib/format'
 
 function Row({
@@ -56,7 +57,16 @@ function Row({
   )
 }
 
-export function FleetMixTable({ frontier }: { frontier: FleetMixFrontier }) {
+export function FleetMixTable({
+  frontier,
+  explanation,
+}: {
+  frontier: FleetMixFrontier
+  /** `quote.explanations.fleet_mix` -- the solver's own plain-English account
+   *  of why this configuration won and what each rival cost. Computed on every
+   *  quote and previously discarded. */
+  explanation?: Explanation | null
+}) {
   return (
     <Panel
       className="h-full"
@@ -115,6 +125,11 @@ export function FleetMixTable({ frontier }: { frontier: FleetMixFrontier }) {
               </li>
             ))}
         </ul>
+      )}
+      {explanation && (
+        <div className="border-t border-border px-2 pb-2">
+          <ExplanationBlock explanation={explanation} label="Why this configuration" />
+        </div>
       )}
     </Panel>
   )
