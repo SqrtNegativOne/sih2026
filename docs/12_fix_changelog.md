@@ -98,6 +98,8 @@ the number/behaviour changed, not just that code was edited.
 | F-82 | Moderate | Synthetic-data allowlist pinned an exception by line number, breaking the build on any edit above it (third occurrence) | ✅ done |
 | F-83 | Major | Rupee display was one checkbox in one panel, for an Indian PSU — and no real FX rate was reachable outside the landed-cost path | ✅ done |
 | F-84 | Minor | Settings had no ordering rationale and no answer to "what data is actually loaded?" | ✅ done |
+| F-85 | Major | A selected combobox could not be reopened by clicking — correcting a wrong port required backspacing; and Escape closed the whole drawer instead of the list | ✅ done |
+| F-86 | Minor | Settings carried quote-form defaults and a satellite-coverage line that read as configuration and as an apology | ✅ done |
 
 Legend: ⬜ not started · 🔶 in progress · ✅ done · ⏸️ deferred (with reason) · ➖ no action needed
 
@@ -2943,3 +2945,44 @@ Verified: all five secondary pages PASS in both themes, desk PASSES, **contrast 
 themes**, zero console errors, currency switches live across the whole desk with correct Indian
 grouping, `/fx` returns a real observation (₹95.71, 2026-08-20). `ruff check .` clean, `tsc` clean,
 build clean, tripwire green.
+
+#### F-85 — a selected combobox was a dead end
+
+Reported as "the port scrollbar becomes disabled and we have to backspace it". Exactly right, and the
+cause was a single missing handler: `onFocus` was the **only** thing that opened the list. Committing
+an option closes the list but leaves focus in the input, so clicking the field again fires no focus
+event and nothing reopens — the only way back to the options was to backspace until `onChange` fired.
+Correcting a wrong port, the most common thing anyone does with this control, was the one thing it
+made hard.
+
+There are now three obvious ways back in: click the field, click the chevron (a real toggle button
+rather than a `pointer-events-none` glyph), or press ArrowDown. Opening with a value already chosen
+also starts the highlight **on** that value and scrolls it into view, rather than at the top of a
+16-port list.
+
+**A second bug surfaced while testing it.** Pressing Escape to dismiss the dropdown closed the whole
+quote drawer, because the combobox never stopped the event and both drawers listen for Escape on
+`window`. You could not dismiss the list and stay in the form. Escape is now swallowed only when the
+list is actually open; with it closed the event passes through and Escape still closes the drawer.
+Verified as a sequence: first Escape closes the list and keeps the drawer, second Escape closes the
+drawer.
+
+#### F-86 — Settings trimmed to what belongs in Settings
+
+The quote-form defaults and the System & data section are gone. Both were defensible and neither was
+right:
+
+- **Quote defaults** read as configuration rather than as a product. Nobody opens Settings to change
+  a port they are about to type anyway — the quote form is the right place to ask for quote inputs.
+  `DeskSettings` and `QuoteDrawer` are cleaned up with them, so no dead configuration is left behind
+  driving values nothing can edit.
+- **Satellite coverage** ("5 of 16") was accurate and read as an apology. Coverage is already
+  self-evident where it matters: the panel renders for a covered port and does not for the others.
+
+Settings is now two sections — **Currency & numbers** and **Appearance** — both of which change every
+screen, which is the test for whether something belongs in a settings panel at all.
+
+Verified: all five secondary pages PASS in both themes, desk PASSES, contrast **0 failures in both
+themes**, zero console errors, combobox reopens on click and on chevron with all 16 options and
+corrects a wrong pick in one click, Settings shows exactly two sections with no satellite or
+quote-default copy. `pytest` 1297 passed, 3 skipped.

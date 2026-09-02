@@ -5,7 +5,6 @@ import { IconRail } from '@/components/shell/icon-rail'
 import { SettingsDrawer } from '@/components/shell/settings-drawer'
 import { TopBar } from '@/components/shell/top-bar'
 import { loadSettings, type DeskSettings } from '@/lib/settings'
-import { PORT_CODE_TO_ANCHORAGE_PORT } from '@/lib/anchorage-ports'
 import { MoneyProvider } from '@/lib/money-context'
 import type { MoneyContext } from '@/lib/format'
 import {
@@ -30,11 +29,6 @@ import { PortfolioPage } from '@/pages/portfolio-page'
 import { PortTwinPage } from '@/pages/port-twin-page'
 import { TonnageFieldPage } from '@/pages/tonnage-field-page'
 import { VoyageDeskPage } from '@/pages/voyage-desk-page'
-
-/** Ports with a processed Sentinel-1 scene, from lib/anchorage-ports. Real
- *  coverage, stated in Settings rather than left for a reader to infer from
- *  which panels appear. */
-const SATELLITE_PORT_COUNT = Object.keys(PORT_CODE_TO_ANCHORAGE_PORT).length
 
 export type DeskView = 'desk' | 'port-twin' | 'tonnage-field' | 'fragility' | 'ledger' | 'portfolio'
 
@@ -211,22 +205,13 @@ function App() {
         latestDate={latestDate}
         submitting={solving}
         onSubmit={handleSubmit}
-        settings={settings}
       />
       <SettingsDrawer
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
-        ports={ports}
         settings={settings}
         onChange={setSettings}
         fx={{ inrPerUsd, asOf: fxAsOf }}
-        system={{
-          latestDate,
-          portCount: ports.length,
-          // The five ports with a processed Sentinel-1 scene. Stated as a real
-          // count rather than implied by which panels happen to render.
-          satellitePorts: SATELLITE_PORT_COUNT,
-        }}
       />
       <HelpDrawer open={helpOpen} onClose={() => setHelpOpen(false)} />
     </div>

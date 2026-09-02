@@ -1,23 +1,9 @@
 import { AnimatePresence, motion } from 'motion/react'
-import { RotateCcw, X } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { Combobox, type ComboOption } from '@/components/ui/combobox'
-import { prettyPort } from '@/lib/format'
+import { X } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { resolveTheme, setTheme, type Theme } from '@/lib/theme'
-import {
-  DEFAULT_SETTINGS,
-  clearSettings,
-  saveSettings,
-  type DeskSettings,
-} from '@/lib/settings'
-import type { PortListing } from '@/lib/types'
+import { saveSettings, type DeskSettings } from '@/lib/settings'
 import { cn } from '@/lib/utils'
-
-const inputCls =
-  'h-7 w-full rounded-sm border border-input bg-surface px-2 text-lead text-foreground ' +
-  'transition-colors placeholder:text-muted-foreground/70 hover:border-muted-foreground/60 ' +
-  'focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40'
 
 /**
  * The Settings panel.
@@ -33,22 +19,17 @@ const inputCls =
 export function SettingsDrawer({
   open,
   onClose,
-  ports,
   settings,
   onChange,
   fx,
-  system,
 }: {
   open: boolean
   onClose: () => void
-  ports: PortListing[]
   settings: DeskSettings
   onChange: (next: DeskSettings) => void
   /** The real USD/INR observation, so the currency control can state its rate
    *  and disable rupees outright when no real rate exists. */
   fx: { inrPerUsd: number | null; asOf: string | null }
-  /** Facts about what is loaded, for the System & data section. */
-  system: { latestDate: string | null; portCount: number; satellitePorts: number }
 }) {
   const [theme, setThemeState] = useState<Theme>(() =>
     typeof document !== 'undefined' && document.documentElement.classList.contains('light')
@@ -64,11 +45,6 @@ export function SettingsDrawer({
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [open, onClose])
-
-  const portOptions = useMemo<ComboOption[]>(
-    () => ports.map((p) => ({ value: p.code, label: prettyPort(p.name), hint: p.code })),
-    [ports],
-  )
 
   function set<K extends keyof DeskSettings>(key: K, value: DeskSettings[K]) {
     const next = { ...settings, [key]: value }
@@ -196,129 +172,6 @@ export function SettingsDrawer({
                 </div>
               </Section>
 
-              <Section
-                title="New quote defaults"
-                note="Prefilled when you open the quote form. Every field stays editable there — the quote is always computed from what you actually submit."
-              >
-                <Field label="Origin port">
-                  <Combobox
-                    value={settings.defaultOriginPort}
-                    onChange={(v) => set('defaultOriginPort', v)}
-                    options={portOptions}
-                    placeholder="No default"
-                  />
-                </Field>
-                <Field label="Destination port">
-                  <Combobox
-                    value={settings.defaultDestPort}
-                    onChange={(v) => set('defaultDestPort', v)}
-                    options={portOptions}
-                    placeholder="No default"
-                  />
-                </Field>
-                <div className="grid grid-cols-2 gap-2">
-                  <Field label="Cargo volume (t)">
-                    <input
-                      type="number"
-                      min={1}
-                      value={settings.defaultCargoVolumeDwt}
-                      onChange={(e) => set('defaultCargoVolumeDwt', e.target.value)}
-                      className={cn(inputCls, 'font-mono')}
-                    />
-                  </Field>
-                  <Field label="Contract term (days)">
-                    <input
-                      type="number"
-                      min={1}
-                      value={settings.defaultContractTermDays}
-                      onChange={(e) => set('defaultContractTermDays', e.target.value)}
-                      className={cn(inputCls, 'font-mono')}
-                    />
-                  </Field>
-                </div>
-                <Field label="Commodity">
-                  <input
-                    value={settings.defaultCommodity}
-                    onChange={(e) => set('defaultCommodity', e.target.value)}
-                    className={inputCls}
-                  />
-                </Field>
-                <div className="grid grid-cols-2 gap-2">
-                  <Field label="Laycan opens in (days)">
-                    <input
-                      type="number"
-                      min={0}
-                      value={settings.laycanLeadDays}
-                      onChange={(e) => set('laycanLeadDays', Number(e.target.value) || 0)}
-                      className={cn(inputCls, 'font-mono')}
-                    />
-                  </Field>
-                  <Field label="Laycan width (days)">
-                    <input
-                      type="number"
-                      min={1}
-                      value={settings.laycanWindowDays}
-                      onChange={(e) => set('laycanWindowDays', Number(e.target.value) || 1)}
-                      className={cn(inputCls, 'font-mono')}
-                    />
-                  </Field>
-                </div>
-                <Field label={`Risk tolerance — ${settings.defaultRiskTolerance}`}>
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.1}
-                    value={settings.defaultRiskTolerance}
-                    onChange={(e) => set('defaultRiskTolerance', e.target.value)}
-                    className="h-1 w-full cursor-pointer appearance-none rounded bg-muted accent-primary"
-                  />
-                  <div className="flex justify-between text-micro uppercase tracking-wide text-muted-foreground">
-                    <span>Risk-neutral</span>
-                    <span>Risk-averse</span>
-                  </div>
-                </Field>
-              </Section>
-
-              <Section
-                title="System & data"
-                note="What this desk is actually running on. Stated rather than implied, because the honest answer to 'how much of this is real?' is a list."
-              >
-                <dl className="space-y-1">
-                  {[
-                    ['Market data through', system.latestDate ?? '—'],
-                    ['Ports priced', String(system.portCount)],
-                    ['Satellite-covered ports', `${system.satellitePorts} of ${system.portCount}`],
-                    ['USD/INR rate', fx.inrPerUsd != null ? `₹${fx.inrPerUsd} (${fx.asOf})` : 'unavailable'],
-                  ].map(([k, v]) => (
-                    <div key={k} className="stat-row">
-                      <dt className="stat-label">{k}</dt>
-                      <dd className="stat-value">{v}</dd>
-                    </div>
-                  ))}
-                </dl>
-                <p className="text-micro leading-relaxed text-muted-foreground">
-                  Satellite vessel counts exist only for ports with a processed Sentinel-1 scene;
-                  the panel does not render for the others rather than showing an estimate.
-                </p>
-              </Section>
-
-              <Section
-                title="Storage"
-                note="Preferences live in this browser only — there is no account system yet, so nothing here is shared between machines or people."
-              >
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={() => {
-                    clearSettings()
-                    onChange({ ...DEFAULT_SETTINGS })
-                  }}
-                >
-                  <RotateCcw className="h-3 w-3" aria-hidden="true" />
-                  Reset to defaults
-                </Button>
-              </Section>
             </div>
           </motion.aside>
         </>
@@ -345,13 +198,3 @@ function Section({
   )
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="flex flex-col gap-1">
-      <span className="text-caption font-semibold uppercase tracking-wide text-muted-foreground">
-        {label}
-      </span>
-      {children}
-    </label>
-  )
-}

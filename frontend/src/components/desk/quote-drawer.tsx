@@ -3,7 +3,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import { Combobox, type ComboOption } from '@/components/ui/combobox'
 import { prettyPort } from '@/lib/format'
-import type { DeskSettings } from '@/lib/settings'
 import type { PortListing, QuoteRequest, VesselClass, VesselInput } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
@@ -15,9 +14,6 @@ interface QuoteDrawerProps {
   latestDate: string | null
   submitting: boolean
   onSubmit: (req: QuoteRequest) => void
-  /** Starting values for this form, from Settings. Never used to compute a
-   *  quote -- only to prefill fields the user then edits and submits. */
-  settings: DeskSettings
 }
 
 const VESSEL_CLASSES: VesselClass[] = ['Capesize', 'Panamax', 'Supramax', 'Handysize']
@@ -108,7 +104,6 @@ export function QuoteDrawer({
   latestDate,
   submitting,
   onSubmit,
-  settings,
 }: QuoteDrawerProps) {
   const addDaysIso = (iso: string, days: number) =>
     new Date(new Date(`${iso}T00:00:00Z`).getTime() + days * 86_400_000)
@@ -129,27 +124,20 @@ export function QuoteDrawer({
   const fallback = useRef(latestDate ?? new Date().toISOString().slice(0, 10)).current
   const anchorDate = latestDate ?? fallback
 
-  // Frozen at mount, like `fallback` above and for the same reason: the F-02
-  // resync below compares a field against "the offset it was seeded with", so
-  // that offset must not move if Settings changes while the drawer is open.
-  const lead = useRef(settings.laycanLeadDays).current
-  const width = useRef(settings.laycanWindowDays).current
+  const lead = 14
+  const width = 7
 
-  // Seeded from Settings rather than from literals. These are STARTING values
-  // for a form the user then edits and submits -- the quote is always computed
-  // from what was actually submitted, never from a stored preference, so a
-  // default can shorten the typing without ever changing a result.
-  const [cargoVolume, setCargoVolume] = useState(settings.defaultCargoVolumeDwt)
-  const [originPort, setOriginPort] = useState(settings.defaultOriginPort)
-  const [destPort, setDestPort] = useState(settings.defaultDestPort)
+  const [cargoVolume, setCargoVolume] = useState('75000')
+  const [originPort, setOriginPort] = useState('')
+  const [destPort, setDestPort] = useState('')
   const [asOf, setAsOf] = useState(fallback)
   const [laycanStart, setLaycanStart] = useState(addDaysIso(fallback, lead))
   const [laycanEnd, setLaycanEnd] = useState(
     addDaysIso(fallback, lead + width),
   )
-  const [contractTermDays, setContractTermDays] = useState(settings.defaultContractTermDays)
-  const [commodity, setCommodity] = useState(settings.defaultCommodity)
-  const [riskTolerance, setRiskTolerance] = useState(settings.defaultRiskTolerance)
+  const [contractTermDays, setContractTermDays] = useState('30')
+  const [commodity, setCommodity] = useState('Thermal Coal')
+  const [riskTolerance, setRiskTolerance] = useState('0')
   const [vessels, setVessels] = useState<VesselDraft[]>([])
   const [revenueUsd, setRevenueUsd] = useState('')
 
