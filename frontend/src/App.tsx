@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { QuoteDrawer } from '@/components/desk/quote-drawer'
+import { AccountsDrawer } from '@/components/shell/accounts-drawer'
 import { HelpDrawer } from '@/components/shell/help-drawer'
 import { IconRail } from '@/components/shell/icon-rail'
 import { SettingsDrawer } from '@/components/shell/settings-drawer'
+import { SignIn } from '@/components/shell/sign-in'
 import { TopBar } from '@/components/shell/top-bar'
+import { AuthProvider, useAuth } from '@/lib/auth-context'
 import { loadSettings, type DeskSettings } from '@/lib/settings'
 import { MoneyProvider } from '@/lib/money-context'
 import type { MoneyContext } from '@/lib/format'
@@ -49,7 +52,8 @@ const VIEW_LABEL: Partial<Record<DeskView, string>> = {
   portfolio: 'Portfolio',
 }
 
-function App() {
+function Shell() {
+  const auth = useAuth()
   const [view, setView] = useState<DeskView>('desk')
   const [ports, setPorts] = useState<PortListing[]>([])
   const [portsError, setPortsError] = useState<string | null>(null)
@@ -86,6 +90,7 @@ function App() {
   // over the whole app before the user has done anything.
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
+  const [accountsOpen, setAccountsOpen] = useState(false)
   const [settings, setSettings] = useState<DeskSettings>(() => loadSettings())
   // The real FRED USD/INR observation, fetched once. Null until it answers,
   // and null forever if no real observation covers the pricing date -- in
@@ -95,7 +100,18 @@ function App() {
   const [fxAsOf, setFxAsOf] = useState<string | null>(null)
   const runId = useRef(0)
 
+  // Only once the desk is actually reachable. These four fired on mount
+  // unconditionally, which on a closed deployment meant four guaranteed 401s
+  // in the console behind the sign-in screen -- before the app even knew
+  // whether anyone was signed in. Harmless in effect and awful in practice:
+  // real failures become impossible to spot in a console that always has
+  // errors in it, and a user's first impression of the product is a wall of
+  // red. `admitted` is false while /auth/status is still in flight, so the
+  // requests wait for the answer rather than racing it.
+  const admitted = !auth.loading && !auth.unreachable && (!auth.status?.enforced || !!auth.user)
+
   useEffect(() => {
+    if (!admitted) return
     fetchPorts()
       .then(setPorts)
       .catch((err: unknown) => {
@@ -113,7 +129,7 @@ function App() {
         setFxAsOf(f.as_of)
       })
       .catch(() => setInrPerUsd(null))
-  }, [])
+  }, [admitted])
 
   function handleSubmit(req: QuoteRequest) {
     const id = ++runId.current
@@ -146,6 +162,42 @@ function App() {
     inrPerUsd,
   }
 
+  // Every hook above runs unconditionally; the gates below are the last thing
+  // before render, so switching between the sign-in screen and the desk never
+  // changes the hook order.
+  if (auth.loading) {
+    // Deliberately blank rather than a spinner. This resolves in one local
+    // request, and the only thing worse than a brief blank frame is a closed
+    // desk that flashes its contents before deciding to ask for a password.
+    return <div className="h-full bg-background" aria-busy="true" />
+  }
+
+  if (auth.unreachable) {
+    // A backend that is down is not an unauthenticated user. Showing a
+    // sign-in form here would send someone to type credentials at a server
+    // that cannot answer.
+    return (
+      <div className="flex h-full items-center justify-center bg-background p-6">
+        <div className="max-w-sm space-y-2 text-center">
+          <p className="text-lead font-semibold text-risk">Cannot reach the desk</p>
+          <p className="text-caption leading-relaxed text-muted-foreground">
+            The backend is not answering. Start it with{' '}
+            <span className="desk-num">uv run uvicorn backend.main:app --reload</span> and reload
+            this page.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  if (auth.status?.enforced && !auth.user) {
+    return (
+      <div className="h-full bg-background">
+        <SignIn />
+      </div>
+    )
+  }
+
   return (
     <MoneyProvider value={moneyCtx}>
     <div className="flex h-full flex-col overflow-hidden">
@@ -160,6 +212,7 @@ function App() {
         onNewQuote={() => setDrawerOpen(true)}
         onOpenSettings={() => setSettingsOpen(true)}
         onOpenHelp={() => setHelpOpen(true)}
+        onOpenAccounts={() => setAccountsOpen(true)}
       />
       <div className="flex min-h-0 flex-1">
         <IconRail active={VIEW_LABEL[view]} onSelectView={setView} />
@@ -225,8 +278,20 @@ function App() {
         fx={{ inrPerUsd, asOf: fxAsOf }}
       />
       <HelpDrawer open={helpOpen} onClose={() => setHelpOpen(false)} />
+      <AccountsDrawer open={accountsOpen} onClose={() => setAccountsOpen(false)} />
     </div>
     </MoneyProvider>
+  )
+}
+
+/** AuthProvider wraps the shell rather than living inside it, so the shell
+ *  can read the session with a hook and still decide, before rendering
+ *  anything, whether this deployment wants a sign-in first. */
+function App() {
+  return (
+    <AuthProvider>
+      <Shell />
+    </AuthProvider>
   )
 }
 

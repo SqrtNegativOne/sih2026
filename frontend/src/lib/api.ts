@@ -3,8 +3,11 @@ import type {
   AnchorageCensus,
   AnchoragePortCode,
   ApiError,
+  AuthStatus,
   BackhaulResponse,
   ChokepointReference,
+  DeskRole,
+  DeskUser,
   FractureResponse,
   FragilityReport,
   FragilityVariable,
@@ -42,6 +45,29 @@ import type {
 // this is unchanged '/api' -- the exact dev behaviour today.
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api'
 
+/**
+ * Every request goes through here so the session cookie is sent consistently.
+ *
+ * `credentials` defaults to 'same-origin', which is already correct for the
+ * normal setup — vite proxies /api to the backend, so the browser sees one
+ * origin. It is NOT correct when VITE_API_BASE_URL points at another origin:
+ * there the cookie is simply omitted and every call comes back 401 on a
+ * closed desk, with nothing in the console to say why. Deciding it once, from
+ * the base URL, means no call site can get it wrong or forget.
+ *
+ * A cross-origin deployment also needs the server to name that origin in
+ * DESK_CORS_ORIGINS — the backend enables credentialed CORS only for an
+ * explicit list, because a wildcard plus credentials lets any site on the
+ * internet make authenticated calls with a logged-in user's cookie.
+ */
+const CREDENTIALS: RequestCredentials = /^https?:\/\//.test(BASE_URL)
+  ? 'include'
+  : 'same-origin'
+
+function api(path: string, init?: RequestInit): Promise<Response> {
+  return fetch(`${BASE_URL}${path}`, { ...init, credentials: CREDENTIALS })
+}
+
 export class ApiRequestError extends Error {
   status: number
 
@@ -60,11 +86,11 @@ async function parseOrThrow<T>(res: Response): Promise<T> {
 }
 
 export async function fetchMeta(): Promise<Meta> {
-  return parseOrThrow<Meta>(await fetch(`${BASE_URL}/meta`))
+  return parseOrThrow<Meta>(await api(`/meta`))
 }
 
 export async function fetchPorts(): Promise<PortListing[]> {
-  return parseOrThrow<PortListing[]>(await fetch(`${BASE_URL}/ports`))
+  return parseOrThrow<PortListing[]>(await api(`/ports`))
 }
 
 // ---------------------------------------------------------------------------
@@ -93,11 +119,11 @@ export async function fetchPortReality(code: PortCode, p: PortRealityParams): Pr
   if (p.vesselIsLaden !== undefined) qs.set('vessel_is_laden', String(p.vesselIsLaden))
   if (p.commodity) qs.set('commodity', p.commodity)
   if (p.asOf) qs.set('as_of', p.asOf)
-  return parseOrThrow<PortRealityReport>(await fetch(`${BASE_URL}/ports/${code}/reality?${qs}`))
+  return parseOrThrow<PortRealityReport>(await api(`/ports/${code}/reality?${qs}`))
 }
 
 export async function fetchPortBerths(code: PortCode): Promise<PortBerthsResponse> {
-  return parseOrThrow<PortBerthsResponse>(await fetch(`${BASE_URL}/ports/${code}/berths`))
+  return parseOrThrow<PortBerthsResponse>(await api(`/ports/${code}/berths`))
 }
 
 export async function fetchPortCalls(
@@ -107,11 +133,11 @@ export async function fetchPortCalls(
   const qs = new URLSearchParams()
   if (opts.limit !== undefined) qs.set('limit', String(opts.limit))
   if (opts.offset !== undefined) qs.set('offset', String(opts.offset))
-  return parseOrThrow<PortCallsResponse>(await fetch(`${BASE_URL}/ports/${code}/calls?${qs}`))
+  return parseOrThrow<PortCallsResponse>(await api(`/ports/${code}/calls?${qs}`))
 }
 
 export async function fetchPortWaits(code: PortCode): Promise<PortWaitsResponse> {
-  return parseOrThrow<PortWaitsResponse>(await fetch(`${BASE_URL}/ports/${code}/waits`))
+  return parseOrThrow<PortWaitsResponse>(await api(`/ports/${code}/waits`))
 }
 
 // ---------------------------------------------------------------------------
@@ -120,12 +146,12 @@ export async function fetchPortWaits(code: PortCode): Promise<PortWaitsResponse>
 
 export async function fetchTonnageField(asOf?: string): Promise<TonnageFieldResponse> {
   const qs = asOf ? `?${new URLSearchParams({ as_of: asOf })}` : ''
-  return parseOrThrow<TonnageFieldResponse>(await fetch(`${BASE_URL}/tonnage-field${qs}`))
+  return parseOrThrow<TonnageFieldResponse>(await api(`/tonnage-field${qs}`))
 }
 
 export async function fetchTonnageFieldForward(horizon = 90): Promise<TonnageFieldForwardResponse> {
   const qs = new URLSearchParams({ horizon: String(horizon) })
-  return parseOrThrow<TonnageFieldForwardResponse>(await fetch(`${BASE_URL}/tonnage-field/forward?${qs}`))
+  return parseOrThrow<TonnageFieldForwardResponse>(await api(`/tonnage-field/forward?${qs}`))
 }
 
 /** Slow on the first call after backend start (~45s real -- an XGBoost A/B
@@ -133,11 +159,11 @@ export async function fetchTonnageFieldForward(horizon = 90): Promise<TonnageFie
  * "computing validation" state rather than a generic spinner so a first-time
  * user understands the wait. */
 export async function fetchTonnageFieldValidation(): Promise<TonnageFieldValidationResponse> {
-  return parseOrThrow<TonnageFieldValidationResponse>(await fetch(`${BASE_URL}/tonnage-field/validation`))
+  return parseOrThrow<TonnageFieldValidationResponse>(await api(`/tonnage-field/validation`))
 }
 
 export async function fetchQuote(req: QuoteRequest): Promise<QuoteEnvelope> {
-  const res = await fetch(`${BASE_URL}/quote`, {
+  const res = await api(`/quote`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(req),
@@ -159,7 +185,7 @@ interface StreamHandlers {
 export async function streamQuote(req: QuoteRequest, handlers: StreamHandlers): Promise<void> {
   let res: Response
   try {
-    res = await fetch(`${BASE_URL}/quote/stream`, {
+    res = await api(`/quote/stream`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(req),
@@ -224,7 +250,7 @@ export interface FragilityRequest {
 }
 
 export async function fetchFragility(req: FragilityRequest): Promise<FragilityReport> {
-  const res = await fetch(`${BASE_URL}/fragility`, {
+  const res = await api(`/fragility`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -251,14 +277,14 @@ export async function fetchLedgerLive(opts: { from?: string; to?: string } = {})
   const qs = new URLSearchParams()
   if (opts.from) qs.set('date_from', opts.from)
   if (opts.to) qs.set('date_to', opts.to)
-  return parseOrThrow<LedgerLiveResponse>(await fetch(`${BASE_URL}/ledger/live?${qs}`))
+  return parseOrThrow<LedgerLiveResponse>(await api(`/ledger/live?${qs}`))
 }
 
 export async function fetchLedgerPerformance(opts: { from?: string; to?: string } = {}): Promise<LedgerPerformanceResponse> {
   const qs = new URLSearchParams()
   if (opts.from) qs.set('date_from', opts.from)
   if (opts.to) qs.set('date_to', opts.to)
-  return parseOrThrow<LedgerPerformanceResponse>(await fetch(`${BASE_URL}/ledger/live/performance?${qs}`))
+  return parseOrThrow<LedgerPerformanceResponse>(await api(`/ledger/live/performance?${qs}`))
 }
 
 export async function postLedgerOutcome(req: {
@@ -267,7 +293,7 @@ export async function postLedgerOutcome(req: {
   realizedAtDate: string
   note?: string
 }): Promise<void> {
-  const res = await fetch(`${BASE_URL}/ledger/outcome`, {
+  const res = await api(`/ledger/outcome`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -284,7 +310,7 @@ export async function postLedgerOutcome(req: {
  * outcomes) -- see backend's DELETE /ledger/live docstring for why this is
  * safe (all-or-nothing, never a selective per-entry deletion). */
 export async function resetLedgerLive(): Promise<{ cleared: boolean; records_removed: number }> {
-  const res = await fetch(`${BASE_URL}/ledger/live`, { method: 'DELETE' })
+  const res = await api(`/ledger/live`, { method: 'DELETE' })
   return parseOrThrow<{ cleared: boolean; records_removed: number }>(res)
 }
 
@@ -293,7 +319,7 @@ export async function resetLedgerLive(): Promise<{ cleared: boolean; records_rem
  * fast; callers should show a "computing replay" state, not a generic
  * spinner, so a first-time user understands the wait. */
 export async function fetchLedgerReplay(): Promise<LedgerReplayResponse> {
-  return parseOrThrow<LedgerReplayResponse>(await fetch(`${BASE_URL}/ledger/replay`))
+  return parseOrThrow<LedgerReplayResponse>(await api(`/ledger/replay`))
 }
 
 // ---------------------------------------------------------------------------
@@ -301,7 +327,7 @@ export async function fetchLedgerReplay(): Promise<LedgerReplayResponse> {
 // ---------------------------------------------------------------------------
 
 export async function fetchLandedCost(req: LandedCostRequest): Promise<LandedCostBreakdown> {
-  const res = await fetch(`${BASE_URL}/landed-cost`, {
+  const res = await api(`/landed-cost`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(req),
@@ -318,7 +344,7 @@ export async function fetchBackhaul(req: {
   candidateLoadPorts?: PortCode[]
   assumedWindowDays?: number
 }): Promise<BackhaulResponse> {
-  const res = await fetch(`${BASE_URL}/backhaul`, {
+  const res = await api(`/backhaul`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -345,7 +371,7 @@ export async function fetchPortfolio(req: {
   destPort?: PortCode
   asOf?: string
 }): Promise<PortfolioResponse> {
-  const res = await fetch(`${BASE_URL}/portfolio`, {
+  const res = await api(`/portfolio`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -372,13 +398,13 @@ export async function fetchPortfolio(req: {
  * error. Any OTHER failure (network, 5xx) still throws ApiRequestError, same
  * as every other fetch* helper here. */
 export async function fetchAnchorageCensus(port: AnchoragePortCode): Promise<AnchorageCensus | null> {
-  const res = await fetch(`${BASE_URL}/anchorage/${port}/census`)
+  const res = await api(`/anchorage/${port}/census`)
   if (res.status === 404) return null
   return parseOrThrow<AnchorageCensus>(res)
 }
 
 export async function fetchAnchorageCalibration(): Promise<AnchorageCalibrationResponse> {
-  return parseOrThrow<AnchorageCalibrationResponse>(await fetch(`${BASE_URL}/anchorage/calibration`))
+  return parseOrThrow<AnchorageCalibrationResponse>(await api(`/anchorage/calibration`))
 }
 
 /** GET /anchorage/{port}/overlay.png -- the real SAR crop with a ring drawn
@@ -400,7 +426,7 @@ export function anchorageOverlayUrl(port: AnchoragePortCode): string {
  * once and reuse it (e.g. to place markers for every fracture response
  * afterward) rather than refetching per quote. */
 export async function fetchChokepoints(): Promise<ChokepointReference[]> {
-  return parseOrThrow<ChokepointReference[]>(await fetch(`${BASE_URL}/chokepoints`))
+  return parseOrThrow<ChokepointReference[]>(await api(`/chokepoints`))
 }
 
 export async function fetchFracture(req: {
@@ -409,7 +435,7 @@ export async function fetchFracture(req: {
   asOf?: string
   hullValueUsd?: number
 }): Promise<FractureResponse> {
-  const res = await fetch(`${BASE_URL}/fracture`, {
+  const res = await api(`/fracture`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -436,7 +462,7 @@ export interface FxRate {
 }
 
 export async function fetchFxRate(): Promise<FxRate> {
-  const res = await fetch(`${BASE_URL}/fx`)
+  const res = await api(`/fx`)
   return parseOrThrow<FxRate>(res)
 }
 
@@ -450,10 +476,80 @@ export async function fetchSeasonPlan(req: {
   as_of?: string
   contract_term_days?: number
 }): Promise<SeasonPlanResponse> {
-  const res = await fetch(`${BASE_URL}/season-plan`, {
+  const res = await api(`/season-plan`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(req),
   })
   return parseOrThrow<SeasonPlanResponse>(res)
+}
+
+// ---------------------------------------------------------------------------
+// Accounts, roles and sessions
+// ---------------------------------------------------------------------------
+
+export async function fetchAuthStatus(): Promise<AuthStatus> {
+  return parseOrThrow<AuthStatus>(await api(`/auth/status`))
+}
+
+/** Create the very first account (an admin) and sign in as it. Only works on
+ *  an empty deployment; the endpoint closes permanently once used. */
+export async function bootstrapAdmin(body: {
+  username: string
+  password: string
+  display_name?: string
+}): Promise<{ user: DeskUser }> {
+  return parseOrThrow(
+    await api(`/auth/bootstrap`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  )
+}
+
+export async function login(username: string, password: string): Promise<{ user: DeskUser }> {
+  return parseOrThrow(
+    await api(`/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    }),
+  )
+}
+
+export async function logout(): Promise<void> {
+  await api(`/auth/logout`, { method: 'POST' })
+}
+
+export async function listUsers(): Promise<DeskUser[]> {
+  return parseOrThrow<DeskUser[]>(await api(`/auth/users`))
+}
+
+export async function createUser(body: {
+  username: string
+  password: string
+  display_name?: string
+  role: DeskRole
+}): Promise<{ user: DeskUser }> {
+  return parseOrThrow(
+    await api(`/auth/users`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  )
+}
+
+export async function updateUser(
+  userId: string,
+  body: { role?: DeskRole; is_active?: boolean; password?: string },
+): Promise<{ user: DeskUser }> {
+  return parseOrThrow(
+    await api(`/auth/users/${userId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  )
 }

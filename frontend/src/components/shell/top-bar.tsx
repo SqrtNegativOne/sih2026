@@ -1,4 +1,5 @@
 import { CircleHelp, Settings, Ship } from 'lucide-react'
+import { AccountMenu } from '@/components/shell/account-menu'
 import { ThemeToggle } from '@/components/shell/theme-toggle'
 
 const SECTIONS = [
@@ -13,6 +14,7 @@ interface TopBarProps {
   onNewQuote: () => void
   onOpenSettings: () => void
   onOpenHelp: () => void
+  onOpenAccounts: () => void
 }
 
 /** A live icon control on the navy bar. Every one of these does something —
@@ -44,7 +46,7 @@ function scrollTo(id: string) {
   document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
-export function TopBar({ onNewQuote, onOpenSettings, onOpenHelp }: TopBarProps) {
+export function TopBar({ onNewQuote, onOpenSettings, onOpenHelp, onOpenAccounts }: TopBarProps) {
   return (
     // relative z-50: same fix as icon-rail.tsx -- without an explicit
     // z-index this static header sat behind the New Quote drawer's `fixed
@@ -117,6 +119,7 @@ export function TopBar({ onNewQuote, onOpenSettings, onOpenHelp }: TopBarProps) 
         >
           New Quote
         </button>
+        <AccountMenu onOpenAccounts={onOpenAccounts} />
         <ThemeToggle onDark />
         <IconButton label="Settings" onClick={onOpenSettings} icon={Settings} />
         <IconButton label="Help" onClick={onOpenHelp} icon={CircleHelp} />

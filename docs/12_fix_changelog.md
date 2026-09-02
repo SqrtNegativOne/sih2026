@@ -106,6 +106,10 @@ the number/behaviour changed, not just that code was edited.
 | F-88b | Major | 300 form controls across Port Twin, Fragility, Ledger and Portfolio had no accessible name from any source — a caption `<span>` above a control associates nothing | ✅ done |
 | F-88c | Minor | Three disabled buttons carried their only explanation in a native `title`, which most platforms suppress on a disabled element — a dead control with no stated reason | ✅ done |
 | F-89 | Major | The season plan said what a book earns but not whether it was worth the tonnage it consumes — no break-even hire, and no honest statement that this system holds no period charter rate | ✅ done |
+| F-90 | Major | No accounts, roles or sign-in: the decision ledger recorded outcomes with no way to say who reported them, so the performance statistics computed from it were unattributable | ✅ done |
+| F-90a | Major | The account dropdown rendered inside the top bar's stacking context, so `<main>` painted over it and ate every click — same root cause as F-48/F-52 | ✅ done |
+| F-90b | Minor | The shell fetched desk data before knowing whether anyone was signed in, putting eight guaranteed 401s in the console behind the sign-in screen | ✅ done |
+| F-90c | Minor | The account button had no accessible name below the `sm` breakpoint — visible name hidden, monogram aria-hidden | ✅ done |
 
 Legend: ⬜ not started · 🔶 in progress · ✅ done · ⏸️ deferred (with reason) · ➖ no action needed
 
@@ -3224,3 +3228,156 @@ The Supramax and Handysize TC averages have shorter histories than the Panamax a
 there are 91 real dates carrying a Panamax rate and no Supramax rate. On 2025-12-22, a mixed fleet
 correctly reports a real benchmark for the Panamax and `no_benchmark` for the Supramax, with the
 Supramax break-even still standing because it needs no market data.
+
+### 2026-09-03 — F-90: accounts, roles and sign-in (chunk 4)
+
+The system had no notion of who was using it. That is a gap in a product whose central artefact is
+an **append-only decision ledger** scored by `opt.ledger.compute_performance` — a record of what
+this system recommended and what actually happened is only worth something if the outcomes on it
+were reported by someone identifiable.
+
+New package `src/auth/`: `models.py` (roles), `passwords.py` (hashing), `store.py` (users and
+sessions on SQLite, and every SQL statement in the system). Routes in `backend/main.py`, per the
+house convention. Frontend: a sign-in screen, an account menu, an accounts drawer, and role gating
+on the ledger's two privileged actions.
+
+#### Why enforcement is off by default
+
+`DESK_REQUIRE_AUTH` is unset by default, and that is a stated choice rather than an oversight.
+
+A fresh clone of this repository has to run end to end with no setup — that has been a hard
+requirement throughout and it is what someone evaluating the work will actually do. An API that
+returns 401 to every call until somebody finds the bootstrap endpoint fails that on the first
+click. So the login system is fully built and fully usable in either mode, and a deployment that
+wants the desk closed sets one environment variable.
+
+What is **not** done is pretending. `/auth/status` reports the mode; the top bar shows "Open desk"
+rather than a padlock over an open door; and on an open deployment the role checks in the UI return
+true for everyone, because the server really does accept those requests and greying out a control
+the backend would honour is the interface lying about its own security.
+
+Two things are never relaxed by the open mode, both tested:
+
+- **Account management is always admin-only.** "This deployment is open" is a statement about the
+  desk — anyone may price a cargo — and never about the account system. A username is half of a
+  credential; handing the user list to an unauthenticated caller would be a real disclosure however
+  open the rest is.
+- **The last-admin guard.** Disabling or demoting the only active admin is refused at the store, so
+  it holds for every caller rather than only the route that remembered to check. The alternative is
+  a deployment recoverable only by editing the database by hand.
+
+#### Why three roles
+
+The obvious split is "the SAIL official" and "the admin", and that is one role short. The missing
+one is `chartering_manager`, and it exists because **recording a realised outcome has to be a
+privileged, attributable act**. If everyone who can read a quote can also write to the ledger, the
+audit trail records "someone" and the performance statistics computed from it mean nothing. The
+manager is the person who actually fixed the vessel and therefore knows what it fixed at; their
+name goes on the line.
+
+Permission checks compare **rank**, not set membership. An allow-list is where "admins can do
+everything except the one thing someone forgot to add them to" comes from.
+
+#### Security decisions, and what they are defending against
+
+- **`hashlib.scrypt` from the standard library**, not a third-party password library. scrypt is a
+  standardised memory-hard KDF (RFC 7914) and one of OWASP's three recommended choices; taking it
+  from the stdlib means no extra dependency to audit or trust for the single most security-sensitive
+  operation in the system. Parameters are `n=2**17, r=8, p=1` — OWASP's stated minimum — measured
+  at 272 ms per hash on this machine, which is the right order for something that happens at login
+  and nowhere else. `maxmem` has to be passed explicitly: OpenSSL's default ceiling is 32 MiB and
+  this configuration needs 128 MiB, so without it the call raises rather than silently weakening.
+- **Parameters are stored inside each hash**, so raising the cost later does not strand existing
+  passwords; old hashes keep verifying and are re-hashed on the owner's next successful login,
+  which is the only moment the plaintext exists.
+- **`hmac.compare_digest`**, not `==`. A plain byte comparison short-circuits at the first differing
+  byte, which is a real if narrow timing oracle on the stored digest.
+- **Failed sign-in is one message for every cause** — unknown username, wrong password, disabled
+  account. Separating them is a free account-enumeration oracle, and the person actually locked out
+  is no better served by knowing which of the three it was. `authenticate` also hashes the supplied
+  password even when the username does not exist: returning early would make an unknown username
+  answer in microseconds and a known one in ~270 ms, a timing difference wide enough to read over
+  the network.
+- **Server-side sessions, not JWTs.** A session can be revoked the instant an account is disabled;
+  a self-contained token stays valid until it expires whatever the user table says. For a system
+  whose point is an auditable record of who did what, "signed out means signed out" is worth more
+  than statelessness. Disabling an account and changing a password both drop that account's live
+  sessions immediately.
+- **Cookie is HttpOnly, SameSite=Lax, and Secure only when `DESK_COOKIE_SECURE` is set.** The last
+  is off by default because a Secure cookie is never stored on a plain-http origin, so defaulting it
+  on would silently break every local run.
+- **Credentialed CORS requires an explicit origin list.** Starlette, given `allow_origins=["*"]`
+  together with `allow_credentials=True`, echoes back whatever `Origin` the request carried — so
+  every website on the internet could make authenticated calls with a logged-in user's cookie. That
+  is a textbook CSRF hole, so credentials are enabled only when `DESK_CORS_ORIGINS` names the
+  origins. The local desk needs none of it: vite proxies `/api`, so the browser sees one origin.
+- **No default password and no seeded account anywhere.** `bootstrap_admin` creates the first
+  account on an empty store only and closes permanently once used.
+
+#### A middleware, not a decorator on each route
+
+Enforcement is an HTTP middleware with a short public-path allow-list, rather than a dependency
+annotated onto each route. Route annotations are opt-in, and the failure mode of an opt-in security
+control is that a route added six months from now silently is not covered — no error, no test
+failure, just an open endpoint nobody noticed. Role checks stay per-route, because those are
+genuinely per-route facts; the middleware only answers "is anyone signed in".
+
+#### Three real bugs found by running it
+
+- **A stacking-context bug in the account menu, found by a click that timed out.** The dropdown
+  rendered inline inside the top bar (`relative z-50`), but `<main>` is also `z-50` and comes later
+  in DOM order — so `<main>` painted over it regardless of the dropdown's own z-index, because a
+  child cannot escape its ancestor's stacking context. The menu looked correct and every click on it
+  hit the page behind. Same root cause as F-48 and F-52; fixed the way the Combobox and Tooltip
+  already solve it, by portaling to `<body>` with fixed coordinates.
+- **Eight guaranteed 401s in the console on a closed deployment.** `App`'s mount effect fetched
+  ports, meta, chokepoints and FX unconditionally — before the app knew whether anyone was signed
+  in — so the sign-in screen sat behind a wall of red. Harmless in effect and corrosive in
+  practice: real failures are impossible to spot in a console that always has errors in it. The
+  fetches now wait for `/auth/status` rather than racing it.
+- **The account button had no accessible name below the `sm` breakpoint.** Its visible name is
+  `hidden sm:inline` and the monogram beside it is `aria-hidden`, so at narrow widths the button
+  announced as nothing at all. Found in a real narrow-viewport run; fixed with an explicit
+  `aria-label` carrying both name and role.
+
+One finding turned out **not** to be a bug: an accessibility snapshot listed the sign-in fields as
+unnamed. Querying the DOM directly showed all three correctly named by their ancestor `<label>`
+("USERNAME", "DISPLAY NAME", "PASSWORD") — the snapshot tool simply does not compute implicit label
+association. Worth recording because the instinct was to "fix" working markup on a tool's say-so.
+
+#### Storage
+
+SQLite, not Postgres. It is a real ACID database with real transactions, constraints and foreign
+keys — a different deployment shape rather than a downgrade — and what it buys is that a fresh
+clone runs with no server to install, no connection string, and no migration step before the first
+login works. The cost is honest: one writer at a time, and no access from another machine. A
+chartering desk with a handful of users on one deployment is comfortably inside that, and every
+statement lives in `auth/store.py`, so outgrowing it is a different `_connect` rather than a
+rewrite. `PRAGMA foreign_keys = ON` is set per connection — it is off by default in SQLite, and
+without it the sessions-to-users foreign key is documentation rather than a constraint.
+
+The database is gitignored: it holds password hashes and live session tokens, and the accounts on
+one deployment are nobody else's business.
+
+#### Two defects found reviewing my own code before committing
+
+- **The session table only ever grew.** `purge_expired_sessions` existed and was never called, so a
+  deployment gained one dead row per sign-in forever. Nothing was insecure — `user_for_session`
+  refuses expired rows regardless — but a table that grows without bound is a real operational bug.
+  Creating a session now drops that same account's already-expired rows: indexed by `user_id`,
+  bounded by one person's history, and free at the one moment it is already writing.
+- **`bootstrap_admin` had a race.** It was a `has_any_user()` check followed by a separate
+  `create_user`, which is two transactions. Two requests arriving together could both see an empty
+  table and both create an admin — with different usernames, so the UNIQUE constraint never fires.
+  On the only unauthenticated write in the system, that matters. It is now a single guarded
+  `INSERT ... SELECT ... WHERE NOT EXISTS (SELECT 1 FROM users)`, whose guard is evaluated inside
+  the same transaction as its insert and cannot be interleaved. Because that path bypasses
+  `create_user`, the username and password rules are enforced on it explicitly — a first admin with
+  a four-character password would be the worst possible place to skip them, and a test pins it.
+
+75 tests added (16 on hashing, 34 on the store, 25 on the API including both enforcement modes and
+the concurrent-session case). One of them,
+`test_cost_is_at_least_the_owasp_minimum`, exists purely to fail if someone lowers the KDF cost to
+speed a test run up.
+
+README gained an "Accounts and sign-in" section documenting all four environment variables.

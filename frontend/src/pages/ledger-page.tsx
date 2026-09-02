@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { fetchLedgerLive, fetchLedgerPerformance, fetchLedgerReplay, postLedgerOutcome, resetLedgerLive } from '@/lib/api'
+import { useAuth } from '@/lib/auth-context'
 import { formatNumber, prettyPort } from '@/lib/format'
 import type { LedgerLiveEntry, LedgerLiveResponse, LedgerPerformanceResponse, LedgerReplayResponse } from '@/lib/types'
 import { cn } from '@/lib/utils'
@@ -78,6 +79,16 @@ function LiveLedgerSection() {
   const [perf, setPerf] = useState<LedgerPerformanceResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [resetting, setResetting] = useState(false)
+  // Recording an outcome is the act the chartering-manager role exists for:
+  // compute_performance scores this system's own recommendations from these
+  // lines, so if anyone who can read a quote can also write an outcome, the
+  // performance figures mean nothing. Clearing the ledger is irreversible and
+  // sits with the admin. On an open deployment `can` is true for everyone --
+  // the server really does accept these, and greying out a control the
+  // backend would honour would be the interface lying about its own security.
+  const { can } = useAuth()
+  const canRecord = can('chartering_manager')
+  const canReset = can('admin')
 
   function reload() {
     Promise.all([fetchLedgerLive(), fetchLedgerPerformance()])
@@ -112,7 +123,7 @@ function LiveLedgerSection() {
       actions={
         <>
           <Badge variant="secondary" className="text-micro">real, forward-only</Badge>
-          {live && live.total > 0 && (
+          {live && live.total > 0 && canReset && (
             <Button
               variant="danger"
               size="xs"
@@ -191,8 +202,16 @@ function LiveLedgerSection() {
                     <span className="desk-num text-caption">
                       {formatNumber(e.outcome.realized_rate_usd_per_day)} @ {e.outcome.realized_at_date}
                     </span>
-                  ) : (
+                  ) : canRecord ? (
                     <OutcomeForm entry={e} onRecorded={reload} />
+                  ) : (
+                    // Not disabled inputs: a form you can fill in and cannot
+                    // submit wastes someone's time and reads as a bug. The
+                    // honest thing is to say who can do this and why the role
+                    // exists at all.
+                    <span className="text-micro text-muted-foreground">
+                      pending — a chartering manager records the outcome
+                    </span>
                   )}
                 </td>
               </tr>

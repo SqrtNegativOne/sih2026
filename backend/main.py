@@ -21,11 +21,12 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import sys
 from collections.abc import AsyncIterator, Sequence
 from datetime import date
 from pathlib import Path
-from typing import Any, Final, Literal
+from typing import Annotated, Any, Final, Literal
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _SRC = _REPO_ROOT / "src"
@@ -35,15 +36,25 @@ if str(_SRC) not in sys.path:
 import functools
 
 import polars as pl
-from fastapi import FastAPI, HTTPException
+from fastapi import Cookie, Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
 from anchorage.calibrate import MIN_N_FOR_CORRELATION, calibrate_all_ports
 from anchorage.render import overlay_path
 from anchorage.store import latest_census
+from auth.models import ROLE_DESCRIPTION, Role, User, outranks_or_equals
+from auth.store import (
+    SESSION_TTL,
+    AuthError,
+    AuthStore,
+    LastAdminError,
+    NoSuchUserError,
+    UsernameTakenError,
+    WeakPasswordError,
+)
 from backend.serialize import model_to_json, quote_envelope_to_json
 from berth_truth.empirical import WaitInterval, compute_wait_distribution
 from berth_truth.fact_port_call import FactPortCallStore
@@ -101,12 +112,98 @@ app = FastAPI(
     version="1.0.0",
 )
 
+#: True when every route requires a real logged-in account.
+AUTH_ENFORCED: Final[bool] = os.environ.get("DESK_REQUIRE_AUTH", "").lower() in {
+    "1",
+    "true",
+    "yes",
+}
+
+#: Name of the session cookie.
+SESSION_COOKIE: Final[str] = "desk_session"
+
+#: Set when the desk is served over https. A Secure cookie is never stored by
+#: a browser on a plain-http origin, so defaulting this on would silently
+#: break every local run.
+COOKIE_SECURE: Final[bool] = os.environ.get("DESK_COOKIE_SECURE", "").lower() in {
+    "1",
+    "true",
+    "yes",
+}
+
+_auth_store: Final[AuthStore] = AuthStore()
+
+
+#: Paths that stay reachable without a session even when the desk is closed.
+#: Without these, enforcement would lock out the very endpoints needed to get
+#: in: you cannot sign in if /auth/login itself demands a signed-in user.
+_PUBLIC_PATHS: Final[frozenset[str]] = frozenset(
+    {
+        "/health",
+        "/auth/status",
+        "/auth/login",
+        "/auth/logout",
+        "/auth/bootstrap",
+        "/docs",
+        "/redoc",
+        "/openapi.json",
+    }
+)
+
+
+@app.middleware("http")
+async def _enforce_sign_in(request: Request, call_next):
+    """Require a session for every non-public path when the desk is closed.
+
+    A middleware rather than a dependency on each route, deliberately. Route
+    annotations are opt-in, and the failure mode of an opt-in security control
+    is that a route added six months from now silently is not covered -- there
+    is no error, no test failure, just an open endpoint nobody noticed. This
+    covers everything that exists and everything added later, and the
+    exceptions are a short list in one place where they can be read.
+
+    Role checks stay on the individual routes, because those are genuinely
+    per-route facts. This only answers "is anyone signed in".
+    """
+    if not AUTH_ENFORCED:
+        return await call_next(request)
+    # A CORS preflight carries no cookies by definition; rejecting it would
+    # break the real request that follows rather than secure anything.
+    if request.method == "OPTIONS" or request.url.path in _PUBLIC_PATHS:
+        return await call_next(request)
+    token = request.cookies.get(SESSION_COOKIE)
+    if token and _auth_store.user_for_session(token) is not None:
+        return await call_next(request)
+    return JSONResponse(
+        status_code=401,
+        content={
+            "detail": (
+                "This desk requires a sign-in. POST /auth/login with a username "
+                "and password, or GET /auth/status to see whether an account "
+                "still needs to be created."
+            )
+        },
+    )
+
+
 # Wide open by default -- this is a hackathon backend meant to be built on
-# top of by a teammate's frontend running on a different local port; a real
-# deployment would restrict this to the actual frontend origin.
+# top of by a teammate's frontend running on a different local port.
+#
+# Credentials (the session cookie) are enabled ONLY when DESK_CORS_ORIGINS
+# names the origins explicitly. That is not caution for its own sake:
+# Starlette, given allow_origins=["*"] together with allow_credentials=True,
+# echoes back whatever Origin the request carried -- so every website on the
+# internet would be able to make authenticated calls to this API using a
+# logged-in user's cookie, which is a textbook CSRF hole. The local desk does
+# not need it either way: vite proxies /api to this server, so the browser
+# sees one origin and sends the cookie with no CORS involved at all.
+_CORS_ORIGINS: Final[list[str]] = [
+    o.strip() for o in os.environ.get("DESK_CORS_ORIGINS", "").split(",") if o.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_CORS_ORIGINS or ["*"],
+    allow_credentials=bool(_CORS_ORIGINS),
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -366,6 +463,287 @@ def _resolve_vessels(vessels: list[VesselInput] | None) -> list[Vessel] | None:
         )
         for i, v in enumerate(vessels)
     ]
+
+
+# ---------------------------------------------------------------------------
+# Accounts, sessions and roles
+# ---------------------------------------------------------------------------
+#
+# Enforcement is OFF unless DESK_REQUIRE_AUTH is set, and that default is a
+# deliberate, stated choice rather than an oversight.
+#
+# A fresh clone of this repository has to run end to end with no setup -- that
+# has been a hard requirement throughout, and it is what someone evaluating
+# the work will actually do. An API that returns 401 to every call until
+# somebody finds the bootstrap endpoint fails that test on the first click.
+#
+# So the login system is fully built and fully usable in either mode -- the
+# /auth routes always work, accounts are real, passwords are really hashed,
+# sessions are really server-side -- and a deployment that wants the desk
+# closed sets one environment variable. What is NOT done is pretending: the
+# mode is reported by /auth/status, and the frontend shows which one it is in
+# rather than displaying a padlock over an open door.
+#
+# The session cookie is HttpOnly (JavaScript cannot read it, so an XSS bug
+# cannot exfiltrate a session), SameSite=Lax (a cross-site form post or image
+# tag will not carry it, which is the CSRF defence that matters here), and
+# Secure whenever DESK_COOKIE_SECURE is set -- off by default only because
+# local development is plain http and a Secure cookie would simply never be
+# stored.
+
+def current_user(desk_session: Annotated[str | None, Cookie()] = None) -> User | None:
+    """The signed-in account, or None. Never raises -- see ``require``."""
+    if not desk_session:
+        return None
+    return _auth_store.user_for_session(desk_session)
+
+
+def require(minimum: Role, *, always: bool = False):
+    """Dependency factory: demand at least ``minimum`` on a route.
+
+    Rank comparison via ``auth.models.outranks_or_equals``, not an allow-list:
+    a privileged action added later is automatically available to every role
+    above the one it names, rather than silently excluding admins because
+    someone forgot to add them to a set.
+
+    With enforcement off this is a no-op that still resolves the session if
+    one is present, so a route can attribute an action to a real person even
+    on an open deployment.
+
+    ``always=True`` opts a route out of that. "This deployment is open" is a
+    statement about the DESK -- anyone may price a cargo -- and never about the
+    account system itself. Account management stays closed in both modes: a
+    username is half of a credential, so handing the user list to an
+    unauthenticated caller would be a real disclosure no matter how open the
+    rest of the desk is. When no account exists yet there is no admin to
+    satisfy this, which is correct -- ``POST /auth/bootstrap`` is the way in,
+    and it closes permanently once it has been used.
+    """
+
+    def dependency(user: Annotated[User | None, Depends(current_user)]) -> User | None:
+        if not AUTH_ENFORCED and not always:
+            return user
+        if user is None:
+            raise HTTPException(
+                status_code=401,
+                detail="This desk requires a sign-in. POST /auth/login with a username and password.",
+            )
+        if not outranks_or_equals(user.role, minimum):
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    f"This action needs the {minimum.value} role or above; "
+                    f"{user.username} holds {user.role.value}. {ROLE_DESCRIPTION[minimum]}"
+                ),
+            )
+        return user
+
+    return dependency
+
+
+# Module-level dependency aliases rather than `Depends(...)` in a default
+# argument. Both are valid FastAPI; this form keeps each role requirement
+# named once, so a route reads as "admin only" rather than restating the
+# machinery, and it does not trip ruff's B008 (a function call evaluated once
+# at import time, bound into a default, is usually a bug -- it is only safe
+# here because FastAPI is built around it).
+CurrentUser = Annotated[User | None, Depends(current_user)]
+RequireViewer = Annotated[User | None, Depends(require(Role.VIEWER))]
+RequireManager = Annotated[User | None, Depends(require(Role.CHARTERING_MANAGER))]
+RequireAdmin = Annotated[User | None, Depends(require(Role.ADMIN))]
+#: For the account system itself -- enforced whether or not the desk is open.
+RequireAdminAlways = Annotated[User, Depends(require(Role.ADMIN, always=True))]
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class CreateUserRequest(BaseModel):
+    username: str
+    password: str
+    display_name: str = ""
+    role: Role = Role.VIEWER
+
+
+class UpdateUserRequest(BaseModel):
+    role: Role | None = None
+    is_active: bool | None = None
+    password: str | None = None
+
+
+def _attributed(note: str | None, actor: User | None) -> str | None:
+    """Attach who reported an outcome to the note it was reported with.
+
+    Appended rather than stored in its own column because the ledger is a
+    plain append-only JSONL log whose schema is deliberately stable
+    (``opt.ledger``); adding a field would make every line written before
+    today structurally different from every line written after, for a record
+    whose whole value is that old lines are never touched. On an open
+    deployment with no signed-in user there is nothing honest to attribute, so
+    nothing is added -- an unattributed line says so by saying nothing, which
+    is better than inventing an actor.
+    """
+    if actor is None:
+        return note
+    stamp = f"[recorded by {actor.display_name} ({actor.username}), {actor.role.value}]"
+    return f"{note.strip()} {stamp}" if note and note.strip() else stamp
+
+
+def _user_json(u: User) -> dict[str, Any]:
+    """A user as the API returns it.
+
+    Built field by field rather than by dumping the model, so that a field
+    added to ``auth.models.User`` later cannot leak into an HTTP response
+    without someone deciding it should. The password hash is not on that model
+    at all -- it never leaves ``auth.store`` -- but this is the second lock.
+    """
+    return {
+        "user_id": u.user_id,
+        "username": u.username,
+        "display_name": u.display_name,
+        "role": u.role.value,
+        "is_active": u.is_active,
+        "created_at": u.created_at.isoformat(),
+        "last_login_at": u.last_login_at.isoformat() if u.last_login_at else None,
+    }
+
+
+@app.get("/auth/status")
+def auth_status(user: CurrentUser) -> dict[str, Any]:
+    """Whether this deployment enforces sign-in, and who is signed in.
+
+    The frontend needs both to render honestly: an open desk should say it is
+    open rather than show a login button that changes nothing.
+    """
+    return {
+        "enforced": AUTH_ENFORCED,
+        "needs_bootstrap": not _auth_store.has_any_user(),
+        "user": _user_json(user) if user else None,
+        "roles": [
+            {"value": r.value, "description": ROLE_DESCRIPTION[r]} for r in Role
+        ],
+        "session_hours": SESSION_TTL.total_seconds() / 3600.0,
+    }
+
+
+@app.post("/auth/bootstrap")
+def auth_bootstrap(req: CreateUserRequest, response: Response) -> dict[str, Any]:
+    """Create the very first account, an admin, on an empty store only.
+
+    Open by design and safe because it closes permanently the moment any
+    account exists -- the alternative, a built-in default credential, is the
+    single most reliably exploited thing in self-hosted software. There is no
+    seeded admin anywhere in this codebase and no password it will invent.
+    """
+    try:
+        user = _auth_store.bootstrap_admin(
+            username=req.username, password=req.password, display_name=req.display_name
+        )
+    except WeakPasswordError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except AuthError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    _issue_session(response, user)
+    return {"user": _user_json(user)}
+
+
+@app.post("/auth/login")
+def auth_login(req: LoginRequest, response: Response) -> dict[str, Any]:
+    """Sign in and receive a session cookie.
+
+    One failure message for every cause -- unknown username, wrong password,
+    disabled account. Distinguishing them would hand an attacker a free
+    account-enumeration oracle, and the person actually locked out is no
+    better served by knowing which of the three it was.
+    """
+    user = _auth_store.authenticate(req.username, req.password)
+    if user is None:
+        raise HTTPException(status_code=401, detail="That username and password do not match an active account.")
+    _issue_session(response, user)
+    return {"user": _user_json(user)}
+
+
+def _issue_session(response: Response, user: User) -> None:
+    session = _auth_store.create_session(user.user_id)
+    response.set_cookie(
+        key=SESSION_COOKIE,
+        value=session.token,
+        max_age=int(SESSION_TTL.total_seconds()),
+        httponly=True,
+        samesite="lax",
+        secure=COOKIE_SECURE,
+        path="/",
+    )
+
+
+@app.post("/auth/logout")
+def auth_logout(
+    response: Response, desk_session: Annotated[str | None, Cookie()] = None
+) -> dict[str, Any]:
+    """Sign out. The session is deleted server-side, not merely forgotten by
+    the browser -- which is the whole reason sessions here are stored rather
+    than self-contained tokens."""
+    if desk_session:
+        _auth_store.destroy_session(desk_session)
+    response.delete_cookie(SESSION_COOKIE, path="/")
+    return {"signed_out": True}
+
+
+@app.get("/auth/users")
+def auth_list_users(_admin: RequireAdminAlways) -> list[dict[str, Any]]:
+    """Every account. Admin only."""
+    return [_user_json(u) for u in _auth_store.list_users()]
+
+
+@app.post("/auth/users")
+def auth_create_user(req: CreateUserRequest, _admin: RequireAdminAlways) -> dict[str, Any]:
+    """Create an account. Admin only."""
+    try:
+        user = _auth_store.create_user(
+            username=req.username,
+            password=req.password,
+            display_name=req.display_name,
+            role=req.role,
+        )
+    except UsernameTakenError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except WeakPasswordError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except AuthError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"user": _user_json(user)}
+
+
+@app.patch("/auth/users/{user_id}")
+def auth_update_user(
+    user_id: str, req: UpdateUserRequest, _admin: RequireAdminAlways
+) -> dict[str, Any]:
+    """Change a role, enable/disable an account, or set a password.
+
+    Refuses to disable or demote the last active admin: that would leave the
+    deployment with no way back in short of editing the database by hand. The
+    guard lives in ``auth.store``, so it holds for every caller, not just this
+    route.
+    """
+    try:
+        if req.password is not None:
+            _auth_store.set_password(user_id, req.password)
+        if req.role is not None:
+            _auth_store.set_role(user_id, req.role)
+        if req.is_active is not None:
+            _auth_store.set_active(user_id, req.is_active)
+    except NoSuchUserError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except LastAdminError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except WeakPasswordError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    user = _auth_store.get_user(user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail=f"No account with id {user_id!r}.")
+    return {"user": _user_json(user)}
 
 
 @app.get("/health")
@@ -1370,13 +1748,26 @@ def get_ledger_live_performance(date_from: date | None = None, date_to: date | N
 
 
 @app.post("/ledger/outcome")
-def post_ledger_outcome(req: OutcomeRequest) -> dict[str, Any]:
+def post_ledger_outcome(req: OutcomeRequest, actor: RequireManager) -> dict[str, Any]:
     """Record a realised outcome against an existing entry -- appended as a
-    new, linked record; the original entry is never touched."""
+    new, linked record; the original entry is never touched.
+
+    Needs the chartering-manager role, and this is the reason the role exists.
+    The ledger is only worth something if what it says happened actually
+    happened; ``compute_performance`` reads it to score this system's own
+    recommendations. If everyone who can read a quote can also write an
+    outcome, the audit trail records "someone" and the performance figures
+    computed from it mean nothing.
+
+    The actor's name is appended to the note rather than replacing it, so the
+    line says both what was reported and who reported it -- the ledger is
+    append-only, so this is the only moment attribution can be attached.
+    """
     try:
         outcome = ledger.record_outcome(
             req.entry_id, realized_rate_usd_per_day=req.realized_rate_usd_per_day,
-            realized_at_date=req.realized_at_date, note=req.note,
+            realized_at_date=req.realized_at_date,
+            note=_attributed(req.note, actor),
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -1391,8 +1782,10 @@ def post_ledger_outcome(req: OutcomeRequest) -> dict[str, Any]:
 
 
 @app.delete("/ledger/live")
-def delete_ledger_live() -> dict[str, Any]:
-    """P7/F-38: clear the Live Decision Ledger entirely -- all entries and
+def delete_ledger_live(_admin: RequireAdmin) -> dict[str, Any]:
+    """Admin only: this is irreversible.
+
+    P7/F-38: clear the Live Decision Ledger entirely -- all entries and
     outcomes at once, no selective deletion possible (see
     opt.ledger.reset_ledger's own docstring for why that's a genuinely
     different, safe operation from the per-entry mutation

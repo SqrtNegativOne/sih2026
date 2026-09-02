@@ -74,6 +74,12 @@ raw_data/pit_archive/
 # date. Regenerated on demand (falls back to None, never breaks a quote, if
 # absent); not source data any teammate needs to share via git.
 raw_data/open_meteo/
+# The user account and session database (auth.store). Real per-deployment
+# state: password hashes and live session tokens. Committing it would publish
+# credential material and hand every clone the same accounts -- the accounts
+# on one deployment are nobody else's business, and a fresh clone is supposed
+# to start with none and bootstrap its own first admin.
+raw_data/auth/
 
 # IBTrACS is the one exception to "raw_data/ is intentionally tracked" above:
 # the ALL-list CSV is hundreds of MB, too large to commit sensibly. Only

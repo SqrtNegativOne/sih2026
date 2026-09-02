@@ -1238,3 +1238,39 @@ export interface SeasonPlanResponse {
    *  rather than as "there is no plan". */
   period_cover: SeasonPeriodCover[]
 }
+
+// ---------------------------------------------------------------------------
+// Accounts, roles and sessions
+// ---------------------------------------------------------------------------
+
+/**
+ * What an account may do. Ordered: admin outranks chartering_manager outranks
+ * viewer. `src/auth/models.py` carries the reasoning for why there are three
+ * rather than two — the middle one exists because recording a realised
+ * outcome has to be an attributable act, or the performance record computed
+ * from the ledger means nothing.
+ */
+export type DeskRole = 'viewer' | 'chartering_manager' | 'admin'
+
+export interface DeskUser {
+  user_id: string
+  username: string
+  display_name: string
+  role: DeskRole
+  is_active: boolean
+  created_at: string
+  last_login_at: string | null
+}
+
+export interface AuthStatus {
+  /** True when this deployment requires a sign-in for every route. False is
+   *  a real, deliberate mode — not a bug — and the UI says which one it is
+   *  in rather than showing a padlock over an open door. */
+  enforced: boolean
+  /** True when no account exists yet, so the first admin still has to be
+   *  created. There is no seeded account and no default password anywhere. */
+  needs_bootstrap: boolean
+  user: DeskUser | null
+  roles: { value: DeskRole; description: string }[]
+  session_hours: number
+}

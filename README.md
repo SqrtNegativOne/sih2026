@@ -50,6 +50,43 @@ To run either half by hand instead:
 cd frontend && npm run dev
 ```
 
+## Accounts and sign-in
+
+The desk **runs with no accounts and no sign-in by default**, and that is deliberate: a fresh
+clone has to work end to end with nothing configured. Everything above stays true as written.
+
+The account system is fully built and usable in either mode. To require a sign-in, set one
+environment variable on the backend:
+
+```
+set DESK_REQUIRE_AUTH=1
+```
+
+Then open the desk. With no accounts yet it offers to create the first one, an administrator.
+There is **no default password and no seeded account anywhere in this repository** — a well-known
+first-run credential is the single most reliably exploited thing in self-hosted software, so the
+first admin is created by whoever sets the deployment up, with a password they choose.
+
+Three roles, and `src/auth/models.py` explains why there are three rather than two:
+
+| Role | Can |
+|---|---|
+| `viewer` | Run and read everything — quotes, season plans, fragility, portfolio, the ledger |
+| `chartering_manager` | The above, plus recording what a fixture actually achieved (their name goes on the ledger line) |
+| `admin` | The above, plus managing accounts and resetting the ledger |
+
+Account management is admin-only in **both** modes: "this deployment is open" is a statement about
+the desk, never about the account system.
+
+Other environment variables, all optional:
+
+| Variable | Effect |
+|---|---|
+| `DESK_REQUIRE_AUTH` | `1` to require a sign-in for every route. Default: open. |
+| `DESK_AUTH_DB` | Path to the account database. Default: `raw_data/auth/desk.sqlite3` (gitignored). |
+| `DESK_COOKIE_SECURE` | `1` when serving over https. Off by default because a Secure cookie is never stored on plain http, so defaulting it on would silently break local runs. |
+| `DESK_CORS_ORIGINS` | Comma-separated origins allowed to send credentials. Needed only when the frontend is served from a different origin than the API. |
+
 ### A known npm optional-dependency issue (Windows)
 
 `npm install` can, on some machines/npm versions, fail to fetch the platform-specific
