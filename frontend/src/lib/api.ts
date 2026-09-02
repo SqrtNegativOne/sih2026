@@ -24,6 +24,8 @@ import type {
   ProgressStage,
   QuoteEnvelope,
   QuoteRequest,
+  SeasonParcelInput,
+  SeasonPlanResponse,
   TonnageFieldForwardResponse,
   TonnageFieldResponse,
   TonnageFieldValidationResponse,
@@ -436,4 +438,22 @@ export interface FxRate {
 export async function fetchFxRate(): Promise<FxRate> {
   const res = await fetch(`${BASE_URL}/fx`)
   return parseOrThrow<FxRate>(res)
+}
+
+// ---------------------------------------------------------------------------
+// Season plan -- the multi-voyage schedule.
+// ---------------------------------------------------------------------------
+
+export async function fetchSeasonPlan(req: {
+  parcels: SeasonParcelInput[]
+  vessels: VesselInput[]
+  as_of?: string
+  contract_term_days?: number
+}): Promise<SeasonPlanResponse> {
+  const res = await fetch(`${BASE_URL}/season-plan`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  })
+  return parseOrThrow<SeasonPlanResponse>(res)
 }

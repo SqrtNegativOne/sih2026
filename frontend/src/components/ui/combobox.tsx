@@ -17,6 +17,15 @@ interface ComboboxProps {
   /** Allow a value that is not in `options` (used for free-form cargo type). */
   allowFreeText?: boolean
   disabled?: boolean
+  /**
+   * Accessible name for the field. Without one the only name a screen reader
+   * can find is the placeholder, so a row of these announces as "Select…"
+   * over and over with nothing to say which is the load port and which the
+   * discharge port. A visible <label> is not always available — inside a data
+   * table the column header is not programmatically associated with an input
+   * in the cell — so callers pass the name here.
+   */
+  label?: string
 }
 
 /**
@@ -43,6 +52,7 @@ export function Combobox({
   placeholder,
   allowFreeText = false,
   disabled = false,
+  label,
 }: ComboboxProps) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -164,6 +174,7 @@ export function Combobox({
           ref={inputRef}
           type="text"
           role="combobox"
+          aria-label={label}
           aria-expanded={open}
           aria-controls={listId}
           disabled={disabled}
@@ -183,7 +194,11 @@ export function Combobox({
           type="button"
           tabIndex={-1}
           disabled={disabled}
-          aria-label={open ? 'Close the list' : 'Show all options'}
+          aria-label={
+            open
+              ? `Close the list${label ? ` for ${label}` : ''}`
+              : `Show all options${label ? ` for ${label}` : ''}`
+          }
           // Keep focus in the input so typing still filters after the toggle.
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => {

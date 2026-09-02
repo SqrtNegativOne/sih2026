@@ -4,6 +4,7 @@ import { StatRow } from '@/components/desk/stat'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Combobox, type ComboOption } from '@/components/ui/combobox'
+import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { useElementSize } from '@/hooks/use-element-size'
 import { fetchPortfolio } from '@/lib/api'
@@ -14,16 +15,6 @@ import { useMoney } from '@/lib/money-context'
 
 const VESSEL_CLASSES: VesselClass[] = ['Capesize', 'Panamax', 'Supramax', 'Handysize']
 
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <span className="stat-label" title={hint}>
-        {label}
-      </span>
-      {children}
-    </div>
-  )
-}
 
 /** Spot/TC/COA share the same three-way palette everywhere on this page --
  * market (spot's own screen colour, since spot IS the open market), go

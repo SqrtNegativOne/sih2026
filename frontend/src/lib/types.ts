@@ -1156,3 +1156,57 @@ export interface AnchorageCalibrationResponse {
   min_n_for_correlation: number
   results: AnchorageCalibrationRow[]
 }
+
+// ---------------------------------------------------------------------------
+// Season plan -- POST /season-plan. A book of cargo lots scheduled across a
+// fleet in one CP-SAT solve, rather than priced one at a time.
+// ---------------------------------------------------------------------------
+
+export interface SeasonParcelInput {
+  parcel_id: string
+  origin_port: PortCode
+  dest_port: PortCode
+  commodity: string
+  volume_dwt: number
+  laycan_start: string
+  laycan_end: string
+  /** No honest default exists -- revenue is a business fact. 0 means the
+   *  scheduler will correctly never assign a vessel to this lot. */
+  revenue_usd: number
+}
+
+export interface SeasonAssignment {
+  vessel_id: string
+  parcel_id: string
+  dest_port: string
+  arrival_hours: number
+  wait_hours: number
+  start_operation_hours: number
+  finish_hours: number
+  ballast_hours: number
+  inter_cargo_gap_hours: number
+  profit_usd: number
+}
+
+export interface SeasonUnassigned {
+  parcel_id: string
+  reason: string
+}
+
+export interface SeasonInfeasiblePair {
+  vessel_id: string
+  parcel_id: string
+  reason: string
+}
+
+export interface SeasonPlanResponse {
+  as_of: string
+  solver_status: string
+  total_profit_usd: number
+  n_parcels: number
+  n_vessels: number
+  n_assigned: number
+  assignments: SeasonAssignment[]
+  unassigned: SeasonUnassigned[]
+  infeasible_pairs: SeasonInfeasiblePair[]
+}

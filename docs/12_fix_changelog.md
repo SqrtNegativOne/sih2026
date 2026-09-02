@@ -101,6 +101,10 @@ the number/behaviour changed, not just that code was edited.
 | F-85 | Major | A selected combobox could not be reopened by clicking — correcting a wrong port required backspacing; and Escape closed the whole drawer instead of the list | ✅ done |
 | F-86 | Minor | Settings carried quote-form defaults and a satellite-coverage line that read as configuration and as an apology | ✅ done |
 | F-87 | Major | The CP-SAT multi-parcel scheduler existed and was unreachable — `/quote` hardcodes `parcels=[one]`, so the problem statement's "multiple voyages" was never exposed | ✅ done |
+| F-88 | Major | No Season Plan screen: `POST /season-plan` had no UI, so the many-lot solve stayed invisible to a user | ✅ done |
+| F-88a | Major | Season Plan seeded its cargo book from the wall clock, not the real data date — `latestDate` arrives after first render and the state initialiser never re-ran (F-02's bug, reproduced in new code); lost the race every measured time | ✅ done |
+| F-88b | Major | 300 form controls across Port Twin, Fragility, Ledger and Portfolio had no accessible name from any source — a caption `<span>` above a control associates nothing | ✅ done |
+| F-88c | Minor | Three disabled buttons carried their only explanation in a native `title`, which most platforms suppress on a disabled element — a dead control with no stated reason | ✅ done |
 
 Legend: ⬜ not started · 🔶 in progress · ✅ done · ⏸️ deferred (with reason) · ➖ no action needed
 
@@ -3031,3 +3035,113 @@ Two things worth recording:
 **This is chunk 1.** The frontend Season Plan screen and the period-versus-spot synthesis — "cover
 these four of six voyages with one period charter, fixed in this window" — are separate chunks and
 are not built yet.
+
+### 2026-09-03 — F-88: the Season Plan screen (chunk 2), and a live a11y audit that found 300 unnamed controls
+
+Chunk 2 of the season plan: `frontend/src/pages/season-plan-page.tsx`, reached from a new **Season
+Plan** item in the icon rail and a new `'season-plan'` case in `App.tsx`. A cargo book and a fleet go
+in; one CP-SAT solve comes back as a Gantt with one row per vessel on a shared time axis. Every
+figure on the page is `schedule_voyages`'s own output — nothing is a per-lot quote stitched together,
+for the reason F-87 records.
+
+Verified end to end against the running stack, not by reading the code:
+
+- **One vessel, two lots** — OPTIMAL, $1.65M fleet profit, 1 of 2 covered, 36-day span, 61% laden
+  utilisation. The uncovered lot (Richards Bay → Vizag) came back with a real reason: the only ship
+  finishes Newcastle → Paradip too late to ballast to Richards Bay inside that laycan.
+- **Two vessels, two lots** — OPTIMAL, $3.38M, 2 of 2 covered, 51-day span, two Gantt rows with the
+  bars at different offsets on the shared axis. This is the case a single-quote desk structurally
+  cannot show.
+
+Three things this screen does deliberately differently from a first draft:
+
+- **Vessels open on their own dates.** Fixing the whole fleet at one availability date would have
+  made every plan a special case of the easy problem — a ship that comes free after a laycan closes
+  simply cannot take that lot, and that is most of what a season plan is deciding.
+- **The axis epoch is `min(available_from)`, not the anchor date.** The scheduler measures every hour
+  from the earliest vessel availability. Labelling the axis with the pricing anchor was only ever
+  right while every vessel defaulted to it; once a vessel can open on its own date, the anchor
+  mis-dates the entire chart by the offset between them.
+- **The pricing date is printed in the panel header.** A plan is not auditable if the reader cannot
+  see which day's market data it was costed against.
+
+The Gantt carries a dated grid, not just two end labels. A 51-day axis labelled only at its ends
+tells you a voyage happens somewhere in the middle third of a quarter, which is not a date — and
+"when does this ship actually sail" is the question the chart exists to answer. The tick step adapts
+to the span (3/7/14/30 days) so the axis carries roughly six to nine ticks whatever the horizon.
+Worth recording that the first version of those gridlines used `bg-hairline`: `--hairline` is a raw
+custom property that was never registered as a Tailwind colour, so the class compiles to nothing and
+the gridlines would have silently not existed. Same failure mode as the `text-micro` colour-group bug
+in F-55 — a Tailwind class that looks plausible and generates no CSS.
+
+#### F-88a — F-02's bug, reproduced in new code
+
+`latestDate` (the real last day of market data) arrives from `App`'s own `/meta` fetch, which
+resolves *after* the first render. Seeding `useState` from `latestDate ?? today` therefore loses a
+race the user cannot see, and never corrects: mount before `/meta` answers and the whole cargo book
+is dated off the wall clock instead of off the data.
+
+This is not theoretical and it is not a rare interleaving. Measured live, the headless run lost that
+race **every time**: laycans seeded from 2026-09-02 (today) rather than 2026-08-20 (the data), and
+`as_of` went to the solver as a date the dataset does not reach. It was caught only because the
+Gantt's date axis printed "Sep 02" where "Aug 20" was expected — a figure being visible on screen is
+what made a silent data-date drift falsifiable.
+
+The quote drawer hit exactly this in F-02 and fixed it with a resync effect. The same treatment is
+applied here, simplified: nothing on a fresh page is worth preserving, so a single `touched` flag —
+set by every patch, add and remove — decides whether the re-seed may run. Re-verified after the fix:
+vessels seed from 2026-08-20, and the axis reads Aug 20 → Oct 10 for the 51-day two-vessel plan.
+
+The drawer's own F-02 fix was re-checked at the same time and still holds (price-as-of 2026-08-20,
+laycan 2026-09-03 → 2026-09-10).
+
+#### F-88b — 300 form controls with no accessible name
+
+Adding the Season Plan's comboboxes surfaced that the `Combobox` had no way to take a label at all,
+so its only accessible name was its placeholder. Rather than assume that was local to the new page,
+the running app was audited: walk every view, and for each `input`/`select`/`textarea` under `<main>`
+report those with no accessible name from **any** source — no `aria-label`, no `aria-labelledby`, no
+`label[for]`, no ancestor `<label>`.
+
+| View | Unnamed controls before | After |
+|---|---|---|
+| Port Twin | 7 | 0 |
+| Fragility | 5 | 0 |
+| Ledger | 280 | 0 |
+| Portfolio | 8 | 0 |
+| Season Plan | 0 (labelled as written) | 0 |
+| Tonnage Field | 0 | 0 |
+
+The Ledger's 280 are 140 fixture rows × 2 inputs: a "realised $/day" placeholder repeated 140 times
+names nothing, and more to the point says nothing about **which** recommendation is being settled.
+Those now carry the route and laycan (`Realised rate in dollars per day for Newcastle AU to Paradip,
+laycan 2026-09-03`).
+
+The root cause on the other three pages was one shape written out by hand four times: a `<div>` with
+a caption `<span className="stat-label">` above a control. That is text that happens to sit near a
+box — it associates nothing. `frontend/src/components/ui/field.tsx` is now the single `Field`
+component, a real `<label>`, used by Port Twin, Fragility and Portfolio. It documents the one case
+where it must **not** be used: wrapping a `<button>`, because a `<label>` around a button *replaces*
+the button's own text as its accessible name — Port Twin's Laden/Ballast toggle would have announced
+as "State" and never said which state it was in. That toggle keeps a `<div>` and carries its own
+`aria-label`.
+
+`Combobox` gained an optional `label` prop, which also disambiguates its chevron ("Show all options
+for Load port for LOT-01" rather than "Show all options" five times over).
+
+#### F-88c — native `title` removed from four more places
+
+The desk's own `Tooltip` replaced native `title` on the new page and on `Field`'s hints, per F-79's
+finding that `title` never opens on keyboard focus and never appears on touch. Three **disabled**
+buttons had their explanation in a `title` — Season Plan's "Build the plan", Fragility's "Run sweep",
+Ledger's "Record" — which is strictly worse: most platforms suppress `title` entirely on a disabled
+element, so the user saw a dead control and no reason for it. Each now states the reason in visible
+text beside the button.
+
+Gantt bars get hover-preview and click-to-pin into a detail line below the chart (the voyage
+timeline's pattern from F-82) rather than a per-bar `title`: a bar can be a couple of pixels wide,
+and a tooltip needing a one-second hover on a 3px target is not readable by anyone.
+
+Verified: `tsc --noEmit` clean, `npm run build` clean, `ruff check src backend tests` clean, full
+suite 1307 passed / 3 skipped, runtime error sweep clean, and zero console errors or failed requests
+across all six views in the browser run.

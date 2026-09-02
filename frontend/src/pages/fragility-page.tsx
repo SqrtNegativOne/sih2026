@@ -4,6 +4,7 @@ import { StatRow } from '@/components/desk/stat'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Combobox, type ComboOption } from '@/components/ui/combobox'
+import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { fetchFragility } from '@/lib/api'
 import { formatNumber, prettyPort } from '@/lib/format'
@@ -199,45 +200,44 @@ export function FragilityPage({ ports }: { ports: PortListing[] }) {
     <div className="flex h-full flex-col gap-2 overflow-hidden p-2" id="fragility">
       <Panel title="Decision Fragility" meta="How far is this recommendation from changing?">
         <div className="flex flex-wrap items-end gap-2 p-1">
-          <div className="flex flex-col gap-0.5">
-            <span className="stat-label">Origin</span>
-            <div className="w-48">
-              <Combobox value={origin} onChange={setOrigin} options={options} placeholder="Select…" />
-            </div>
-          </div>
-          <div className="flex flex-col gap-0.5">
-            <span className="stat-label">Destination</span>
-            <div className="w-48">
-              <Combobox value={dest} onChange={setDest} options={options} placeholder="Select…" />
-            </div>
-          </div>
-          <div className="flex flex-col gap-0.5">
-            <span className="stat-label">Cargo tonnes</span>
+          <Field label="Origin" className="w-48">
+            <Combobox
+              value={origin}
+              onChange={setOrigin}
+              options={options}
+              placeholder="Select…"
+              label="Origin port"
+            />
+          </Field>
+          <Field label="Destination" className="w-48">
+            <Combobox
+              value={dest}
+              onChange={setDest}
+              options={options}
+              placeholder="Select…"
+              label="Destination port"
+            />
+          </Field>
+          <Field label="Cargo tonnes">
             <Input className="h-7 w-24 text-body" value={cargo} onChange={(e) => setCargo(e.target.value)} />
-          </div>
-          <div className="flex flex-col gap-0.5">
-            <span className="stat-label">Laycan start</span>
+          </Field>
+          <Field label="Laycan start">
             <Input type="date" className="h-7 w-36 text-body" value={laycanStart} onChange={(e) => setLaycanStart(e.target.value)} />
-          </div>
-          <div className="flex flex-col gap-0.5">
-            <span className="stat-label">Laycan end</span>
+          </Field>
+          <Field label="Laycan end">
             <Input type="date" className="h-7 w-36 text-body" value={laycanEnd} onChange={(e) => setLaycanEnd(e.target.value)} />
-          </div>
-          <Button
-            variant="primary"
-            size="md"
-            onClick={runSweep}
-            disabled={!origin || !dest || loading}
-            title={
-              loading
-                ? 'A real sweep is running.'
-                : !origin || !dest
-                  ? 'Pick an origin and a destination port first.'
-                  : 'Sweep the decision boundary'
-            }
-          >
+          </Field>
+          <Button variant="primary" size="md" onClick={runSweep} disabled={!origin || !dest || loading}>
             {loading ? 'Sweeping…' : report ? 'Re-run sweep' : 'Run sweep'}
           </Button>
+          {/* Why the button is dim, said in the open rather than in a native
+              `title` — which most platforms suppress entirely on a disabled
+              element, leaving a dead-looking control and no reason for it. */}
+          {!origin || !dest ? (
+            <span className="self-center text-caption text-muted-foreground">
+              Pick an origin and a destination port first.
+            </span>
+          ) : null}
           {elapsedMs != null && !loading && (
             <span className="stat-label">{(elapsedMs / 1000).toFixed(1)}s, {report?.evaluations_used} evaluations</span>
           )}

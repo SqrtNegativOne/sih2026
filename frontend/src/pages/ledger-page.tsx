@@ -30,22 +30,44 @@ function OutcomeForm({ entry, onRecorded }: { entry: LedgerLiveEntry; onRecorded
       .finally(() => setSubmitting(false))
   }
 
+  // Every input here is one of a long column of identical pairs -- one per
+  // open recommendation -- so a placeholder alone is not an accessible name
+  // and, even where it were read, "realised $/day" repeated 140 times says
+  // nothing about WHICH recommendation is being settled. The route and the
+  // laycan are what identify a fixture to the person recording it.
+  const which = `${prettyPort(entry.origin_port)} to ${prettyPort(entry.dest_port)}, laycan ${entry.laycan_start}`
+
   return (
     <div className="flex items-center gap-2">
-      <Input placeholder="realised $/day" className="h-6 w-28 text-caption" value={rate} onChange={(e) => setRate(e.target.value)} />
-      <Input type="date" className="h-6 w-32 text-caption" value={atDate} onChange={(e) => setAtDate(e.target.value)} />
+      <Input
+        placeholder="realised $/day"
+        aria-label={`Realised rate in dollars per day for ${which}`}
+        className="h-6 w-28 text-caption"
+        value={rate}
+        onChange={(e) => setRate(e.target.value)}
+      />
+      <Input
+        type="date"
+        aria-label={`Date fixed for ${which}`}
+        className="h-6 w-32 text-caption"
+        value={atDate}
+        onChange={(e) => setAtDate(e.target.value)}
+      />
       <Button
         size="sm"
         onClick={submit}
         disabled={submitting || !rate || !atDate}
-        title={
-          !rate || !atDate
-            ? 'Enter the realised rate and the date it was fixed.'
-            : 'Record this outcome against the recommendation'
-        }
+        aria-label={`Record the outcome for ${which}`}
       >
         {submitting ? 'Recording…' : 'Record'}
       </Button>
+      {/* The disabled reason, visible rather than in a native `title`: most
+          platforms suppress `title` entirely on a disabled control. */}
+      {!rate || !atDate ? (
+        <span className="text-micro text-muted-foreground">
+          Enter the realised rate and the date it was fixed.
+        </span>
+      ) : null}
       {err && <span className="text-micro text-risk">{err}</span>}
     </div>
   )

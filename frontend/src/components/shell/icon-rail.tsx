@@ -3,6 +3,7 @@ import {
   ArrowLeftRight,
   Boxes,
   CalendarClock,
+  CalendarRange,
   FileText,
   Gauge,
   Globe,
@@ -42,6 +43,10 @@ const ITEMS: RailItem[] = [
   { icon: Globe, label: 'Market', target: 'forecast', view: 'desk' },
   { icon: ArrowLeftRight, label: 'Matching', target: 'assignments', view: 'desk' },
   { icon: CalendarClock, label: 'Scheduling', target: 'ports', view: 'desk' },
+  // The many-lot view. Every item above this line is one voyage at a time;
+  // this is the one that answers the problem statement's actual question --
+  // a whole season's cargo book scheduled across a fleet in a single solve.
+  { icon: CalendarRange, label: 'Season Plan', view: 'season-plan' },
   { icon: Anchor, label: 'Port Twin', view: 'port-twin' },
   { icon: Gauge, label: 'Tonnage Field', view: 'tonnage-field' },
   { icon: Zap, label: 'Fragility', view: 'fragility' },

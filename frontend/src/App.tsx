@@ -27,12 +27,21 @@ import { FragilityPage } from '@/pages/fragility-page'
 import { LedgerPage } from '@/pages/ledger-page'
 import { PortfolioPage } from '@/pages/portfolio-page'
 import { PortTwinPage } from '@/pages/port-twin-page'
+import { SeasonPlanPage } from '@/pages/season-plan-page'
 import { TonnageFieldPage } from '@/pages/tonnage-field-page'
 import { VoyageDeskPage } from '@/pages/voyage-desk-page'
 
-export type DeskView = 'desk' | 'port-twin' | 'tonnage-field' | 'fragility' | 'ledger' | 'portfolio'
+export type DeskView =
+  | 'desk'
+  | 'season-plan'
+  | 'port-twin'
+  | 'tonnage-field'
+  | 'fragility'
+  | 'ledger'
+  | 'portfolio'
 
 const VIEW_LABEL: Partial<Record<DeskView, string>> = {
+  'season-plan': 'Season Plan',
   'port-twin': 'Port Twin',
   'tonnage-field': 'Tonnage Field',
   fragility: 'Fragility',
@@ -173,7 +182,9 @@ function App() {
           tabIndex={-1}
           className="relative z-50 min-w-0 flex-1 overflow-y-auto p-2 focus:outline-none"
         >
-          {view === 'port-twin' ? (
+          {view === 'season-plan' ? (
+            <SeasonPlanPage ports={ports} latestDate={latestDate} />
+          ) : view === 'port-twin' ? (
             <PortTwinPage ports={ports} />
           ) : view === 'tonnage-field' ? (
             <TonnageFieldPage />

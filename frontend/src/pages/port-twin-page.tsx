@@ -3,6 +3,7 @@ import { PageState, Panel } from '@/components/desk/panel'
 import { StatRow } from '@/components/desk/stat'
 import { Badge } from '@/components/ui/badge'
 import { Combobox, type ComboOption } from '@/components/ui/combobox'
+import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import {
   fetchPortBerths,
@@ -138,12 +139,15 @@ export function PortTwinPage({ ports }: { ports: PortListing[] }) {
       {/* Query bar */}
       <Panel title="Port Twin" meta="Real berth constraints, tide rules, and empirical wait/handling data, per port">
         <div className="flex flex-wrap items-end gap-2 p-1">
-          <div className="flex flex-col gap-0.5">
-            <span className="stat-label">Port</span>
-            <div className="w-56">
-              <Combobox value={port} onChange={setPort} options={options} placeholder="Select a port…" />
-            </div>
-          </div>
+          <Field label="Port" className="w-56">
+            <Combobox
+              value={port}
+              onChange={setPort}
+              options={options}
+              placeholder="Select a port…"
+              label="Port to inspect"
+            />
+          </Field>
           {/* F-41 fix: this feeds vesselDwt (the ship's own deadweight,
            * checked against the port's max DWT) into fetchPortReality --
            * it was labelled "Cargo DWT", which is backwards on two counts:
@@ -153,8 +157,7 @@ export function PortTwinPage({ ports }: { ports: PortListing[] }) {
           <LabeledInput label="Draft (m)" value={draftM} onChange={setDraftM} width="w-20" />
           <LabeledInput label="LOA (m)" value={loaM} onChange={setLoaM} width="w-20" />
           <LabeledInput label="Beam (m)" value={beamM} onChange={setBeamM} width="w-20" />
-          <div className="flex flex-col gap-0.5">
-            <span className="stat-label">Class</span>
+          <Field label="Class">
             <select
               className="h-7 w-28 rounded-sm border border-input bg-background px-2 text-body"
               value={vesselClass}
@@ -166,9 +169,15 @@ export function PortTwinPage({ ports }: { ports: PortListing[] }) {
                 </option>
               ))}
             </select>
-          </div>
+          </Field>
+          {/* Deliberately NOT a <Field>: this holds a <button>, and a <label>
+              around a button replaces the button's own text as its accessible
+              name -- the toggle would announce as "State" and never say
+              whether it is currently laden or in ballast. */}
           <div className="flex flex-col gap-0.5">
-            <span className="stat-label">State</span>
+            <span className="stat-label" aria-hidden="true">
+              State
+            </span>
             {/* A two-state toggle, not a command: it says which state is
                 currently selected and switches on click, so it carries
                 aria-pressed rather than reading as a button that "does"
@@ -177,7 +186,7 @@ export function PortTwinPage({ ports }: { ports: PortListing[] }) {
               type="button"
               onClick={() => setIsLaden((v) => !v)}
               aria-pressed={isLaden}
-              title={`Currently ${isLaden ? 'laden' : 'in ballast'} — click to switch`}
+              aria-label={`Vessel state: currently ${isLaden ? 'laden' : 'in ballast'}. Activate to switch.`}
               className={cn(
                 'h-7 w-20 cursor-pointer rounded-sm border text-body font-semibold transition-colors',
                 'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring',
@@ -517,13 +526,12 @@ function LabeledInput({
   width: string
 }) {
   return (
-    <div className="flex flex-col gap-0.5">
-      <span className="stat-label">{label}</span>
+    <Field label={label}>
       <Input
         className={cn('h-7 text-body', width)}
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />
-    </div>
+    </Field>
   )
 }
