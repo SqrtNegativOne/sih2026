@@ -5,6 +5,7 @@ import { PageState, Panel } from '@/components/desk/panel'
 import { Term } from '@/components/desk/term'
 import { Button } from '@/components/ui/button'
 import { Combobox, type ComboOption } from '@/components/ui/combobox'
+import { Field } from '@/components/ui/field'
 import { Tooltip } from '@/components/ui/tooltip'
 import { fetchSeasonPlan } from '@/lib/api'
 import { addDays, formatNumber, formatShortDate, prettyPort } from '@/lib/format'
@@ -14,6 +15,7 @@ import type {
   PortCode,
   PortListing,
   SeasonParcelInput,
+  SeasonPeriodCover,
   SeasonPlanResponse,
   VesselInput,
 } from '@/lib/types'
@@ -126,7 +128,12 @@ export function SeasonPlanPage({
   // The quote drawer hit this first and fixed it by resyncing only the
   // fields the user had not touched. Here it is simpler: nothing is worth
   // preserving until the user starts editing, so one flag covers it.
-  const fallback = useRef(latestDate ?? new Date().toISOString().slice(0, 10)).current
+  // A lazy `useState` initialiser rather than `useRef(...).current`: both give
+  // a value fixed for the component's life, but reading a ref during render is
+  // the pattern that hides stale-value bugs, and the linter is right to flag
+  // it. This one is genuinely a per-mount constant, which is what useState's
+  // initialiser is for.
+  const [fallback] = useState(() => latestDate ?? new Date().toISOString().slice(0, 10))
   const anchor = latestDate ?? fallback
 
   const [parcels, setParcels] = useState<ParcelDraft[]>(() => [
@@ -694,6 +701,10 @@ function SeasonResult({
         </div>
       </Panel>
 
+      {plan.period_cover.length > 0 && (
+        <PeriodCoverPanel cover={plan.period_cover} asOf={plan.as_of} money={money} />
+      )}
+
       <div className="grid gap-2 lg:grid-cols-2">
         <Panel
           title="Voyages Scheduled"
@@ -791,6 +802,149 @@ function SeasonResult({
  *  than a native `title`: a native tooltip is invisible to a keyboard user,
  *  takes about a second to appear and renders in OS chrome — which is exactly
  *  why the desk's explanatory text went unread until it was replaced. */
+/**
+ * Is this book worth the tonnage it consumes?
+ *
+ * The break-even hire comes straight from the solver's own output: fleet
+ * profit over the ship-days the plan occupies. The benchmark beside it is the
+ * real published Baltic class TC average at the pricing date.
+ *
+ * That benchmark is a SPOT index, and this panel says so on its face rather
+ * than in a footnote. A 3/6/12-month period rate is a forward, negotiated,
+ * broker-supplied number that exists nowhere in this system's data, so the
+ * panel does not quote one -- it gives the bar any offer has to clear, and
+ * lets the desk type in the rate it has actually been shown.
+ */
+function PeriodCoverPanel({
+  cover,
+  asOf,
+  money,
+}: {
+  cover: SeasonPeriodCover[]
+  asOf: string
+  money: (usd: number) => string
+}) {
+  return (
+    <Panel
+      title="Period Cover"
+      meta={`break-even hire · priced from ${asOf}`}
+      hint="The highest daily rate at which chartering in the tonnage to cover this plan still breaks even, against the real published spot TC average for the class. The benchmark is a spot index, not a period quote — this system holds no period charter rate, and does not invent one."
+    >
+      <div className="divide-y divide-border p-1">
+        {cover.map((c) => (
+          <ClassCover key={c.vessel_class} c={c} asOf={asOf} money={money} />
+        ))}
+      </div>
+    </Panel>
+  )
+}
+
+/**
+ * One vessel class's break-even, benchmark and offer check.
+ *
+ * A component per class rather than a loop body, because the quoted-rate input
+ * has to be per class. A Panamax period rate and a Supramax period rate are
+ * different numbers negotiated separately; one shared input would check a
+ * single figure against two different bars and report both answers as if the
+ * desk had been quoted the same rate for both.
+ */
+function ClassCover({
+  c,
+  asOf,
+  money,
+}: {
+  c: SeasonPeriodCover
+  asOf: string
+  money: (usd: number) => string
+}) {
+  const [offer, setOffer] = useState('')
+  const offered = Number(offer)
+  const hasOffer = offer.trim() !== '' && Number.isFinite(offered) && offered > 0
+  const beats = c.verdict === 'cover_beats_spot'
+  const clears = hasOffer && offered < c.break_even_hire_usd_per_day
+
+  return (
+    <div className="space-y-2 py-2 first:pt-0 last:pb-0">
+      <div className="grid grid-cols-2 gap-x-6 md:grid-cols-4">
+        <Stat
+          label={`${c.vessel_class} break-even hire`}
+          value={`${money(c.break_even_hire_usd_per_day)}/day`}
+          tone={beats ? 'go' : undefined}
+          explain={`Profit from this class (${money(c.profit_usd)}) divided by the ship-days it occupies (${c.n_vessels} vessel${c.n_vessels === 1 ? '' : 's'} × ${(c.ship_days / c.n_vessels).toFixed(1)} days = ${c.ship_days.toFixed(1)}). Idle vessels count: chartering three ships and using two still costs three ships' hire.`}
+        />
+        <Stat
+          label="Spot TC average"
+          value={
+            c.spot_tc_average_usd_per_day == null
+              ? '—'
+              : `${money(c.spot_tc_average_usd_per_day)}/day`
+          }
+          explain={`The real published ${c.spot_tc_series_id} value${c.spot_tc_as_of ? ` on ${c.spot_tc_as_of}` : ''}. What these ships would earn trading spot — a spot index, not a period charter rate.`}
+        />
+        <Stat
+          label="Room for hire"
+          value={
+            c.margin_over_spot_usd_per_day == null
+              ? '—'
+              : `${money(c.margin_over_spot_usd_per_day)}/day`
+          }
+          explain="Break-even less the spot average. Positive means the book earns more per ship-day than trading the ships spot — that gap is what a period charter has to fit inside."
+        />
+        <Stat label="Ship-days" value={c.ship_days.toFixed(1)} />
+      </div>
+
+      <p className="panel-note">
+        {c.verdict === 'no_benchmark' ? (
+          <>
+            No published <span className="desk-num">{c.spot_tc_series_id}</span> value exists on{' '}
+            {asOf}, so there is nothing real to compare the break-even against. The index is not
+            published every calendar day; pricing from a day the market was open will give a
+            benchmark. The break-even itself stands — it needs no market data.
+          </>
+        ) : beats ? (
+          <>
+            This book earns more per ship-day than these {c.vessel_class} vessels would earn
+            trading spot. Covering it with chartered-in tonnage is worth doing at any hire below{' '}
+            <span className="desk-num font-semibold text-foreground">
+              {money(c.break_even_hire_usd_per_day)}/day
+            </span>
+            .
+          </>
+        ) : (
+          <>
+            These {c.vessel_class} vessels would earn more simply trading spot than this book pays
+            them. The programme does not cover its own opportunity cost, so no period charter
+            improves it — the book itself is what needs to change.
+          </>
+        )}
+      </p>
+
+      {/* The desk supplies the offer, because this system does not have one.
+          Everything above is computed; this is the one number that has to come
+          from a broker. */}
+      <div className="flex flex-wrap items-end gap-2 border-t border-border pt-2">
+        <Field label={`A ${c.vessel_class} period rate you have been quoted (USD/day)`}>
+          <input
+            type="number"
+            min={0}
+            value={offer}
+            onChange={(e) => setOffer(e.target.value)}
+            placeholder="e.g. 24500"
+            className={cn(inputCls, 'w-40 font-mono')}
+          />
+        </Field>
+        {hasOffer && (
+          <p className={cn('pb-1 text-body font-semibold', clears ? 'text-go' : 'text-risk')}>
+            {clears
+              ? `Clears the bar by ${money(c.break_even_hire_usd_per_day - offered)}/day.`
+              : `Short by ${money(offered - c.break_even_hire_usd_per_day)}/day — this book does not pay that hire.`}
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function Stat({
   label,
   value,

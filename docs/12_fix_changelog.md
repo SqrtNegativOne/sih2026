@@ -105,6 +105,7 @@ the number/behaviour changed, not just that code was edited.
 | F-88a | Major | Season Plan seeded its cargo book from the wall clock, not the real data date — `latestDate` arrives after first render and the state initialiser never re-ran (F-02's bug, reproduced in new code); lost the race every measured time | ✅ done |
 | F-88b | Major | 300 form controls across Port Twin, Fragility, Ledger and Portfolio had no accessible name from any source — a caption `<span>` above a control associates nothing | ✅ done |
 | F-88c | Minor | Three disabled buttons carried their only explanation in a native `title`, which most platforms suppress on a disabled element — a dead control with no stated reason | ✅ done |
+| F-89 | Major | The season plan said what a book earns but not whether it was worth the tonnage it consumes — no break-even hire, and no honest statement that this system holds no period charter rate | ✅ done |
 
 Legend: ⬜ not started · 🔶 in progress · ✅ done · ⏸️ deferred (with reason) · ➖ no action needed
 
@@ -3145,3 +3146,81 @@ and a tooltip needing a one-second hover on a 3px target is not readable by anyo
 Verified: `tsc --noEmit` clean, `npm run build` clean, `ruff check src backend tests` clean, full
 suite 1307 passed / 3 skipped, runtime error sweep clean, and zero console errors or failed requests
 across all six views in the browser run.
+
+### 2026-09-03 — F-89: period cover (chunk 3) — the break-even hire, and the rate this system refuses to invent
+
+Chunk 3 of the season plan, and the last piece of the problem statement's period-versus-spot framing
+that was not already answered somewhere. `src/opt/period_cover.py` plus a **Period Cover** panel on
+the Season Plan screen.
+
+#### What it computes
+
+The **break-even hire**: the highest daily rate at which chartering in the tonnage to cover a solved
+plan still breaks even.
+
+```
+ship_days  = n_vessels × plan span in days
+break_even = total fleet profit / ship_days
+```
+
+That is arithmetic over the scheduler's own output and nothing else. Verified live on the two-vessel
+book: $3.38M over 101 ship-days → **$33,442/day** break-even, against a real spot benchmark of
+**$20,698/day**, leaving $12,744/day of room. A quoted period rate of $24,500 clears by $8,942/day;
+$60,000 falls short by $26,558.
+
+Idle vessels are counted in the ship-days on purpose. Chartering three ships and using two still
+costs three ships' hire, and the whole point of the figure is what the programme costs against what
+it earns. A test pins this: adding a vessel must lower the break-even on fixed profit.
+
+The split is **per vessel class**. One break-even across a mixed fleet would be compared against one
+class's spot average — arithmetically fine, commercially meaningless, since a Capesize and a
+Supramax earn very different money per day.
+
+#### What it deliberately does not do
+
+**It does not quote a period charter rate, because this repository does not have one.**
+
+This was checked before any of it was written, not assumed. The only real $/day series on disk are
+the Baltic class TC *averages* — `CAPESIZE_TCAVG` / `PANAMAX_TCAVG` / `SUPRAMAX_TCAVG` /
+`HANDYSIZE_TCAVG`, from the handybulk pull, mapped in `ml.units.CLASS_SERIES`. Those are **spot**
+indices: the average of the spot voyage routes expressed in dollars per day, i.e. what a ship earns
+trading spot today. A 3-, 6- or 12-month period rate is a forward, negotiated, broker-supplied
+number. It is a different quantity, it moves differently from the spot average, and it is not in
+`master_long.parquet`.
+
+Turning the spot average into a "period rate" with an assumed premium would have been one line and
+would have invented the single number the entire decision turns on. So the comparison offered is the
+honest one the data supports — break-even against the real spot average, which answers "is this book
+worth more per ship-day than simply trading these ships spot" — and the desk types in the period rate
+it has actually been shown. Everything on the panel is computed; that one field is the only number
+that has to come from a broker, and it is asked for rather than guessed.
+
+`tests/opt/test_period_cover.py::TestNoInventedPeriodRate` exists specifically to fail if anyone
+later adds that premium multiplier.
+
+Three more honesty details:
+
+- **A date with no observation raises rather than carrying the last value forward.** The index is not
+  published every calendar day; a rate carried forward is a different number wearing today's date,
+  and the comparison is only meaningful against a rate really quoted on the day the plan is priced
+  from. `no_benchmark` is its own verdict, not a neutral one — reporting "spot wins" or "cover wins"
+  with no benchmark would be inventing the comparison.
+- **A loss-making book gives a negative break-even, which is a real answer**, not an error: no hire
+  rate makes a loss-making programme worth covering.
+- **A plan with no assignments reports no break-even at all** (`period_cover: []`). Nothing was
+  carried, so there are no earnings to break even on, and a break-even of zero would read as a market
+  finding rather than as "there is no plan".
+
+Provenance: `spot_tc_average_usd_per_day` is OBSERVED (a published index value read at a real date).
+`break_even_hire_usd_per_day` and `ship_days` are MODEL_DERIVED — computed from a CP-SAT solve over
+real port, distance and vessel data — and do not inherit the OBSERVED provenance of their inputs.
+
+18 tests added (12 on the module, 6 on the endpoint field), covering the arithmetic, the idle-vessel
+rule, the mixed-fleet split, the missing-benchmark verdict, the empty-plan case, and the
+no-invented-rate guard.
+
+The missing-benchmark case is exercised against **real data on a real date**, not a contrived one.
+The Supramax and Handysize TC averages have shorter histories than the Panamax and Capesize ones —
+there are 91 real dates carrying a Panamax rate and no Supramax rate. On 2025-12-22, a mixed fleet
+correctly reports a real benchmark for the Panamax and `no_benchmark` for the Supramax, with the
+Supramax break-even still standing because it needs no market data.

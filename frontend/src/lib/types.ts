@@ -1199,6 +1199,30 @@ export interface SeasonInfeasiblePair {
   reason: string
 }
 
+/**
+ * Break-even hire for one vessel class in a solved season plan — the highest
+ * daily rate at which chartering in the tonnage to cover the plan still
+ * breaks even.
+ *
+ * `spot_tc_average_usd_per_day` is the real published Baltic class TC average
+ * for the class, read at the pricing date. It is a SPOT index, not a period
+ * quote: no period charter rate exists anywhere in this system's data, and
+ * `opt/period_cover.py` documents why nothing here invents one.
+ */
+export interface SeasonPeriodCover {
+  vessel_class: VesselClass
+  n_vessels: number
+  profit_usd: number
+  ship_days: number
+  break_even_hire_usd_per_day: number
+  /** null when no real observation exists at the pricing date. */
+  spot_tc_average_usd_per_day: number | null
+  spot_tc_series_id: string
+  spot_tc_as_of: string | null
+  verdict: 'cover_beats_spot' | 'spot_beats_cover' | 'no_benchmark'
+  margin_over_spot_usd_per_day: number | null
+}
+
 export interface SeasonPlanResponse {
   as_of: string
   solver_status: string
@@ -1209,4 +1233,8 @@ export interface SeasonPlanResponse {
   assignments: SeasonAssignment[]
   unassigned: SeasonUnassigned[]
   infeasible_pairs: SeasonInfeasiblePair[]
+  /** Empty when nothing was scheduled — no voyages means no earnings to
+   *  break even on, and a break-even of zero would read as a market finding
+   *  rather than as "there is no plan". */
+  period_cover: SeasonPeriodCover[]
 }

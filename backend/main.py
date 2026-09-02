@@ -22,7 +22,7 @@ from __future__ import annotations
 import asyncio
 import json
 import sys
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from datetime import date
 from pathlib import Path
 from typing import Any, Final, Literal
@@ -70,6 +70,7 @@ from opt.landed_cost import (
     usd_inr_rate_as_of,
 )
 from opt.network import PortEnum, route_family_for_origin
+from opt.period_cover import assess_period_cover
 from opt.portfolio import efficient_frontier, optimize_portfolio_mix, spot_cost_stats
 from opt.quote import (
     InsufficientMarketDataError,
@@ -85,7 +86,7 @@ from opt.types import (
     Vessel,
     VesselClass,
 )
-from opt.voyage import _REGISTER_PORT_ID, schedule_voyages
+from opt.voyage import _REGISTER_PORT_ID, VoyageScheduleResult, schedule_voyages
 from opt.war_risk import listed_areas_on_route, war_risk_premium_usd
 from tonnage.field import get_ablation_snapshot, get_snapshot
 from tonnage.forward import project_tightness_forward
@@ -1036,7 +1037,64 @@ def post_season_plan(req: SeasonPlanRequest) -> dict:
             {"vessel_id": v, "parcel_id": pid, "reason": why}
             for v, pid, why in result.infeasible_pairs
         ],
+        # Whether covering this book is worth the tonnage it consumes, per
+        # vessel class. See opt.period_cover for what this deliberately does
+        # NOT claim: there is no period charter rate on disk, so nothing here
+        # quotes one.
+        "period_cover": _period_cover_for_plan(result, vessels, as_of),
     }
+
+
+def _period_cover_for_plan(
+    result: VoyageScheduleResult,
+    vessels: Sequence[Vessel],
+    as_of: date,
+) -> list[dict]:
+    """Break-even hire per vessel class for a solved season plan.
+
+    Split by class on purpose. A single break-even across a mixed fleet would
+    be compared against one class's spot average, and a Capesize and a
+    Supramax earn very different money per day -- the comparison would be
+    arithmetically fine and commercially meaningless.
+
+    Idle vessels are counted in each class's ship-days. Chartering in three
+    ships and using two still costs three ships' hire, and the whole point of
+    this figure is what the programme costs against what it earns.
+    """
+    if not result.assignments:
+        # No voyages means no earnings to break even on. Reporting a
+        # break-even of zero here would read as a real market finding rather
+        # than as "there is no plan".
+        return []
+
+    span_hours = max(a.finish_hours for a in result.assignments)
+    if span_hours <= 0:
+        return []
+
+    profit_by_vessel = {a.vessel_id: 0.0 for a in result.assignments}
+    for a in result.assignments:
+        profit_by_vessel[a.vessel_id] += a.profit_usd
+
+    out: list[dict] = []
+    for cls in sorted({v.vessel_class for v in vessels}, key=lambda c: c.value):
+        members = [v for v in vessels if v.vessel_class == cls]
+        profit = sum(profit_by_vessel.get(v.vessel_id, 0.0) for v in members)
+        assessment = assess_period_cover(
+            total_profit_usd=profit,
+            n_vessels=len(members),
+            span_hours=span_hours,
+            vessel_class=cls.value,
+            as_of=as_of,
+        )
+        out.append(
+            {
+                "vessel_class": cls.value,
+                "n_vessels": len(members),
+                "profit_usd": profit,
+                **assessment.model_dump(mode="json"),
+            }
+        )
+    return out
 
 
 @app.post("/quote")
