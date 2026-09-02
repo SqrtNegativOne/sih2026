@@ -2582,3 +2582,49 @@ BAY (4.1-day buffer) both report zero clipped panels.
 
 Bundle 751 KB / 245 KB gzip against the 714 KB / 233 KB pre-transformation baseline: +12 KB gzip
 total, against a +150 KB budget, with no new dependencies.
+
+#### Steps 7 and 8 — secondary pages and the full sweep
+
+The five secondary screens needed no separate visual pass in the end, and that is the point of the
+token work in F-62: every one of them is built from the same `Panel`, `.desk-table`, `.desk-chip`,
+`Button` and semantic tokens, so re-tuning those propagated automatically. The per-page work that did
+land was the provenance chips (Tonnage Field), the segmented class control, the shared `PageState`
+busy/empty/error states, and the grid fix (F-57 / F-61) — all already recorded above.
+
+**Full verification matrix.** Geometry measured with `getBoundingClientRect`, never text presence:
+
+| Surface | 1280 | 1440 | 1920 |
+|---|---|---|---|
+| Voyage desk (12 panels), dark | PASS | PASS | PASS |
+| Voyage desk (12 panels), light | PASS | PASS | PASS |
+| All 5 secondary pages, dark | PASS | PASS | PASS |
+| All 5 secondary pages, light | PASS | PASS | PASS |
+
+"PASS" means every panel measures > 50px, zero unintended content overflow, and no horizontal page
+scroll — after triggering each page's own real computation (quote, Run analysis, Run sweep, port
+select, ledger load).
+
+Also verified: zero console errors, zero page exceptions and zero failed requests across every page
+and every action · contrast clean in both themes on the empty state, the drawer and a populated desk,
+with only the two disabled TC In / TC Out rail items outstanding (WCAG 1.4.3 exempts inactive
+controls) · theme toggle persists and survives reload · skip link is the first tab stop and moves
+focus into `<main>` · `prefers-reduced-motion` leaves zero elements with long transitions.
+
+`tsc` clean · `oxlint` 5 warnings, all pre-existing · `npm run build` clean · `ruff check .` clean ·
+synthetic-data tripwire green · `pytest` 1297 passed, 3 skipped · bundle 751 KB / 245 KB gzip against
+a 714 KB / 233 KB baseline (+12 KB gzip, no new dependencies).
+
+**What was deliberately not done**, and why:
+
+- **No infinite pulse on chokepoints.** Asked for, and refused on the merits — see F-71.
+- **No `⌘K` command palette.** It was offered as optional ("if it earns its place"). With six
+  destinations reachable in one click from an always-visible rail, it would add a keyboard surface
+  and ~15 KB to solve a navigation problem this app does not have. The skip link (F-70) fixed the
+  real keyboard complaint.
+- **No route path-draw animation.** The route legs already encode meaning in `strokeDasharray` —
+  focus, great-circle fallback, rejected, considered are four distinct patterns — and animating
+  `pathLength` reinterprets dash units in normalised space, which would corrupt those patterns. The
+  arrival motion went to the chokepoint markers instead, where it costs nothing semantic.
+- **No `Figure` on every money value.** It is on the verdict's three rates, where a changing quote is
+  the thing worth noticing. Extending it to every static figure on the secondary pages would add
+  shadow-DOM elements and `sr-only` duplicates for numbers that never change between renders.
