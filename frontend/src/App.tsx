@@ -103,6 +103,13 @@ function App() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
+      {/* First focusable thing in the document. Without it, reaching the
+          desk's primary action by keyboard took a measured 19 tab presses --
+          the top bar's five section links plus the rail's thirteen module
+          buttons all precede <main> in DOM order. */}
+      <a href="#desk-main" className="skip-link">
+        Skip to the desk
+      </a>
       <TopBar onNewQuote={() => setDrawerOpen(true)} />
       <div className="flex min-h-0 flex-1">
         <IconRail active={VIEW_LABEL[view]} onSelectView={setView} />
@@ -120,7 +127,11 @@ function App() {
             same reasoning: DOM order (the drawer renders after this <main>)
             keeps the drawer panel itself on top where it actually overlaps
             this element's right edge. */}
-        <main className="relative z-50 min-w-0 flex-1 overflow-y-auto p-2">
+        <main
+          id="desk-main"
+          tabIndex={-1}
+          className="relative z-50 min-w-0 flex-1 overflow-y-auto p-2 focus:outline-none"
+        >
           {view === 'port-twin' ? (
             <PortTwinPage ports={ports} />
           ) : view === 'tonnage-field' ? (

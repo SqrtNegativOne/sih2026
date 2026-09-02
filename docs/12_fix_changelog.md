@@ -2511,3 +2511,49 @@ wraps.
 
 Verified after this pass: all five secondary pages PASS in **both** themes, desk clean, zero console
 errors, `tsc` / `build` / `ruff` / tripwire green, bundle 746 KB / 243 KB gzip.
+
+#### 2026-09-02 (follow-up 3) — bugs found by testing the branches the first pass never hit
+
+**F-68 — the walk-away curve contradicted the verdict directly above it.** This is the serious one,
+and it is the same failure as F-06: a panel keyed off a *different number* than the one the decision
+was actually made with.
+
+`opt.stopping` applies the weather/cyclone transit buffer on top of the raw LSMC boundary before
+deciding — `adjusted = boundary[0] + weather_cost_per_day`, then `LOCK if today <= adjusted` — and it
+is that adjusted figure the quote exposes as `ceiling_usd_per_day`, which the verdict panel already
+labels "Ceiling". The new curve compared today's rate against the *raw* `boundary[0]` instead.
+
+Whenever the weather buffer was small the two agreed, which is why every earlier check passed: the
+route I had been testing throughout (Newcastle → Paradip) carries a 0.1-day buffer worth $99. Probing
+other routes for a LOCK verdict surfaced VIZAG → RICHARDS_BAY, where a **4.1-day** buffer lifts the
+line from $18,141 to $20,737 — today's rate is $18,790, the verdict is **LOCK**, and the panel
+underneath it would have read *"today's rate is above the line … so it says wait."*
+
+Fixed by keying every decision statement in the panel off `ceiling_usd_per_day`, the same figure the
+solver used. The curve still draws the raw boundary, because that is the real modelled shape across
+the horizon, but the day-1 marker is the adjusted line and the difference is now stated on screen
+rather than hidden: a "of which weather buffer raises it by $2,595" row, plus a sentence naming which
+line the verdict uses. Verified on that exact route: verdict LOCK, panel "you are inside the line, so
+it says lock".
+
+The lesson is about testing, not about the arithmetic: the WAIT branch had been exercised a dozen
+times and the LOCK branch never once, and the bug lived entirely in the branch that was never run.
+
+**F-69 — the glossary shipped as dead code.** `components/desk/term.tsx` and the `GLOSSARY` map were
+written and wired into nothing; a live count of `abbr[title]` elements returned **0**. The whole point
+of the language layer was that domain terms get a definition, and none was reachable. Now attached to
+Cargo/DWT, Laycan, Ceiling, Draft, LOA and Beam — 7 terms live, all carrying definitions, all
+keyboard-focusable.
+
+**F-70 — 19 tab presses to reach the primary action.** The top bar's five section links and the
+rail's thirteen module buttons all precede `<main>` in DOM order, so a keyboard user traversed the
+entire chrome of the application before reaching the thing they came to do, on every page load. Added
+a standard skip link as the first focusable element; verified that the first Tab lands on it and
+Enter moves focus to `MAIN#desk-main`.
+
+Also removed `respectReducedMotion` from `lib/motion.ts` (written, never used — the global CSS block
+already handles it) and documented on `fadeBand` the cascade trap that made the curve's gap band
+invisible on first build, so the next consumer does not repeat it.
+
+Verified after: all five secondary pages PASS in both themes, zero console errors, `tsc` / `oxlint` /
+`build` / `ruff` / tripwire green.

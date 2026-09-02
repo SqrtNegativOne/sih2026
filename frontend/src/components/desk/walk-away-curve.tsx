@@ -57,6 +57,32 @@ export function WalkAwayCurve({ quote }: { quote: QuoteResult }) {
   const w = Math.max(box.width, 280)
   const n = boundary.length
 
+  /*
+   * The line the VERDICT actually tests against is not boundary[0].
+   *
+   * opt.stopping applies the weather/cyclone transit buffer on top of the raw
+   * LSMC boundary before deciding -- `adjusted = boundary[0] + weather_cost
+   * per day`, then `LOCK if today <= adjusted` -- and that adjusted figure is
+   * what the quote exposes as `ceiling_usd_per_day` and what the verdict panel
+   * already labels "Ceiling".
+   *
+   * Reading this panel off the raw boundary instead produced a chart that
+   * contradicted the verdict printed directly above it. Real case, VIZAG ->
+   * RICHARDS_BAY: today 18,790, raw boundary 18,141, but a 4.1-day weather
+   * buffer lifts the line to 20,737 -- the verdict is LOCK while this panel
+   * would have said "above the line, so wait".
+   *
+   * This is the same failure as F-06, where a caption keyed off the fused
+   * verdict instead of the number it was describing. So: the curve still draws
+   * the raw boundary, because that is the real modelled shape across the
+   * horizon, but every *decision* statement here keys off the same adjusted
+   * figure the solver used, and the gap between the two is stated rather than
+   * hidden.
+   */
+  const decisionLine = quote.ceiling_usd_per_day
+  const weatherLift = decisionLine - boundary[0]
+  const hasWeatherLift = Math.abs(weatherLift) > 1
+
   // The last point is the terminal condition (boundary == strike, because at
   // the horizon there is nothing left to wait for). Including it in "the
   // lowest the line gets" would report a number that is an artefact of the
@@ -65,8 +91,8 @@ export function WalkAwayCurve({ quote }: { quote: QuoteResult }) {
   const troughValue = Math.min(...interior)
   const troughIndex = interior.indexOf(troughValue)
 
-  const lo = Math.min(today, ...boundary)
-  const hi = Math.max(today, ...boundary)
+  const lo = Math.min(today, decisionLine, ...boundary)
+  const hi = Math.max(today, decisionLine, ...boundary)
   const span = hi - lo || 1
   const yMin = lo - span * 0.12
   const yMax = hi + span * 0.12
@@ -95,8 +121,9 @@ export function WalkAwayCurve({ quote }: { quote: QuoteResult }) {
   const troughAnchor = nearRight ? 'end' : nearLeft ? 'start' : 'middle'
   const troughLabelX = nearRight ? w - PAD.r : nearLeft ? PAD.l : troughX
 
-  const boundaryToday = boundary[0]
-  const gap = today - boundaryToday
+  // Keyed off the adjusted line, so this panel and the verdict can never
+  // disagree.
+  const gap = today - decisionLine
   const isAbove = gap > 0
   const troughDate = formatShortDate(addDays(quote.as_of, troughIndex + 1))
 
@@ -113,7 +140,7 @@ export function WalkAwayCurve({ quote }: { quote: QuoteResult }) {
     >
       <div className="flex h-full flex-col">
         <div ref={ref} className="w-full px-2 pt-2">
-          <svg width={w} height={H} className="block" role="img" aria-label={ariaSummary(today, boundaryToday, isAbove, troughValue, troughDate)}>
+          <svg width={w} height={H} className="block" role="img" aria-label={ariaSummary(today, decisionLine, isAbove, troughValue, troughDate)}>
             {/* Gap band: how far today's rate still has to fall. */}
             {isAbove && (
               // Opacity is the animated property AND the final look, so it has
@@ -162,7 +189,7 @@ export function WalkAwayCurve({ quote }: { quote: QuoteResult }) {
               animate={{ opacity: 1 }}
               transition={{ ...transition.base, delay: reduced ? 0 : 0.35 }}
             >
-              <circle cx={x(0)} cy={y(boundaryToday)} r={3.5} fill="var(--go)" stroke="var(--surface)" strokeWidth={1.5} />
+              <circle cx={x(0)} cy={y(decisionLine)} r={3.5} fill="var(--go)" stroke="var(--surface)" strokeWidth={1.5} />
               <circle cx={x(troughIndex)} cy={y(troughValue)} r={2.5} fill="var(--market)" />
               {/* The trough often sits near the right edge (the boundary
                   declines across the horizon), so a centred label runs off the
@@ -196,8 +223,21 @@ export function WalkAwayCurve({ quote }: { quote: QuoteResult }) {
         <div className="mt-auto space-y-1 border-t border-border px-2 py-2">
           <div className="stat-row">
             <span className="stat-label">Walk-away line today</span>
-            <span className="stat-value font-semibold text-go">{formatUsd(boundaryToday)}</span>
+            <span className="stat-value font-semibold text-go">{formatUsd(decisionLine)}</span>
           </div>
+          {/* When the weather buffer moves the line, say so and by how much --
+              otherwise the figure above silently disagrees with the curve's
+              own day-1 point and there is nothing on screen to explain it. */}
+          {hasWeatherLift && (
+            <div className="stat-row">
+              <span className="stat-label">
+                of which weather buffer {weatherLift > 0 ? 'raises it by' : 'lowers it by'}
+              </span>
+              <span className="stat-value text-caption text-muted-foreground">
+                {formatUsd(Math.abs(weatherLift))}
+              </span>
+            </div>
+          )}
           <div className="stat-row">
             <span className="stat-label">
               {isAbove ? "Today's rate is above it by" : "Today's rate is below it by"}
@@ -219,6 +259,12 @@ export function WalkAwayCurve({ quote }: { quote: QuoteResult }) {
                 <strong className="text-foreground">lock</strong>. Waiting is not expected to beat this.
               </>
             )}{' '}
+            {hasWeatherLift && (
+              <>
+                The green curve is the raw model boundary; the weather buffer moves today&apos;s
+                decision line to {formatUsd(decisionLine)}, which is the figure the verdict uses.{' '}
+              </>
+            )}
             The final point is where the horizon ends, not a forecast — with no time left to wait, the
             line meets the strike by construction.
           </p>
@@ -231,14 +277,14 @@ export function WalkAwayCurve({ quote }: { quote: QuoteResult }) {
 /** Charts need a text equivalent; this is what a screen reader is told. */
 function ariaSummary(
   today: number,
-  boundaryToday: number,
+  decisionLine: number,
   isAbove: boolean,
   trough: number,
   troughDate: string,
 ): string {
   return (
     `Walk-away line. Today's rate ${formatUsd(today)} is ` +
-    `${isAbove ? 'above' : 'at or below'} today's walk-away line of ${formatUsd(boundaryToday)}. ` +
+    `${isAbove ? 'above' : 'at or below'} today's walk-away line of ${formatUsd(decisionLine)}. ` +
     `The line reaches its lowest point of ${formatUsd(trough)} around ${troughDate}.`
   )
 }

@@ -1,4 +1,5 @@
 import { ExplanationBlock } from '@/components/desk/explanation'
+import { Term } from '@/components/desk/term'
 import { Figure, FigureGroup } from '@/components/desk/figure'
 import { addDays, formatShortDate, formatUsd, formatUsdCompact } from '@/lib/format'
 import type { QuoteResult } from '@/lib/types'
@@ -122,7 +123,9 @@ export function VerdictBlock({ quote }: { quote: QuoteResult }) {
               <td className="text-right text-body text-muted-foreground">{windowText}</td>
             </tr>
             <tr>
-              <td className="font-semibold">Ceiling</td>
+              <td className="font-semibold">
+                <Term term="ceiling">Ceiling</Term>
+              </td>
               <td className="desk-num text-right text-muted-foreground">
                 <Figure value={quote.ceiling_usd_per_day} kind="usd" />
               </td>

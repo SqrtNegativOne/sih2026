@@ -503,6 +503,20 @@
   .panel-note {
     @apply border-t border-border px-2 py-1 text-micro leading-relaxed text-muted-foreground;
   }
+
+  /*
+   * Skip link. Measured: reaching the desk's primary action by keyboard took
+   * 19 tab presses, because the top bar's five section links and the rail's
+   * thirteen module buttons all come first in DOM order. That is the whole
+   * chrome of the app between a keyboard user and the thing they came to do,
+   * on every single page load. Visually hidden until focused, standard
+   * pattern, first focusable element in the document.
+   */
+  .skip-link {
+    @apply absolute left-2 top-2 z-[100] -translate-y-16 rounded-sm bg-primary px-3 py-2
+           text-lead font-semibold text-primary-foreground opacity-0
+           transition-transform focus:translate-y-0 focus:opacity-100;
+  }
 }
 
 ::-webkit-scrollbar {

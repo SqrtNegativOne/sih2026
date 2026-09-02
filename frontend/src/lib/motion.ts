@@ -90,18 +90,16 @@ export const drawPath: Variants = {
   },
 }
 
-/** An area band under a drawn line: fades up rather than wiping. */
+/**
+ * An area band under a drawn line: fades up rather than wiping.
+ *
+ * Note for consumers: if you also need a resting opacity below 1 (a shaded
+ * band usually does), express it in the variant, not in a `style` alongside
+ * it. An inline `style={{opacity}}` wins the cascade over an opacity variant
+ * and the element silently never appears -- which is exactly what happened to
+ * the walk-away curve's gap band on its first build.
+ */
 export const fadeBand: Variants = {
   hidden: { opacity: 0 },
   shown: { opacity: 1, transition: { duration: DURATION.slow, ease: EASE, delay: 0.1 } },
-}
-
-/**
- * Under `prefers-reduced-motion` every variant above still runs, but with a
- * zero-length transition -- so elements land in their final state immediately
- * instead of being skipped, and nothing that only exists as an animation is
- * lost. Pass the result of motion's `useReducedMotion()`.
- */
-export function respectReducedMotion<T extends Transition>(t: T, reduced: boolean | null): T {
-  return reduced ? ({ duration: 0 } as unknown as T) : t
 }

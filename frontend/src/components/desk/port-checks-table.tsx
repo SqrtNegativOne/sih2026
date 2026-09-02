@@ -1,4 +1,5 @@
 import { Panel } from '@/components/desk/panel'
+import { Term } from '@/components/desk/term'
 import type { CongestionLabel, PortCheck, PortListing } from '@/lib/types'
 import { formatNumber, prettyPort } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -28,13 +29,34 @@ export function PortChecksTable({
 }) {
   const portName = (code: string) => prettyPort(ports.find((p) => p.code === code)?.name ?? code)
 
-  const rows: Array<{ label: string; render: (pc: PortCheck) => React.ReactNode }> = [
-    { label: 'Port', render: (pc) => portName(pc.port) },
-    { label: 'Max DWT', render: (pc) => num(pc.max_dwt) },
-    { label: 'Draft', render: (pc) => num(pc.max_draft_m, 1, ' m') },
-    { label: 'LOA', render: (pc) => num(pc.max_loa_m, 0, ' m') },
-    { label: 'Beam', render: (pc) => num(pc.max_beam_m, 1, ' m') },
+  // DWT / draft / LOA / beam are the correct trade words and stay -- `term`
+  // attaches the definition so someone new to chartering is not stopped by
+  // four abbreviations in a row, without the desk having to stop speaking the
+  // language of the people using it.
+  const rows: Array<{ label: React.ReactNode; key: string; render: (pc: PortCheck) => React.ReactNode }> = [
+    { key: 'port', label: 'Port', render: (pc) => portName(pc.port) },
     {
+      key: 'dwt',
+      label: <Term term="DWT">Max DWT</Term>,
+      render: (pc) => num(pc.max_dwt),
+    },
+    {
+      key: 'draft',
+      label: <Term term="draft">Draft</Term>,
+      render: (pc) => num(pc.max_draft_m, 1, ' m'),
+    },
+    {
+      key: 'loa',
+      label: <Term term="LOA">LOA</Term>,
+      render: (pc) => num(pc.max_loa_m, 0, ' m'),
+    },
+    {
+      key: 'beam',
+      label: <Term term="beam">Beam</Term>,
+      render: (pc) => num(pc.max_beam_m, 1, ' m'),
+    },
+    {
+      key: 'wait',
       label: 'Wait, days',
       render: (pc) => (
         <span title={pc.wait_days_is_real_data ? 'Real data' : 'Estimated'}>
@@ -44,6 +66,7 @@ export function PortChecksTable({
       ),
     },
     {
+      key: 'congestion',
       label: 'Congestion',
       render: (pc) => (
         <span
@@ -75,8 +98,8 @@ export function PortChecksTable({
           </tr>
         </thead>
         <tbody>
-          {rows.map(({ label, render }) => (
-            <tr key={label}>
+          {rows.map(({ key, label, render }) => (
+            <tr key={key}>
               <td className="text-caption font-semibold uppercase tracking-wide text-muted-foreground">
                 {label}
               </td>
