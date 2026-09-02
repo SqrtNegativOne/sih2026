@@ -95,9 +95,20 @@ raw_data/sentinel1/*.tiff
 raw_data/sentinel1/*.png
 
 # anchorage.render's per-(port, scene_id) overlay PNGs (served live by
-# GET /anchorage/{port}/overlay.png) -- ~0.5-1 MB each, same "regenerable
-# from the real scene + census, not source data" reasoning as the
-# sentinel1/*.png entry above. census.jsonl itself (the real persisted
-# vessel-count record, anchorage.store's append-only log) is NOT ignored --
-# that IS the real observation, kept the same way opt/ledger's log is.
-raw_data/anchorage/overlays/
+# GET /anchorage/{port}/overlay.png) are NO LONGER ignored.
+#
+# They were, on the reasoning that they are "regenerable from the real scene +
+# census, not source data" -- the same argument as the sentinel1/*.png entry
+# above. That argument is sound for anyone who has the scenes, and it does not
+# hold for anyone who clones this repo: regenerating an overlay needs the
+# Sentinel-1 GRD scenes (6.8 GB, not in the repo) AND Copernicus credentials.
+# Tested on a fresh clone, GET /anchorage/{port}/overlay.png returned 404 for
+# every port, so the satellite panel -- a headline feature -- fell back to its
+# text-only view with a console 404, on a machine that had done nothing wrong.
+#
+# All five are 4.1 MB in total, which is not a meaningful cost against being
+# the difference between the feature working and not working out of the box.
+# The 6.8 GB of source scenes stay ignored; only the rendered crops ship.
+#
+# census.jsonl is likewise NOT ignored -- that IS the real observation, kept
+# the same way opt/ledger's log is.
