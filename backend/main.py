@@ -77,8 +77,15 @@ from opt.quote import (
     quote_envelope,
 )
 from opt.replay import get_replay_snapshot
-from opt.types import PortfolioMix, ProgressStage, Vessel, VesselClass
-from opt.voyage import _REGISTER_PORT_ID
+from opt.types import (
+    CargoParcel,
+    OptimizerInputs,
+    PortfolioMix,
+    ProgressStage,
+    Vessel,
+    VesselClass,
+)
+from opt.voyage import _REGISTER_PORT_ID, schedule_voyages
 from opt.war_risk import listed_areas_on_route, war_risk_premium_usd
 from tonnage.field import get_ablation_snapshot, get_snapshot
 from tonnage.forward import project_tightness_forward
@@ -877,6 +884,159 @@ def _run_quote_envelope(req: QuoteRequest, on_progress=None) -> dict[str, Any]:
     if envelope.quote is not None:
         payload["landed_cost"] = _quote_partial_landed_cost(envelope.quote)
     return payload
+
+
+class SeasonParcel(BaseModel):
+    """One cargo lot in a multi-voyage plan. Same shape as a /quote's cargo,
+    plus an id so the caller can match a returned assignment back to the lot
+    it supplied."""
+
+    parcel_id: str = Field(..., min_length=1, description="Caller's own id for this lot.")
+    origin_port: str
+    dest_port: str
+    commodity: str = "Dry Bulk"
+    volume_dwt: float = Field(..., gt=0)
+    laycan_start: date
+    laycan_end: date
+    revenue_usd: float = Field(
+        0.0,
+        description=(
+            "What this lot is worth to the caller. No honest default exists -- revenue is a "
+            "business fact, not something a market forecast supplies -- so it defaults to 0, "
+            "which correctly means the scheduler will not assign a vessel to it."
+        ),
+    )
+
+
+class SeasonPlanRequest(BaseModel):
+    parcels: list[SeasonParcel] = Field(..., min_length=1, max_length=30)
+    vessels: list[VesselInput] = Field(..., min_length=1)
+    as_of: date | None = None
+    contract_term_days: int = Field(30, gt=0)
+    max_solve_seconds: float = Field(30.0, gt=0, le=120.0)
+
+
+@app.post("/season-plan")
+def post_season_plan(req: SeasonPlanRequest) -> dict:
+    """Schedule a whole book of cargo lots across a fleet, in one solve.
+
+    The problem statement this system was built for asks for **multiple**
+    voyages -- the point of moving off single spot fixtures is covering a
+    season with period tonnage. `opt.voyage.schedule_voyages` has always
+    solved exactly that: it is a CP-SAT pickup-and-delivery model over
+    `inputs.parcels` (plural) and `inputs.vessels`, maximising fleet profit
+    net of fuel, idle opex and demurrage, and it has been exercised by the
+    suite since it was written.
+
+    Nothing exposed it. `opt.quote.run_quote` builds a single
+    `CargoParcel(parcel_id="quote_parcel")` and passes `parcels=[parcel]`, so
+    every caller has only ever seen the one-lot case of a many-lot solver.
+    This endpoint passes the caller's real lots straight through.
+
+    Deliberately NOT a wrapper that calls /quote N times: scheduling six lots
+    together is a different problem from pricing six lots separately, because
+    the same vessel cannot serve two overlapping laycans and only a joint
+    solve can see that. The rejections it returns are therefore real
+    constraint findings, not per-lot failures.
+
+    Returns HTTP 200 with the solver's own status. `NO_DATA` and an empty
+    assignment list is a legitimate answer -- it means no vessel can serve any
+    lot -- and is reported rather than dressed up.
+    """
+    as_of = req.as_of or latest_available_date()
+    vessels = _resolve_vessels(req.vessels) or []
+
+    parcels: list[CargoParcel] = []
+    for i, p in enumerate(req.parcels):
+        origin = _resolve_port(p.origin_port, f"parcels[{i}].origin_port")
+        dest = _resolve_port(p.dest_port, f"parcels[{i}].dest_port")
+        if p.laycan_end < p.laycan_start:
+            raise HTTPException(
+                status_code=422,
+                detail=f"parcels[{i}]: laycan_end {p.laycan_end} is before laycan_start {p.laycan_start}.",
+            )
+        parcels.append(
+            CargoParcel(
+                parcel_id=p.parcel_id,
+                origin_port=origin,
+                dest_port=dest,
+                commodity=p.commodity,
+                volume_dwt=p.volume_dwt,
+                laycan_start=p.laycan_start,
+                laycan_end=p.laycan_end,
+                route_family=route_family_for_origin(origin),
+                revenue_usd=p.revenue_usd,
+            )
+        )
+
+    ids = [p.parcel_id for p in req.parcels]
+    if len(set(ids)) != len(ids):
+        raise HTTPException(status_code=422, detail="parcel_id values must be unique.")
+
+    # `schedule_voyages` reads only `parcels` and `vessels` -- it is a routing
+    # and sequencing model, not a pricing one, and profit comes from each
+    # parcel's own revenue less fuel, idle opex and demurrage. Verified against
+    # the function body rather than assumed: it never touches tc_quotes,
+    # forecasts, basis or risk_tolerance. Those are supplied empty because
+    # OptimizerInputs requires them structurally, not because a real value was
+    # unavailable and quietly dropped.
+    inputs = OptimizerInputs(
+        parcels=parcels,
+        vessels=vessels,
+        tc_quotes={},
+        planning_horizon_days=max(90, req.contract_term_days),
+        contract_term_days=req.contract_term_days,
+        forecasts=[],
+        basis={},
+        risk_tolerance=0.0,
+    )
+    result = schedule_voyages(inputs, max_solve_seconds=req.max_solve_seconds)
+
+    assigned_ids = {a.parcel_id for a in result.assignments}
+    return {
+        "as_of": as_of.isoformat(),
+        "solver_status": result.solver_status,
+        "total_profit_usd": result.total_profit_usd,
+        "n_parcels": len(parcels),
+        "n_vessels": len(vessels),
+        "n_assigned": len(result.assignments),
+        "assignments": [
+            {
+                "vessel_id": a.vessel_id,
+                "parcel_id": a.parcel_id,
+                "dest_port": a.dest_port.value.id,
+                "arrival_hours": a.arrival_hours,
+                "wait_hours": a.wait_hours,
+                "start_operation_hours": a.start_operation_hours,
+                "finish_hours": a.finish_hours,
+                "ballast_hours": a.ballast_hours,
+                "inter_cargo_gap_hours": a.inter_cargo_gap_hours,
+                "profit_usd": a.profit_usd,
+            }
+            for a in result.assignments
+        ],
+        # Lots the solve could not place, and why. A lot with revenue_usd = 0
+        # is unassigned by construction, not by constraint, and says so.
+        "unassigned": [
+            {
+                "parcel_id": p.parcel_id,
+                "reason": (
+                    "No revenue supplied, so assigning a vessel to this lot could never "
+                    "improve fleet profit."
+                    if p.revenue_usd <= 0
+                    else "No feasible vessel-to-lot pairing survived the port and laycan constraints."
+                ),
+            }
+            for p in parcels
+            if p.parcel_id not in assigned_ids
+        ],
+        # (vessel, parcel, reason) triples the port-constraint pre-filter ruled
+        # out before the solver ever saw them -- draft, LOA, beam or DWT.
+        "infeasible_pairs": [
+            {"vessel_id": v, "parcel_id": pid, "reason": why}
+            for v, pid, why in result.infeasible_pairs
+        ],
+    }
 
 
 @app.post("/quote")

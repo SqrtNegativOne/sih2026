@@ -100,6 +100,7 @@ the number/behaviour changed, not just that code was edited.
 | F-84 | Minor | Settings had no ordering rationale and no answer to "what data is actually loaded?" | ✅ done |
 | F-85 | Major | A selected combobox could not be reopened by clicking — correcting a wrong port required backspacing; and Escape closed the whole drawer instead of the list | ✅ done |
 | F-86 | Minor | Settings carried quote-form defaults and a satellite-coverage line that read as configuration and as an apology | ✅ done |
+| F-87 | Major | The CP-SAT multi-parcel scheduler existed and was unreachable — `/quote` hardcodes `parcels=[one]`, so the problem statement's "multiple voyages" was never exposed | ✅ done |
 
 Legend: ⬜ not started · 🔶 in progress · ✅ done · ⏸️ deferred (with reason) · ➖ no action needed
 
@@ -2986,3 +2987,47 @@ Verified: all five secondary pages PASS in both themes, desk PASSES, contrast **
 themes**, zero console errors, combobox reopens on click and on chevron with all 16 options and
 corrects a wrong pick in one click, Settings shows exactly two sections with no satellite or
 quote-default copy. `pytest` 1297 passed, 3 skipped.
+
+---
+
+### 2026-09-03 — F-87: the multi-voyage scheduler, exposed (chunk 1 of the season plan)
+
+The problem statement asks for **multiple** voyages — the whole point of moving off single spot
+fixtures is covering a season with period tonnage. That solver has existed since the beginning.
+
+`opt.voyage.schedule_voyages` is a CP-SAT pickup-and-delivery model over `inputs.parcels` — **plural**
+— and `inputs.vessels`, maximising fleet profit net of fuel, idle opex and demurrage, exercised by the
+suite since it was written. Nothing exposed it: `opt.quote.run_quote` builds a single
+`CargoParcel(parcel_id="quote_parcel")` and passes `parcels=[parcel]` at line 249, so every caller
+this system has ever had saw only the one-lot case of a many-lot solver. Same pattern as the
+walk-away curve (F-65) and the four discarded explanations (F-66): real capability, computed,
+unreachable.
+
+`POST /season-plan` passes the caller's real lots straight through. Deliberately **not** a wrapper
+that calls `/quote` N times — scheduling six lots together is a different problem from pricing six
+lots separately, because one vessel cannot serve two overlapping laycans and only a joint solve can
+see that. The rejections it returns are therefore real constraint findings rather than per-lot
+failures.
+
+Verified against a real four-lot book on two Supramaxes: **OPTIMAL**, $3.58M fleet profit, two lots
+assigned, and the two that were not each carry a real reason — one because a 58,000 dwt vessel
+cannot call Haldia (40,000 dwt port maximum, straight from the port register), one because it was
+sent with no revenue and assigning a ship to it could never raise fleet profit. Those two cases get
+*different* explanations on purpose: a lot with no revenue is unassigned by construction, not by
+constraint, and saying "no feasible pairing" there would be wrong.
+
+Two things worth recording:
+
+- The response accounts for **every** lot the caller sent — each is either in `assignments` or in
+  `unassigned` with a reason. A lot may not simply vanish from the answer.
+- `OptimizerInputs` requires `tc_quotes`, `forecasts`, `basis` and `risk_tolerance`, and
+  `schedule_voyages` reads **none** of them — verified by reading the function body, not assumed. They
+  are passed empty because the type demands them structurally, not because a real value was
+  unavailable and quietly dropped, and the code says so.
+
+10 tests added covering the wiring, the joint solve, the two unassigned explanations, and validation
+(duplicate ids, backwards laycan naming its index, unknown port, empty fleet or book).
+
+**This is chunk 1.** The frontend Season Plan screen and the period-versus-spot synthesis — "cover
+these four of six voyages with one period charter, fixed in this window" — are separate chunks and
+are not built yet.
