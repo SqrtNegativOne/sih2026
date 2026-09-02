@@ -21,9 +21,11 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import sys
 from collections.abc import AsyncIterator, Sequence
+from contextlib import asynccontextmanager, suppress
 from datetime import date
 from pathlib import Path
 from typing import Annotated, Any, Final, Literal
@@ -42,6 +44,9 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
+from alerts.models import WATCH_DESCRIPTION, Direction, Firing, Watch, WatchKind
+from alerts.run import run_due_watches
+from alerts.store import AlertStore, InvalidWatchError, NoSuchWatchError
 from anchorage.calibrate import MIN_N_FOR_CORRELATION, calibrate_all_ports
 from anchorage.render import overlay_path
 from anchorage.store import latest_census
@@ -102,6 +107,75 @@ from opt.war_risk import listed_areas_on_route, war_risk_premium_usd
 from tonnage.field import get_ablation_snapshot, get_snapshot
 from tonnage.forward import project_tightness_forward
 
+LOGGER: Final[logging.Logger] = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Standing alerts: the background evaluation loop
+# ---------------------------------------------------------------------------
+#
+# How often this runs, and why the number is what it is: the market data these
+# watches read only changes when a build-time harvester under
+# src/data_builders/ is run, which is a manual act. So a tight loop would spend
+# almost all of its evaluations re-reading a file that has not changed. What
+# does move on its own is the clock, and one watch kind (OUTCOME_OVERDUE)
+# depends on it -- a ledger entry becomes overdue with no new data at all.
+#
+# Fifteen minutes is chosen for that: fast enough that a clock-based condition
+# is noticed the same working hour, slow enough that the parquet read is
+# negligible. It is not a live market feed and the UI does not claim to be one.
+ALERT_INTERVAL_SECONDS: Final[float] = float(
+    os.environ.get("DESK_ALERT_INTERVAL_SECONDS", "900")
+)
+
+#: Set to disable the loop entirely (tests, or a deployment that would rather
+#: drive evaluation from cron against POST /alerts/evaluate).
+ALERTS_DISABLED: Final[bool] = os.environ.get("DESK_DISABLE_ALERT_LOOP", "").lower() in {
+    "1",
+    "true",
+    "yes",
+}
+
+_alert_store: Final[AlertStore] = AlertStore()
+
+
+async def _alert_loop() -> None:
+    """Evaluate every active watch on an interval, forever.
+
+    Each pass runs in a worker thread: the evaluator reads a parquet file and
+    the ledger from disk, and doing that on the event loop would stall every
+    in-flight request for the duration.
+
+    An exception in one pass is logged and the loop continues. A background
+    task that dies silently on the first bad day is worse than no background
+    task, because the bell keeps showing a stale count and nothing says why.
+    """
+    while True:
+        try:
+            fired = await run_in_threadpool(run_due_watches, _alert_store)
+            if fired:
+                LOGGER.info("Alert evaluation fired %d watch(es)", len(fired))
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            LOGGER.exception("Alert evaluation pass failed; the loop continues")
+        await asyncio.sleep(ALERT_INTERVAL_SECONDS)
+
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    task: asyncio.Task | None = None
+    if not ALERTS_DISABLED:
+        task = asyncio.create_task(_alert_loop())
+    try:
+        yield
+    finally:
+        if task is not None:
+            task.cancel()
+            with suppress(asyncio.CancelledError):
+                await task
+
+
 app = FastAPI(
     title="SIH26006 Freight Charter Optimizer",
     description=(
@@ -110,6 +184,7 @@ app = FastAPI(
         "constraints, and risk flags for one cargo lot."
     ),
     version="1.0.0",
+    lifespan=_lifespan,
 )
 
 #: True when every route requires a real logged-in account.
@@ -744,6 +819,151 @@ def auth_update_user(
     if user is None:
         raise HTTPException(status_code=404, detail=f"No account with id {user_id!r}.")
     return {"user": _user_json(user)}
+
+
+# ---------------------------------------------------------------------------
+# Standing alerts
+# ---------------------------------------------------------------------------
+
+
+class CreateWatchRequest(BaseModel):
+    kind: WatchKind
+    label: str
+    vessel_class: VesselClass | None = None
+    threshold_usd_per_day: float | None = None
+    direction: Direction | None = None
+    move_pct: float | None = None
+    window_days: int | None = None
+    overdue_days: int | None = None
+
+
+class UpdateWatchRequest(BaseModel):
+    is_active: bool
+
+
+def _watch_json(w: Watch) -> dict[str, Any]:
+    return {
+        "watch_id": w.watch_id,
+        "kind": w.kind.value,
+        "label": w.label,
+        "is_active": w.is_active,
+        "created_at": w.created_at.isoformat(),
+        "created_by": w.created_by,
+        "vessel_class": w.vessel_class,
+        "threshold_usd_per_day": w.threshold_usd_per_day,
+        "direction": w.direction.value if w.direction else None,
+        "move_pct": w.move_pct,
+        "window_days": w.window_days,
+        "overdue_days": w.overdue_days,
+        "last_evaluated_at": w.last_evaluated_at.isoformat() if w.last_evaluated_at else None,
+    }
+
+
+def _firing_json(f: Firing) -> dict[str, Any]:
+    return {
+        "firing_id": f.firing_id,
+        "watch_id": f.watch_id,
+        "fired_at": f.fired_at.isoformat(),
+        # The date of the real observation behind the firing, which is usually
+        # EARLIER than fired_at -- a rate published Friday and noticed Monday
+        # fired on Monday about Friday's number. Conflating them would misdate
+        # the evidence, so both are reported.
+        "observed_on": f.observed_on.isoformat() if f.observed_on else None,
+        "message": f.message,
+        "observed_value": f.observed_value,
+        "is_read": f.is_read,
+    }
+
+
+@app.get("/alerts")
+def get_alerts(_viewer: RequireViewer) -> dict[str, Any]:
+    """Every watch, the recent firings, and the unread count for the bell.
+
+    ``delivers_notifications`` is false and will stay false until something in
+    this stack actually sends a message. The desk shows firings; it does not
+    email, text or call anyone, and saying otherwise in a UI is exactly the
+    kind of promise the notification bell was removed for making (F-79).
+    """
+    return {
+        "watches": [_watch_json(w) for w in _alert_store.list_watches()],
+        "firings": [_firing_json(f) for f in _alert_store.list_firings(limit=50)],
+        "unread": _alert_store.unread_count(),
+        "delivers_notifications": False,
+        "evaluation_interval_seconds": None if ALERTS_DISABLED else ALERT_INTERVAL_SECONDS,
+        "kinds": [
+            {"value": k.value, "description": WATCH_DESCRIPTION[k]} for k in WatchKind
+        ],
+    }
+
+
+@app.post("/alerts/watches")
+def post_alert_watch(req: CreateWatchRequest, actor: RequireManager) -> dict[str, Any]:
+    """Create a standing watch.
+
+    Chartering manager or above. A watch is a claim on everyone's attention --
+    it puts a number on a bell every other user of this deployment sees -- so
+    it sits with the role that already carries responsibility for what goes on
+    the record, not with read-only access.
+    """
+    try:
+        watch = _alert_store.create_watch(
+            kind=req.kind,
+            label=req.label,
+            created_by=actor.username if actor else None,
+            vessel_class=req.vessel_class.value if req.vessel_class else None,
+            threshold_usd_per_day=req.threshold_usd_per_day,
+            direction=req.direction,
+            move_pct=req.move_pct,
+            window_days=req.window_days,
+            overdue_days=req.overdue_days,
+        )
+    except InvalidWatchError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"watch": _watch_json(watch)}
+
+
+@app.patch("/alerts/watches/{watch_id}")
+def patch_alert_watch(
+    watch_id: str, req: UpdateWatchRequest, _actor: RequireManager
+) -> dict[str, Any]:
+    try:
+        watch = _alert_store.set_watch_active(watch_id, req.is_active)
+    except NoSuchWatchError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"watch": _watch_json(watch)}
+
+
+@app.delete("/alerts/watches/{watch_id}")
+def delete_alert_watch(watch_id: str, _actor: RequireManager) -> dict[str, Any]:
+    """Delete a watch and its firings.
+
+    Unlike the decision ledger -- append-only because it is evidence about
+    this system's own recommendations -- a watch is a preference. Deleting one
+    destroys no record of anything that happened in the market.
+    """
+    try:
+        _alert_store.delete_watch(watch_id)
+    except NoSuchWatchError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"deleted": True}
+
+
+@app.post("/alerts/read")
+def post_alerts_read(_viewer: RequireViewer) -> dict[str, Any]:
+    """Mark every firing read. Clears the bell, keeps the firings."""
+    return {"marked_read": _alert_store.mark_all_read()}
+
+
+@app.post("/alerts/evaluate")
+def post_alerts_evaluate(_actor: RequireManager) -> dict[str, Any]:
+    """Evaluate every active watch now, instead of waiting for the loop.
+
+    Exists so the feature is demonstrable and testable without waiting fifteen
+    minutes, and so a deployment that would rather drive evaluation from cron
+    can disable the loop and call this.
+    """
+    fired = run_due_watches(_alert_store)
+    return {"fired": [_firing_json(f) for f in fired], "unread": _alert_store.unread_count()}
 
 
 @app.get("/health")

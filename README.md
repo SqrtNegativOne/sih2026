@@ -86,6 +86,8 @@ Other environment variables, all optional:
 | `DESK_AUTH_DB` | Path to the account database. Default: `raw_data/auth/desk.sqlite3` (gitignored). |
 | `DESK_COOKIE_SECURE` | `1` when serving over https. Off by default because a Secure cookie is never stored on plain http, so defaulting it on would silently break local runs. |
 | `DESK_CORS_ORIGINS` | Comma-separated origins allowed to send credentials. Needed only when the frontend is served from a different origin than the API. |
+| `DESK_ALERT_INTERVAL_SECONDS` | How often standing alerts are evaluated. Default 900 (15 minutes). |
+| `DESK_DISABLE_ALERT_LOOP` | `1` to stop the background evaluation loop — for tests, or to drive evaluation from cron against `POST /alerts/evaluate` instead. |
 
 ### A known npm optional-dependency issue (Windows)
 

@@ -1,5 +1,7 @@
-import { CircleHelp, Settings, Ship } from 'lucide-react'
+import { Bell, CircleHelp, Settings, Ship } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { AccountMenu } from '@/components/shell/account-menu'
+import { fetchAlerts } from '@/lib/api'
 import { ThemeToggle } from '@/components/shell/theme-toggle'
 
 const SECTIONS = [
@@ -15,6 +17,11 @@ interface TopBarProps {
   onOpenSettings: () => void
   onOpenHelp: () => void
   onOpenAccounts: () => void
+  onOpenAlerts: () => void
+  /** Bumped by the shell whenever something might have changed the count --
+   *  closing the alerts drawer, for instance. The bell polls slowly on its
+   *  own; this is for the cases where waiting would look broken. */
+  alertsRefreshKey: number
 }
 
 /** A live icon control on the navy bar. Every one of these does something —
@@ -46,7 +53,39 @@ function scrollTo(id: string) {
   document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
-export function TopBar({ onNewQuote, onOpenSettings, onOpenHelp, onOpenAccounts }: TopBarProps) {
+export function TopBar({
+  onNewQuote,
+  onOpenSettings,
+  onOpenHelp,
+  onOpenAccounts,
+  onOpenAlerts,
+  alertsRefreshKey,
+}: TopBarProps) {
+  // The bell shows a real count or it shows nothing. It polls at a slow,
+  // deliberate cadence: the backend evaluates on its own interval and the
+  // market data behind it only changes when a harvester runs, so a fast poll
+  // would be asking a question whose answer cannot have changed.
+  const [unread, setUnread] = useState(0)
+  useEffect(() => {
+    let cancelled = false
+    const load = () => {
+      fetchAlerts()
+        .then((a) => {
+          if (!cancelled) setUnread(a.unread)
+        })
+        // Silent: an unreachable backend already surfaces everywhere else,
+        // and a bell that renders an error is worse than one that renders
+        // nothing.
+        .catch(() => undefined)
+    }
+    load()
+    const id = window.setInterval(load, 120_000)
+    return () => {
+      cancelled = true
+      window.clearInterval(id)
+    }
+  }, [alertsRefreshKey])
+
   return (
     // relative z-50: same fix as icon-rail.tsx -- without an explicit
     // z-index this static header sat behind the New Quote drawer's `fixed
@@ -118,6 +157,26 @@ export function TopBar({ onNewQuote, onOpenSettings, onOpenHelp, onOpenAccounts 
           className="cursor-pointer rounded-sm bg-primary px-2 py-1 text-lead font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white"
         >
           New Quote
+        </button>
+        <button
+          type="button"
+          onClick={onOpenAlerts}
+          aria-label={
+            unread > 0
+              ? `Alerts, ${unread} unread`
+              : 'Alerts — nothing new'
+          }
+          className="relative inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-sm text-navbar-muted transition-colors hover:bg-white/10 hover:text-navbar-foreground focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white"
+        >
+          <Bell className="h-4 w-4" aria-hidden="true" />
+          {unread > 0 && (
+            <span
+              aria-hidden="true"
+              className="absolute -right-0.5 -top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-risk px-1 text-[9px] font-bold leading-none text-risk-fg"
+            >
+              {unread > 9 ? '9+' : unread}
+            </span>
+          )}
         </button>
         <AccountMenu onOpenAccounts={onOpenAccounts} />
         <ThemeToggle onDark />

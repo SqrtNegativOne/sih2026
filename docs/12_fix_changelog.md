@@ -110,6 +110,9 @@ the number/behaviour changed, not just that code was edited.
 | F-90a | Major | The account dropdown rendered inside the top bar's stacking context, so `<main>` painted over it and ate every click — same root cause as F-48/F-52 | ✅ done |
 | F-90b | Minor | The shell fetched desk data before knowing whether anyone was signed in, putting eight guaranteed 401s in the console behind the sign-in screen | ✅ done |
 | F-90c | Minor | The account button had no accessible name below the `sm` breakpoint — visible name hidden, monogram aria-hidden | ✅ done |
+| F-91 | Major | No standing alerts: the desk could compute a verdict but nothing watched for the conditions that would change it, and the notification bell had been removed (F-79) for promising exactly that | ✅ done |
+| F-91a | Minor | `alerts/__init__.py` re-exported the function `evaluate`, shadowing the module of the same name so `alerts.evaluate` meant different things by import order | ✅ done |
+| F-91b | Minor | `tests/alerts/` and `tests/auth/` had no `__init__.py`, so two `test_store.py` files collided and aborted collection for the whole suite | ✅ done |
 
 Legend: ⬜ not started · 🔶 in progress · ✅ done · ⏸️ deferred (with reason) · ➖ no action needed
 
@@ -3381,3 +3384,120 @@ the concurrent-session case). One of them,
 speed a test run up.
 
 README gained an "Accounts and sign-in" section documenting all four environment variables.
+
+### 2026-09-03 — F-91: standing alerts (chunk 5), and the bell earning its place back
+
+The top bar used to carry a notification bell. F-79 removed it with an explicit note:
+
+> *Bell → REMOVED. Alerts need somewhere to persist and someone to notify; both arrive with the
+> account system, and until then the icon promises a capability that does not exist anywhere in the
+> stack.*
+
+Both now exist, so the capability is built and the icon comes back behind it rather than in place of
+it. New package `src/alerts/` (`models`, `conditions`, `run`, `store`), six routes in
+`backend/main.py`, a background evaluation loop, and an alerts drawer on the frontend.
+
+#### What a watch may be about, and what it may not
+
+Only conditions the system can evaluate **honestly, from real data already on disk**:
+
+- `RATE_CROSSES` — a published Baltic class TC average crosses a level. Real series, real date.
+- `RATE_MOVES` — that average moves more than a set percentage over a set window. Both endpoints are
+  real published observations; the window start is the last observation **on or before** the cutoff,
+  never an interpolation to the cutoff itself, because the index is not published every calendar day
+  and inventing a value would put a fabricated number on both sides of the comparison.
+- `OUTCOME_OVERDUE` — a ledger entry has gone unsettled too long. This is the one that protects the
+  evidence base: `compute_performance` scores this system only over entries with a linked outcome,
+  so an entry nobody settles does not make the record look bad — it silently removes itself from the
+  record. A desk that never notices is grading itself on a shrinking, self-selected sample.
+
+Deliberately absent, with reasons: "tell me when a vessel becomes available" (no live fleet feed);
+"tell me when port congestion changes" (PortWatch is a build-time harvest — a watch firing on the
+day the file happened to be rebuilt would be reporting on the harvest, not the port); "tell me when
+the market moves" with no threshold (a condition with no falsifiable trigger is a feeling).
+
+#### The claim it refuses to make
+
+`GET /alerts` returns `delivers_notifications: false`, and the drawer says in plain words: *"Alerts
+are recorded and shown here. Nothing is sent — no email, no message, no push."*
+
+Nothing in this stack sends anything. A bell that looks like it will reach you when you are not
+looking is the same broken promise F-79 removed, in a new shape. A test asserts the flag stays
+false.
+
+#### Edge-triggered, and the bug that makes that hard
+
+A watch fires on the **transition** into its condition, not on every evaluation while it holds. A
+rate that sits below a level for a fortnight is one piece of news, not fourteen; a bell showing
+fourteen copies of the same fact is how people learn to ignore a bell.
+
+Three rules make that work, and each is a bug if inverted:
+
+- **A watch does not fire on its first look.** "This was already true when you asked" is not news,
+  and a watch created deliberately against a condition that already holds would otherwise fire
+  instantly and pointlessly. Verified live: a watch for "Supramax below $1,000,000/day" — trivially
+  true — produced nothing on its first evaluation.
+- **State is recorded on every evaluation that produced a real answer, firing or not.** Recording it
+  only on a firing is the classic version of this bug: the watch never leaves its firing state and
+  fires again forever.
+- **State is NOT recorded when there is no signal.** An edge that has not been seen yet must still
+  be there to see tomorrow; overwriting on a no-data pass silently consumes it. A test removes the
+  market history, confirms nothing fires and the previous state survives, restores the file, and
+  confirms the edge is still there to fire.
+
+`observed_on` and `fired_at` are separate fields and are never conflated. A rate published on Friday
+and noticed on Monday fired on Monday about Friday's number; the drawer shows both ("noticed Sep 02 ·
+observed Aug 20") because stamping the firing with today would misdate the evidence it exists to
+preserve.
+
+One malformed watch cannot stop the rest: `run_due_watches` logs and continues, and the failing
+watch keeps its previous state rather than being reset by its own failure. A background loop that
+aborts on the first bad watch leaves every later one silently unevaluated.
+
+#### Why fifteen minutes
+
+The market data these watches read only changes when a build-time harvester is run, which is a
+manual act — so a tight loop would spend almost every pass re-reading a file that has not changed.
+What moves on its own is the clock, and `OUTCOME_OVERDUE` depends on it. Fifteen minutes is chosen
+for that: fast enough that a clock-based condition is noticed the same working hour, slow enough
+that the parquet read is negligible. `DESK_ALERT_INTERVAL_SECONDS` and `DESK_DISABLE_ALERT_LOOP`
+make it configurable, and `POST /alerts/evaluate` exists so the feature is demonstrable and testable
+without waiting.
+
+Each pass runs in a worker thread — the evaluator reads a parquet file and the ledger from disk, and
+doing that on the event loop would stall every in-flight request for the duration.
+
+#### Roles
+
+Creating a watch needs chartering manager or above. A watch is a claim on everyone's attention — it
+puts a number on a bell every user of the deployment sees — so it sits with the role that already
+carries responsibility for what goes on the record, not with read-only access. Reading alerts and
+clearing the bell are open to viewers.
+
+#### A name collision in my own package, found by a test
+
+`alerts/__init__.py` re-exports the **function** `evaluate`, which shadowed the **module**
+`alerts.evaluate` on the package object. `alerts.evaluate.MASTER_LONG` then resolved to an attribute
+on a function, and `monkeypatch.setattr` failed with a confusing `'function' object ... has no
+attribute`. Worse than the test failure is what it means in ordinary use: `from alerts import
+evaluate` and `import alerts.evaluate` give different objects depending on import order. The module
+is now `alerts/conditions.py`, which describes it better anyway, and the package docstring records
+why.
+
+#### A collection error that would have hidden 34 passing tests
+
+`tests/alerts/` and `tests/auth/` were both created without an `__init__.py`, which every other test
+package in this repository has. Two files then shared the basename `test_store.py`, pytest could not
+tell the modules apart, and collection aborted with an import-file-mismatch error — taking the whole
+run down rather than skipping one file.
+
+Worth recording because of the near-miss: had it merely *skipped* one of them, 34 passing auth-store
+tests would have quietly stopped running and the suite would still have said "passed". The missing
+package markers are added, matching the convention already in `tests/opt/`, `tests/backend/` and the
+seven other test packages.
+
+52 tests added (37 on the package, 15 on the API) covering edge-triggering in both directions, the
+no-signal-preserves-state rule, real-observation dates, failure isolation, every validation refusal,
+the foreign-key cascade on delete, and the role gating.
+
+README gained the two new environment variables.

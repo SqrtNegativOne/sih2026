@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { QuoteDrawer } from '@/components/desk/quote-drawer'
 import { AccountsDrawer } from '@/components/shell/accounts-drawer'
+import { AlertsDrawer } from '@/components/shell/alerts-drawer'
 import { HelpDrawer } from '@/components/shell/help-drawer'
 import { IconRail } from '@/components/shell/icon-rail'
 import { SettingsDrawer } from '@/components/shell/settings-drawer'
@@ -91,6 +92,10 @@ function Shell() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
   const [accountsOpen, setAccountsOpen] = useState(false)
+  const [alertsOpen, setAlertsOpen] = useState(false)
+  // Bumped when the alerts drawer closes, so the bell's count reflects what
+  // was just read rather than waiting for its next slow poll.
+  const [alertsRefreshKey, setAlertsRefreshKey] = useState(0)
   const [settings, setSettings] = useState<DeskSettings>(() => loadSettings())
   // The real FRED USD/INR observation, fetched once. Null until it answers,
   // and null forever if no real observation covers the pricing date -- in
@@ -213,6 +218,8 @@ function Shell() {
         onOpenSettings={() => setSettingsOpen(true)}
         onOpenHelp={() => setHelpOpen(true)}
         onOpenAccounts={() => setAccountsOpen(true)}
+        onOpenAlerts={() => setAlertsOpen(true)}
+        alertsRefreshKey={alertsRefreshKey}
       />
       <div className="flex min-h-0 flex-1">
         <IconRail active={VIEW_LABEL[view]} onSelectView={setView} />
@@ -279,6 +286,13 @@ function Shell() {
       />
       <HelpDrawer open={helpOpen} onClose={() => setHelpOpen(false)} />
       <AccountsDrawer open={accountsOpen} onClose={() => setAccountsOpen(false)} />
+      <AlertsDrawer
+        open={alertsOpen}
+        onClose={() => {
+          setAlertsOpen(false)
+          setAlertsRefreshKey((k) => k + 1)
+        }}
+      />
     </div>
     </MoneyProvider>
   )

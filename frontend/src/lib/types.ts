@@ -1274,3 +1274,56 @@ export interface AuthStatus {
   roles: { value: DeskRole; description: string }[]
   session_hours: number
 }
+
+// ---------------------------------------------------------------------------
+// Standing alerts
+// ---------------------------------------------------------------------------
+
+/** Only conditions the backend can evaluate honestly from data already on
+ *  disk. `src/alerts/models.py` documents what is deliberately absent and
+ *  why — a condition with no falsifiable trigger is a feeling, not an alert. */
+export type WatchKind = 'rate_crosses' | 'rate_moves' | 'outcome_overdue'
+
+export interface Watch {
+  watch_id: string
+  kind: WatchKind
+  label: string
+  is_active: boolean
+  created_at: string
+  /** Null on an open deployment where nobody was signed in — recorded rather
+   *  than invented. */
+  created_by: string | null
+  vessel_class: VesselClass | null
+  threshold_usd_per_day: number | null
+  direction: 'above' | 'below' | null
+  move_pct: number | null
+  window_days: number | null
+  overdue_days: number | null
+  last_evaluated_at: string | null
+}
+
+export interface Firing {
+  firing_id: string
+  watch_id: string
+  /** When this system noticed. */
+  fired_at: string
+  /** When the number behind it was actually published — usually earlier than
+   *  `fired_at`, and never conflated with it. */
+  observed_on: string | null
+  message: string
+  observed_value: number | null
+  is_read: boolean
+}
+
+export interface AlertsResponse {
+  watches: Watch[]
+  firings: Firing[]
+  unread: number
+  /** Always false today. Nothing in this stack emails, texts or calls anyone,
+   *  and the UI says so rather than implying delivery it does not perform. */
+  delivers_notifications: boolean
+  /** null when the background loop is disabled and evaluation is driven
+   *  externally. */
+  evaluation_interval_seconds: number | null
+  kinds: { value: WatchKind; description: string }[]
+}

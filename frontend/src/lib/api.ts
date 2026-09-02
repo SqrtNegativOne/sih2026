@@ -2,12 +2,14 @@ import type {
   AnchorageCalibrationResponse,
   AnchorageCensus,
   AnchoragePortCode,
+  AlertsResponse,
   ApiError,
   AuthStatus,
   BackhaulResponse,
   ChokepointReference,
   DeskRole,
   DeskUser,
+  Firing,
   FractureResponse,
   FragilityReport,
   FragilityVariable,
@@ -34,6 +36,8 @@ import type {
   TonnageFieldValidationResponse,
   VesselClass,
   VesselInput,
+  Watch,
+  WatchKind,
 } from './types'
 
 // F-39: '/api' only resolves in `npm run dev`, where vite.config.ts proxies
@@ -552,4 +556,55 @@ export async function updateUser(
       body: JSON.stringify(body),
     }),
   )
+}
+
+// ---------------------------------------------------------------------------
+// Standing alerts
+// ---------------------------------------------------------------------------
+
+export async function fetchAlerts(): Promise<AlertsResponse> {
+  return parseOrThrow<AlertsResponse>(await api(`/alerts`))
+}
+
+export async function createWatch(body: {
+  kind: WatchKind
+  label: string
+  vessel_class?: VesselClass | null
+  threshold_usd_per_day?: number | null
+  direction?: 'above' | 'below' | null
+  move_pct?: number | null
+  window_days?: number | null
+  overdue_days?: number | null
+}): Promise<{ watch: Watch }> {
+  return parseOrThrow(
+    await api(`/alerts/watches`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  )
+}
+
+export async function setWatchActive(watchId: string, isActive: boolean): Promise<{ watch: Watch }> {
+  return parseOrThrow(
+    await api(`/alerts/watches/${watchId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ is_active: isActive }),
+    }),
+  )
+}
+
+export async function deleteWatch(watchId: string): Promise<void> {
+  await api(`/alerts/watches/${watchId}`, { method: 'DELETE' })
+}
+
+export async function markAlertsRead(): Promise<void> {
+  await api(`/alerts/read`, { method: 'POST' })
+}
+
+/** Evaluate every active watch now rather than waiting for the loop. Exists
+ *  so the feature is demonstrable without waiting fifteen minutes. */
+export async function evaluateAlerts(): Promise<{ fired: Firing[]; unread: number }> {
+  return parseOrThrow(await api(`/alerts/evaluate`, { method: 'POST' }))
 }
