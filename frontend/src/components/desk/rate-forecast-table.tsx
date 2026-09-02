@@ -1,4 +1,6 @@
 import { Minus, TrendingDown, TrendingUp } from 'lucide-react'
+import { motion, useReducedMotion } from 'motion/react'
+import { DURATION, drawPath, transition } from '@/lib/motion'
 import { Panel } from '@/components/desk/panel'
 import { Badge } from '@/components/ui/badge'
 import { PERCENTILE } from '@/lib/vocabulary'
@@ -39,10 +41,16 @@ const PAD = { t: 10, r: 10, b: 16, l: 44 }
 
 function FanChart({ rows, todayQuote }: { rows: RateHorizon[]; todayQuote: number }) {
   const [box, ref] = useElementSize<HTMLDivElement>()
+  const reduced = useReducedMotion()
   const w = Math.max(box.width, 240)
 
   if (rows.length === 0) return null
   const sorted = [...rows].sort((a, b) => a.horizon_days - b.horizon_days)
+
+  // Identifies THIS dataset. Used as the motion key so the draw-in replays
+  // only when a genuinely new forecast arrives -- not on every re-render, and
+  // not when the container merely resizes.
+  const signature = sorted.map((r) => `${r.horizon_days}:${Math.round(r.p50_usd_per_day)}`).join('|')
 
   const lo = Math.min(todayQuote, ...sorted.map((r) => r.p10_usd_per_day))
   const hi = Math.max(todayQuote, ...sorted.map((r) => r.p90_usd_per_day))
@@ -87,11 +95,52 @@ function FanChart({ rows, todayQuote }: { rows: RateHorizon[]; todayQuote: numbe
           today
         </text>
 
-        <polygon points={band} fill="var(--market)" opacity={0.16} />
-        <path d={p50Line} fill="none" stroke="var(--market)" strokeWidth={1.75} />
-        {sorted.map((r) => (
+        {/*
+          The fan draws itself in when a quote lands: the uncertainty band
+          fades up from nothing, then the expected-case line traces left to
+          right. `key` is the dataset signature, so the animation replays when
+          a NEW forecast arrives and not on every re-render -- an unkeyed
+          motion element re-runs on each parent render, which turns a chart
+          into a strobe as soon as anything else on the page changes.
+
+          `opacity` is expressed only in the variant, never alongside a `style`
+          -- see the note on fadeBand in lib/motion for why.
+        */}
+        <motion.polygon
+          key={`band-${signature}`}
+          points={band}
+          fill="var(--market)"
+          initial={reduced ? { opacity: 0.16 } : { opacity: 0 }}
+          animate={{ opacity: 0.16 }}
+          transition={reduced ? { duration: 0 } : { ...transition.slow, delay: 0.05 }}
+        />
+        <motion.path
+          key={`p50-${signature}`}
+          d={p50Line}
+          fill="none"
+          stroke="var(--market)"
+          strokeWidth={1.75}
+          strokeLinejoin="round"
+          pathLength={1}
+          initial={reduced ? false : 'hidden'}
+          animate="shown"
+          variants={drawPath}
+        />
+        {sorted.map((r, i) => (
           <g key={r.horizon_days}>
-            <circle cx={x(r.horizon_days)} cy={y(r.p50_usd_per_day)} r={2.5} fill="var(--market)" />
+            <motion.circle
+              cx={x(r.horizon_days)}
+              cy={y(r.p50_usd_per_day)}
+              r={2.5}
+              fill="var(--market)"
+              initial={reduced ? false : { opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={
+                reduced
+                  ? { duration: 0 }
+                  : { ...transition.fast, delay: 0.2 + i * (DURATION.slow / Math.max(1, sorted.length)) }
+              }
+            />
             <text
               x={x(r.horizon_days)}
               y={H - 4}

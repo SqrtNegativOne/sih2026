@@ -2557,3 +2557,28 @@ invisible on first build, so the next consumer does not repeat it.
 
 Verified after: all five secondary pages PASS in both themes, zero console errors, `tsc` / `oxlint` /
 `build` / `ruff` / tripwire green.
+
+#### F-71 — charts and map, arrival motion (steps 5 and 6)
+
+**The rate-forecast fan draws itself in.** The uncertainty band fades up, the expected-case line
+traces left to right, and the horizon dots settle in sequence. The motion `key` is a signature of the
+dataset (`horizon:p50` pairs), not a constant, so the draw-in replays when a genuinely new forecast
+arrives and **not** on every re-render — an unkeyed motion element re-runs on each parent render,
+which turns a chart into a strobe as soon as anything else on the page changes.
+
+**Chokepoint markers on the route map** settle in with a short stagger, and the two worst bands
+(`elevated`, `critical`) get an expanding attention ring. That ring fires **twice and stops**, which
+is a deliberate departure from "make it pulse": a marker throbbing forever is a permanent distraction
+on a screen someone keeps open all day, it stops carrying information after the first second, and the
+band is already encoded in the marker's radius and colour — which are readable at rest and readable
+in a screenshot. Both are skipped entirely under `prefers-reduced-motion`.
+
+**F-72 — the walk-away panel was sized against the wrong variant.** Adding the weather-buffer row and
+its explanatory sentence pushed the panel 25px past its measured 304px. The height is now set from
+the *tallest* variant (336px), not from whichever one happened to be on screen: a route with a large
+transit buffer is exactly the case where the extra explanation matters most, so it must not be the
+one that gets clipped. Verified on both — Newcastle → Paradip (0.1-day buffer) and VIZAG → RICHARDS
+BAY (4.1-day buffer) both report zero clipped panels.
+
+Bundle 751 KB / 245 KB gzip against the 714 KB / 233 KB pre-transformation baseline: +12 KB gzip
+total, against a +150 KB budget, with no new dependencies.

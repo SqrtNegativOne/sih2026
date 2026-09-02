@@ -254,9 +254,13 @@ export function VoyageDeskPage({
           readable, and because the shape of the line -- where it troughs, how
           far today sits above it -- is the single most informative object on
           the page once you can actually see it. */}
-      {/* 304px measured, not guessed: the 168px chart plus its axis padding
-          and the four-line reading beneath it come to 291px of real content. */}
-      <div className="h-76">
+      {/* 336px, measured against the TALLEST variant rather than the one on
+          screen at the time: the panel grows a "weather buffer raises it by"
+          row and an extra sentence whenever the transit buffer moves the
+          decision line, which 304px clipped by 25px. Sized for that case so a
+          route with a large buffer -- exactly the case where the extra
+          explanation matters most -- is not the one that gets cut off. */}
+      <div className="h-84">
         <WalkAwayCurve quote={quote} />
       </div>
 

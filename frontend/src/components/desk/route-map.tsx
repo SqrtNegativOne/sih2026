@@ -1,6 +1,7 @@
 import { geoGraticule, geoMercator, geoPath } from 'd3-geo'
 import type { Feature, FeatureCollection } from 'geojson'
-import { motion } from 'motion/react'
+import { motion, useReducedMotion } from 'motion/react'
+import { transition } from '@/lib/motion'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import landRaw from '@/assets/ne_110m_land.json'
 import { Panel } from '@/components/desk/panel'
@@ -83,6 +84,7 @@ export function RouteMap({
   onFocus: (id: string | null) => void
 }) {
   const [box, ref] = useElementSize<HTMLDivElement>()
+  const reduceMotion = useReducedMotion()
   const [hidden, setHidden] = useState<Set<SolverRouteKind>>(new Set())
   const [showRejected, setShowRejected] = useState(false)
   const [hoverId, setHoverId] = useState<string | null>(null)
@@ -491,22 +493,60 @@ export function RouteMap({
               )
             })}
 
-            {chokepointMarkers.map((m) => {
+            {/*
+              Chokepoint markers settle in when a route arrives, and the two
+              worst bands get ONE expanding ring to draw the eye to them.
+
+              Deliberately not an infinite pulse. A marker that throbs forever
+              is a permanent distraction on a screen someone keeps open all
+              day, and it stops carrying information after the first second --
+              the band is already encoded in the marker's radius and colour,
+              which are readable at rest and readable in a screenshot. The ring
+              fires twice and stops.
+            */}
+            {chokepointMarkers.map((m, i) => {
               const xy = projection([m.lon, m.lat])
               if (!xy) return null
+              const color = FRACTURE_BAND_COLOR[m.band]
+              const radius = FRACTURE_BAND_RADIUS[m.band]
+              const needsAttention = m.band === 'critical' || m.band === 'elevated'
+              const delay = reduceMotion ? 0 : 0.25 + i * 0.06
               return (
-                <circle
-                  key={m.id}
-                  cx={xy[0]}
-                  cy={xy[1]}
-                  r={FRACTURE_BAND_RADIUS[m.band]}
-                  fill={FRACTURE_BAND_COLOR[m.band]}
-                  fillOpacity={0.35}
-                  stroke={FRACTURE_BAND_COLOR[m.band]}
-                  strokeWidth={1.25}
-                >
-                  <title>{`${m.name}: ${m.band}`}</title>
-                </circle>
+                <g key={m.id}>
+                  {needsAttention && !reduceMotion && (
+                    <motion.circle
+                      cx={xy[0]}
+                      cy={xy[1]}
+                      fill="none"
+                      stroke={color}
+                      strokeWidth={1}
+                      initial={{ r: radius, opacity: 0.7 }}
+                      animate={{ r: radius * 2.6, opacity: 0 }}
+                      transition={{
+                        duration: 1.1,
+                        ease: 'easeOut',
+                        delay,
+                        repeat: 1,
+                        repeatDelay: 0.3,
+                      }}
+                    />
+                  )}
+                  <motion.circle
+                    cx={xy[0]}
+                    cy={xy[1]}
+                    r={radius}
+                    fill={color}
+                    fillOpacity={0.35}
+                    stroke={color}
+                    strokeWidth={1.25}
+                    initial={reduceMotion ? false : { opacity: 0, scale: 0.6 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    style={{ transformOrigin: `${xy[0]}px ${xy[1]}px` }}
+                    transition={reduceMotion ? { duration: 0 } : { ...transition.base, delay }}
+                  >
+                    <title>{`${m.name}: ${m.band}`}</title>
+                  </motion.circle>
+                </g>
               )
             })}
           </motion.g>
