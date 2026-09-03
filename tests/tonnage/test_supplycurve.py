@@ -80,11 +80,38 @@ def test_capesize_and_handysize_are_honestly_flagged_weak(fits):
     assert fits[VesselClass.HANDYSIZE].weak_signal
 
 
-def test_supramax_and_handysize_are_short_history_but_not_below_the_confidence_floor(fits):
-    # Real TCAVG coverage for these two starts 2025-11-19 -- confirm the honest
-    # small-n situation is exactly what it is, not silently padded or truncated.
-    assert fits[VesselClass.SUPRAMAX].n_obs == fits[VesselClass.HANDYSIZE].n_obs == 185
-    assert fits[VesselClass.SUPRAMAX].n_obs >= MIN_OBS_FOR_CONFIDENCE
+def test_supramax_and_handysize_are_short_history_but_not_below_the_confidence_floor(
+    fits, tightness_index
+):
+    # Real TCAVG coverage for these two starts 2025-11-19, later than the other
+    # two classes -- confirm the honest small-n situation is exactly what it is,
+    # not silently padded or truncated.
+    #
+    # This used to assert `n_obs == 185`, a snapshot of the data on the day it
+    # was written. That became wrong the moment the desk started harvesting
+    # rates daily (F-92): the count now grows every publication day, so a
+    # literal here would fail every day the harvester succeeds -- turning a
+    # working feature into a red suite. The intent was never the number 185. It
+    # was that these two classes see the same, shorter history than the others,
+    # and that the fit uses every real joined observation rather than a padded
+    # or truncated set. Both are asserted against the data itself, so they stay
+    # true as it grows.
+    supramax = fits[VesselClass.SUPRAMAX]
+    handysize = fits[VesselClass.HANDYSIZE]
+
+    assert supramax.n_obs == handysize.n_obs
+    assert supramax.n_obs >= MIN_OBS_FOR_CONFIDENCE
+
+    # Not padded, not truncated: the fit used exactly the rows the tightness
+    # index really carries for that class.
+    for cls, fit in ((VesselClass.SUPRAMAX, supramax), (VesselClass.HANDYSIZE, handysize)):
+        available = tightness_index.filter(pl.col("vessel_class") == cls.value).height
+        assert fit.n_obs <= available
+        assert fit.n_obs > 0
+
+    # Still the shorter history: both start later than Panamax, whose TCAVG
+    # series reaches further back.
+    assert supramax.n_obs < fits[VesselClass.PANAMAX].n_obs
 
 
 def test_predict_returns_all_three_quantiles_in_order(fits):

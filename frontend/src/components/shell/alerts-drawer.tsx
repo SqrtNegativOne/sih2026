@@ -154,7 +154,7 @@ export function AlertsDrawer({ open, onClose }: { open: boolean; onClose: () => 
           <p className="panel-note">
             Alerts are recorded and shown here. Nothing is sent — no email, no message, no push.
             {data?.evaluation_interval_seconds
-              ? ` Watches are checked about every ${Math.round(data.evaluation_interval_seconds / 60)} minutes; the market data behind them only changes when a harvester is run.`
+              ? ` Watches are checked about every ${Math.round(data.evaluation_interval_seconds / 60)} minutes, and again the moment a new day's rates arrive.`
               : ' Evaluation is driven externally on this deployment.'}
           </p>
 

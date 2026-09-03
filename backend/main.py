@@ -110,6 +110,33 @@ from tonnage.forward import project_tightness_forward
 LOGGER: Final[logging.Logger] = logging.getLogger(__name__)
 
 
+def _attach_to_uvicorn_logging() -> None:
+    """Make this module's and the harvester's INFO lines actually appear.
+
+    Uvicorn installs its own handlers and does not touch the root logger, so a
+    plain ``LOGGER.info`` from here goes to a logger with no handler and is
+    dropped at WARNING by logging's last resort. The effect was that the daily
+    rate refresh ran, fetched, wrote seven days of new data and fired an alert
+    -- and the server log said nothing at all about any of it.
+
+    A background job whose activity is invisible is one nobody can trust or
+    debug, so these three loggers borrow uvicorn's handler when there is one
+    and fall back to a basic handler when the app is run some other way.
+    """
+    uvicorn_error = logging.getLogger("uvicorn.error")
+    handlers = uvicorn_error.handlers or logging.getLogger().handlers
+    for name in (__name__, "data_builders.harvest_handybulk", "alerts"):
+        target = logging.getLogger(name)
+        target.setLevel(logging.INFO)
+        if not target.handlers and not handlers:
+            target.addHandler(logging.StreamHandler())
+        for handler in handlers:
+            if handler not in target.handlers:
+                target.addHandler(handler)
+        target.propagate = False
+
+
+
 # ---------------------------------------------------------------------------
 # Standing alerts: the background evaluation loop
 # ---------------------------------------------------------------------------
@@ -162,16 +189,107 @@ async def _alert_loop() -> None:
         await asyncio.sleep(ALERT_INTERVAL_SECONDS)
 
 
+# ---------------------------------------------------------------------------
+# Keeping the market data current
+# ---------------------------------------------------------------------------
+#
+# The rate series every forecast, ceiling and alert depends on used to advance
+# only when somebody ran a scraper by hand -- and nobody had, so the stored
+# data sat twelve days behind the source while every downstream figure quietly
+# aged. Standing alerts were the sharpest symptom: they watch a number that
+# could not change, so they could never fire.
+#
+# `data_builders.harvest_handybulk` is the harvester that was missing. This
+# runs it on a schedule.
+#
+# On the repository's network policy: that policy forbids a per-request
+# external call from backend/ or opt/, and this is not one. It is the
+# build-time harvester, in data_builders/, writing to raw_data/, invoked on a
+# timer rather than by a request. No HTTP handler waits on it, and a fetch
+# failure leaves the existing data exactly as it was.
+
+#: A daily cadence, because the source publishes once a day. Anything faster
+#: is asking a question whose answer cannot have changed.
+RATE_REFRESH_SECONDS: Final[float] = float(
+    os.environ.get("DESK_RATE_REFRESH_SECONDS", str(24 * 60 * 60))
+)
+
+#: Set to stop the desk fetching anything at all. A deployment that would
+#: rather run the harvester from cron should set this.
+RATE_REFRESH_DISABLED: Final[bool] = os.environ.get(
+    "DESK_DISABLE_RATE_REFRESH", ""
+).lower() in {"1", "true", "yes"}
+
+
+def _refresh_rates_once() -> int:
+    """Harvest, fold into master_long, and return how many rows were added.
+
+    Synchronous and blocking by design -- the caller runs it in a worker
+    thread. It makes a network request and rewrites a parquet file, neither of
+    which belongs on the event loop.
+    """
+    from data_builders import harvest_handybulk
+
+    result = harvest_handybulk.harvest()
+    if not result.fetched:
+        LOGGER.info("Rate refresh: %s", result.reason)
+        return 0
+    if result.conflicts:
+        # The source disagreeing with stored history is worth a human looking,
+        # and is never applied automatically -- see harvest_handybulk.merge_rows.
+        LOGGER.warning(
+            "Rate refresh: %d stored value(s) differ from the source", len(result.conflicts)
+        )
+    added = harvest_handybulk.update_master(result.parsed)
+    if added:
+        LOGGER.info(
+            "Rate refresh: +%d row(s), source now current to %s", added, result.latest_date
+        )
+    return added
+
+
+async def _rate_refresh_loop() -> None:
+    """Keep the rate series current, and evaluate alerts when it moves.
+
+    Runs once at startup so a desk that has been off for a week catches up on
+    the first request rather than the next midnight, then on the interval.
+
+    Evaluating alerts immediately after new data lands is the point of the
+    whole arrangement: a watch on "Supramax falls below $20,000" is only
+    meaningful if something notices when a new figure arrives. Without this the
+    alert loop would still get there, but up to its own interval later, for no
+    reason.
+    """
+    while True:
+        try:
+            added = await run_in_threadpool(_refresh_rates_once)
+            if added and not ALERTS_DISABLED:
+                fired = await run_in_threadpool(run_due_watches, _alert_store)
+                if fired:
+                    LOGGER.info("New rates fired %d watch(es)", len(fired))
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            LOGGER.exception("Rate refresh failed; the loop continues")
+        await asyncio.sleep(RATE_REFRESH_SECONDS)
+
+
 @asynccontextmanager
 async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    task: asyncio.Task | None = None
+    # Done here rather than at import: uvicorn installs its handlers as part of
+    # startup, so at import time there is nothing to attach to yet.
+    _attach_to_uvicorn_logging()
+    tasks: list[asyncio.Task] = []
     if not ALERTS_DISABLED:
-        task = asyncio.create_task(_alert_loop())
+        tasks.append(asyncio.create_task(_alert_loop()))
+    if not RATE_REFRESH_DISABLED:
+        tasks.append(asyncio.create_task(_rate_refresh_loop()))
     try:
         yield
     finally:
-        if task is not None:
+        for task in tasks:
             task.cancel()
+        for task in tasks:
             with suppress(asyncio.CancelledError):
                 await task
 
@@ -187,11 +305,12 @@ app = FastAPI(
     lifespan=_lifespan,
 )
 
-#: True when every route requires a real logged-in account.
-AUTH_ENFORCED: Final[bool] = os.environ.get("DESK_REQUIRE_AUTH", "").lower() in {
-    "1",
-    "true",
-    "yes",
+#: True when every route requires a real logged-in account. Defaults to true;
+#: the only values that open the desk are an explicit 0/false/no.
+AUTH_ENFORCED: Final[bool] = os.environ.get("DESK_REQUIRE_AUTH", "1").lower() not in {
+    "0",
+    "false",
+    "no",
 }
 
 #: Name of the session cookie.
@@ -544,20 +663,18 @@ def _resolve_vessels(vessels: list[VesselInput] | None) -> list[Vessel] | None:
 # Accounts, sessions and roles
 # ---------------------------------------------------------------------------
 #
-# Enforcement is OFF unless DESK_REQUIRE_AUTH is set, and that default is a
-# deliberate, stated choice rather than an oversight.
+# Enforcement is ON by default. It was off for one release, on the reasoning
+# that a fresh clone must run end to end with no setup -- but that reasoning
+# was weaker than it looked, because the first-run screen already handles the
+# no-accounts case: an empty deployment offers to create the first
+# administrator, which takes about twenty seconds and explains itself. Nobody
+# is locked out by this, and a desk whose whole value is an auditable record of
+# who decided what should not default to not knowing who anyone is.
 #
-# A fresh clone of this repository has to run end to end with no setup -- that
-# has been a hard requirement throughout, and it is what someone evaluating
-# the work will actually do. An API that returns 401 to every call until
-# somebody finds the bootstrap endpoint fails that test on the first click.
-#
-# So the login system is fully built and fully usable in either mode -- the
-# /auth routes always work, accounts are real, passwords are really hashed,
-# sessions are really server-side -- and a deployment that wants the desk
-# closed sets one environment variable. What is NOT done is pretending: the
-# mode is reported by /auth/status, and the frontend shows which one it is in
-# rather than displaying a padlock over an open door.
+# DESK_REQUIRE_AUTH=0 reopens it for a demo where signing in is friction with
+# no audience. What is NOT done is pretending: the mode is reported by
+# /auth/status, and the frontend shows which one it is in rather than
+# displaying a padlock over an open door.
 #
 # The session cookie is HttpOnly (JavaScript cannot read it, so an XSS bug
 # cannot exfiltrate a session), SameSite=Lax (a cross-site form post or image

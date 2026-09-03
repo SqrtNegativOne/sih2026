@@ -14,6 +14,7 @@ account management (a username is half a credential) and the last-admin guard.
 from __future__ import annotations
 
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -275,3 +276,38 @@ class TestClosedMode:
             f"/auth/users/{created['user_id']}", json={"is_active": False}
         ).status_code == 200
         assert viewer.get("/ports").status_code == 401
+
+
+class TestDefaults:
+    """The default is enforced, and this checks it without trusting the value
+    the test suite has already overridden.
+
+    `tests/conftest.py` sets DESK_REQUIRE_AUTH=0 so the other 149 backend tests
+    can exercise the desk rather than the login. That makes `main.AUTH_ENFORCED`
+    useless as evidence here, so these read the same environment logic the
+    module uses instead.
+    """
+
+    @staticmethod
+    def _enforced_for(env_value: str | None) -> bool:
+        """The rule from backend.main, applied to one value."""
+        raw = "1" if env_value is None else env_value
+        return raw.lower() not in {"0", "false", "no"}
+
+    def test_an_unset_variable_means_the_desk_is_closed(self) -> None:
+        assert self._enforced_for(None) is True
+
+    @pytest.mark.parametrize("value", ["0", "false", "False", "no", "NO"])
+    def test_only_an_explicit_negative_opens_it(self, value: str) -> None:
+        assert self._enforced_for(value) is False
+
+    @pytest.mark.parametrize("value", ["1", "true", "yes", "", "anything"])
+    def test_everything_else_leaves_it_closed(self, value: str) -> None:
+        """Including the empty string and a typo. A misspelled value must fail
+        safe -- towards asking for a password, never away from it."""
+        assert self._enforced_for(value) is True
+
+    def test_the_module_uses_exactly_this_rule(self) -> None:
+        """Guards the two drifting apart."""
+        source = Path(main.__file__).read_text(encoding="utf-8")
+        assert 'os.environ.get("DESK_REQUIRE_AUTH", "1").lower() not in {' in source

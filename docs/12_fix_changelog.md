@@ -113,6 +113,13 @@ the number/behaviour changed, not just that code was edited.
 | F-91 | Major | No standing alerts: the desk could compute a verdict but nothing watched for the conditions that would change it, and the notification bell had been removed (F-79) for promising exactly that | ✅ done |
 | F-91a | Minor | `alerts/__init__.py` re-exported the function `evaluate`, shadowing the module of the same name so `alerts.evaluate` meant different things by import order | ✅ done |
 | F-91b | Minor | `tests/alerts/` and `tests/auth/` had no `__init__.py`, so two `test_store.py` files collided and aborted collection for the whole suite | ✅ done |
+| F-92 | Major | The rate series had no harvester at all — a one-off scrape that stopped twelve days behind the source, so every downstream figure aged and standing alerts watched a number that could not move | ✅ done |
+| F-92a | Major | The first version of the harvester rebuilt the whole master parquet, turning a 7-day top-up into a 951,848-row change across 342 unrelated series | ✅ done |
+| F-92b | Major | The source's front page carries only the latest entry on most days, so a front-page-only harvester silently loses every day of any gap | ✅ done |
+| F-92c | Minor | Background-job logging went nowhere: uvicorn installs its own handlers, so the rate refresh ran, wrote data and fired an alert while the server log said nothing | ✅ done |
+| F-92d | Major | Sign-in was off by default on a system whose value is an auditable record of who decided what | ✅ done |
+| F-92e | Minor | `test_supplycurve.py` pinned `n_obs == 185`, a snapshot literal that would fail every day once the data started updating | ✅ done |
+| F-92f | Minor | `master_summary.csv` had drifted from the parquet it describes, and was only refreshed on runs that added rows | ✅ done |
 
 Legend: ⬜ not started · 🔶 in progress · ✅ done · ⏸️ deferred (with reason) · ➖ no action needed
 
@@ -3501,3 +3508,140 @@ no-signal-preserves-state rule, real-observation dates, failure isolation, every
 the foreign-key cascade on delete, and the role gating.
 
 README gained the two new environment variables.
+
+### 2026-09-03 — F-92: the rate data stops going stale, and sign-in is on by default
+
+Three things asked for together, and they turn out to be one thing: the alerts built in F-91 watch a
+number, sign-in decides who may act on it, and neither is worth much if the number never changes.
+
+#### The rate series had no way to advance
+
+`raw_data/handybulk_index_levels.csv` is the source of every `*_TCAVG` series in
+`master_long.parquet` — the real dollars-per-day figures the forecast trains on, the LOCK/WAIT
+ceiling is measured against, and `opt.period_cover` benchmarks a break-even hire against.
+
+**There was no harvester for it.** The file was a one-off scrape with a fetch manifest beside it and
+no script in the repository, so it simply stopped where whoever ran it stopped: stored data ended
+2026-08-20 while the source had published through 2026-09-01. Every downstream figure had quietly
+aged by twelve days, and the standing alerts were the sharpest symptom — they watch a number that
+could not move, so they could never fire.
+
+`src/data_builders/harvest_handybulk.py` is the missing harvester, following the pattern
+`harvest_portwatch.py` established: build-time fetch under `data_builders/`, writing to `raw_data/`,
+cached, offline-safe.
+
+**Confidence the parse is right, before trusting a byte of it.** The source publishes in prose, not
+tables — *"The Baltic Supramax Index (BSI) increased by 3 points to 1,650 points, with average daily
+earnings for supramax bulk carriers increased by $39 to $20,858"* — and the wording varies per class
+within one paragraph ("with average daily earnings", "while average daily income", "as average daily
+earnings"). So the patterns match only the parts that do not vary. The check that mattered was
+running it against dates already stored: on **all 14 overlapping dates, every figure matched the
+previously scraped value to the dollar.** That says it reads the same fields the original scrape
+did, rather than something that merely looks plausible.
+
+Three refusals are built in:
+
+- **A date already stored is never rewritten.** That figure is what the models trained on and what
+  past recommendations were priced against; changing it would rewrite the past out from under the
+  decision ledger. A disagreement is logged for a human and not applied.
+- **A missing figure stays missing.** Two days in the current page genuinely lack one of their
+  numbers. They are stored with that cell empty rather than carried forward from the previous day,
+  which would put a number the source never published under the source's name.
+- **A reachable page that parses to nothing says so.** Silently harvesting zero rows every day is
+  indistinguishable from a quiet market.
+
+#### A 951,848-row lesson about blast radius
+
+The first version ended with `build_master.main()` — one line, and it worked. It also turned a
+seven-day rate top-up into a **951,848-row change**, pulling in 342 PortWatch series from an extended
+harvest the committed parquet predated. All real data, none of it asked for, and none of it
+validated by the thing that triggered it.
+
+That is a genuine staleness finding about the repository, and it is left alone deliberately: bringing
+the rest of `master_long` in step with `raw_data/` is a real task done knowingly, not a side effect
+of a rate fetch. `update_master` now touches only the nine series this source publishes, and within
+those only dates the master does not already carry. Re-run after the fix: **+62 rows across 9
+series, no new series, zero pre-existing values altered.**
+
+#### The front page is not the archive
+
+An early fetch of the front page returned 56 KB carrying three weeks of entries. The same URL the
+next day returned 16 KB carrying exactly one, the rest having moved behind month-archive links.
+
+A harvester reading only the front page therefore works perfectly for as long as it runs every day
+and **silently loses every day of a gap the moment it does not** — invisible until you need the data.
+So a run that finds itself behind also reads the month archives covering the gap, capped at two
+months. Verified by rolling the data back and letting it recover: seven days restored, and the
+current month's archive — which does not exist yet and returns 404 — skipped without drama.
+
+#### It runs on a schedule, and alerts evaluate the moment data lands
+
+A daily loop in `backend/main.py`, in a worker thread because it makes a network request and rewrites
+a parquet file. On the repository's network policy: that policy forbids a *per-request* external call
+from `backend/` or `opt/`, and this is not one — it is the build-time harvester, invoked on a timer,
+with no HTTP handler waiting on it.
+
+Evaluating alerts immediately after new data lands is the point of the whole arrangement. Verified
+end to end by rolling the data back to 2026-08-20 (Supramax $20,698), arming a watch at "above
+$20,700" so its state was genuinely `out`, and starting the server:
+
+```
+handybulk: added 7 new day(s) to handybulk_index_levels.csv
+master_long: +62 row(s) across 9 series
+Rate refresh: +9 row(s), source now current to 2026-09-01
+New rates fired 1 watch(es)
+```
+
+The bell then read **"Alerts, 1 unread"** and the firing said: *Supramax spot TC average is above
+$20,700/day — SUPRAMAX_TCAVG published $20,858/day on 2026-09-01*, shown as "noticed Sep 02 ·
+observed Sep 01".
+
+**A logging bug found in the middle of that.** The first run of this did all of the above and the
+server log said *nothing*. Uvicorn installs its own handlers and never touches the root logger, so a
+plain `LOGGER.info` went to a logger with no handler and was dropped at WARNING by logging's last
+resort. A background job whose activity is invisible is one nobody can trust or debug; the three
+relevant loggers now borrow uvicorn's handler at startup.
+
+#### Sign-in is on by default
+
+`DESK_REQUIRE_AUTH` now defaults to enforced. The earlier default was off, reasoning that a fresh
+clone must run with no setup — but that reasoning was weaker than it looked, because the first-run
+screen already handles an empty deployment: it offers to create the first administrator, which takes
+about twenty seconds and explains itself. Nobody is locked out, and a desk whose whole value is an
+auditable record of who decided what should not default to not knowing who anyone is.
+`DESK_REQUIRE_AUTH=0` reopens it.
+
+Flipping the default broke **149 backend tests**, all of which exercise what the desk computes rather
+than the gate in front of it. `tests/conftest.py` now sets the open mode for the suite (and disables
+both background loops, so constructing a `TestClient` cannot make a network request or rewrite real
+data), with the gate tested deliberately in both directions in `test_auth_api.py`. A new
+`TestDefaults` pins the rule itself — including that a misspelled value fails *safe*, towards asking
+for a password rather than away from it — by reading the same environment logic the module uses
+rather than the constant the suite has already overridden.
+
+#### A test that would have failed every day from now on
+
+`tests/tonnage/test_supplycurve.py` asserted `n_obs == 185` for the Supramax and Handysize supply
+curves — a snapshot of the data on the day it was written. Correct then, and wrong the moment the
+desk started harvesting daily: the count grows with every publication day, so that literal would
+have turned a working feature into a red suite every single morning.
+
+The intent was never the number. Its own comment says it: *"confirm the honest small-n situation is
+exactly what it is, not silently padded or truncated."* That is now asserted against the data
+itself — the two classes share a count, the count clears the confidence floor, the fit uses no more
+rows than the tightness index actually carries for that class, and both remain shorter than
+Panamax's longer TCAVG history. All four stay true as the data grows.
+
+Worth flagging as a class of problem rather than one test: a repository that pins literals from its
+own data cannot then start updating that data. The rest of the suite was checked for the same shape
+and is clean — the other `2026-08-20` occurrences are explicit `as_of` request inputs, which pin the
+question rather than the answer and are stable by construction.
+
+#### master_summary.csv going out of step
+
+`master_summary.csv` describes `master_long.parquet`, and it is what a person reads to answer "how
+current is this data" — so a stale one answers that question wrongly with total confidence. It had
+drifted, and the first fix only rewrote it when rows were added, which is exactly how it drifted in
+the first place. `update_master` now refreshes it on every run, including a no-op one.
+
+38 tests added on the harvester, 4 on the default rule, and one rewritten to survive its own data.
