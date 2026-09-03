@@ -2,7 +2,6 @@
 
 Reads four source families from data_raw/:
   - investing_com/*.csv   (index points, daily, deep but partly frozen)
-  - handybulk_index_levels.csv (index points + TC averages in usd/day)
   - portwatch/*.csv       (daily dry bulk port calls and estimated tonnage per port)
   - signal_weekly/*.extraction.csv (weekly route-level assessments)
 
@@ -26,7 +25,7 @@ REPO_ROOT: Final[Path] = Path(__file__).resolve().parents[2]
 DATA_RAW: Final[Path] = REPO_ROOT / "raw_data"
 DATA_OUT: Final[Path] = REPO_ROOT / "src" / "data"
 
-SOURCE_RANK: Final[dict[str, int]] = {"handybulk": 2, "investing": 1}
+SOURCE_RANK: Final[dict[str, int]] = {"investing": 1}
 INVESTING_SERIES: Final[dict[str, str]] = {
     "dry": "BD_INDEX",
     "capesize": "BC_INDEX",
@@ -88,40 +87,6 @@ def read_investing_dir(path: Path) -> pl.DataFrame:
         frames.append(out.drop_nulls())
         LOGGER.info(f"{file.name}: {out.height} rows -> {match}")
     return pl.concat(frames) if frames else pl.DataFrame(schema=MASTER_SCHEMA)
-
-
-def read_handybulk(path: Path) -> pl.DataFrame:
-    """Melt the HandyBulk wide extract into index-point and TC-average series."""
-    wide = pl.read_csv(path, schema_overrides={c: pl.Float64 for c in [
-        "bdi", "bci", "bpi", "bsi", "bhsi",
-        "capesize_tc_avg_usd_day", "panamax_tc_avg_usd_day",
-        "supramax_tc_avg_usd_day", "handysize_tc_avg_usd_day",
-    ]})
-    mapping: Final[dict[str, tuple[str, str]]] = {
-        "bdi": ("BD_INDEX", "index_pts"),
-        "bci": ("BC_INDEX", "index_pts"),
-        "bpi": ("BPI_INDEX", "index_pts"),
-        "bsi": ("BSI_INDEX", "index_pts"),
-        "bhsi": ("BHSI_INDEX", "index_pts"),
-        "capesize_tc_avg_usd_day": ("CAPESIZE_TCAVG", "usd/day"),
-        "panamax_tc_avg_usd_day": ("PANAMAX_TCAVG", "usd/day"),
-        "supramax_tc_avg_usd_day": ("SUPRAMAX_TCAVG", "usd/day"),
-        "handysize_tc_avg_usd_day": ("HANDYSIZE_TCAVG", "usd/day"),
-    }
-    frames: list[pl.DataFrame] = []
-    for col, (series_id, unit) in mapping.items():
-        frames.append(
-            wide.select(
-                pl.lit(series_id).alias("series_id"),
-                pl.col("date").str.to_date("%Y-%m-%d"),
-                pl.col(col).alias("value"),
-                pl.lit(unit).alias("unit"),
-                pl.lit("handybulk").alias("source"),
-            ).drop_nulls()
-        )
-    df = pl.concat(frames)
-    LOGGER.info(f"handybulk: {df.height} rows across {df['series_id'].n_unique()} series")
-    return df
 
 
 def read_portwatch_dir(path: Path) -> pl.DataFrame:
@@ -257,7 +222,6 @@ def main() -> None:
     master_raw = pl.concat(
         [
             read_investing_dir(DATA_RAW / "investing_com"),
-            read_handybulk(DATA_RAW / "handybulk_index_levels.csv"),
             read_portwatch_dir(DATA_RAW / "portwatch"),
             read_signal_dir(DATA_RAW / "signal_weekly"),
         ],

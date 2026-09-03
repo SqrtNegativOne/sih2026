@@ -6,17 +6,17 @@ import logging
 from pathlib import Path
 from typing import Final
 
+import polars as pl
 import xgboost as xgb
 
-from ml.baselines import load_split, make_matrix
-from ml.model_xgb import XGB_PARAMS
+from ml.baselines import HORIZONS, load_split, make_matrix
+from ml.models.xgb import XGB_PARAMS
 
 LOGGER: Final[logging.Logger] = logging.getLogger(__name__)
 
 REPO_ROOT: Final[Path] = Path(__file__).resolve().parents[2]
 DATA: Final[Path] = REPO_ROOT / "src" / "data"
 MODELS_DIR: Final[Path] = DATA / "models"
-HORIZONS: Final[tuple[int, ...]] = (7, 30, 90)
 
 
 def _setup_logging() -> None:
@@ -39,13 +39,13 @@ def main() -> None:
     # (or you could just train on `train_df` and early stop on `valid_df`)
     for h in HORIZONS:
         LOGGER.info(f"Training XGBoost model for h={h}...")
-        
+
         train_h = train_df.drop_nulls([f"y_step_h{h}"])
         valid_h = valid_df.drop_nulls([f"y_step_h{h}"])
-        
+
         names, x_tr = make_matrix(train_h, h)
         _, x_val = make_matrix(valid_h, h)
-        
+
         y_tr = (train_h[f"y_step_h{h}"] - train_h["log_value"]).to_numpy()
         y_val = (valid_h[f"y_step_h{h}"] - valid_h["log_value"]).to_numpy()
 
@@ -66,7 +66,7 @@ def main() -> None:
         model_path = MODELS_DIR / f"xgb_h{h}.ubj"
         booster.save_model(model_path)
         LOGGER.info(f"Saved model to {model_path}")
-        
+
         meta_path = MODELS_DIR / f"xgb_h{h}_features.json"
         with open(meta_path, "w") as f:
             json.dump(names, f)
