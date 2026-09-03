@@ -1,9 +1,11 @@
-import { Info, TriangleAlert } from 'lucide-react'
+import { FileText, Info, TriangleAlert } from 'lucide-react'
 import { useState } from 'react'
 import { BackhaulPanel } from '@/components/desk/backhaul-panel'
 import { AnchoragePanel } from '@/components/desk/anchorage-panel'
 import { CIIPanel } from '@/components/desk/cii-panel'
+import { DecisionBrief } from '@/components/desk/decision-brief'
 import { DecisionHeadline } from '@/components/desk/decision-headline'
+import { CopyLinkButton } from '@/components/desk/copy-link-button'
 import { FleetMixTable } from '@/components/desk/fleet-mix-table'
 import { FracturePanel } from '@/components/desk/fracture-panel'
 import { InfeasibilityPanel } from '@/components/desk/infeasibility-panel'
@@ -13,7 +15,7 @@ import { RateForecastTable } from '@/components/desk/rate-forecast-table'
 import { RiskFeed } from '@/components/desk/risk-feed'
 import { RouteList } from '@/components/desk/route-list'
 import { RouteMap } from '@/components/desk/route-map'
-import { SolveProgress } from '@/components/desk/solve-progress'
+import { QUOTE_PIPELINE, SolveProgress } from '@/components/desk/solve-progress'
 import { SummaryStrip } from '@/components/desk/summary-strip'
 import { VerdictBlock } from '@/components/desk/verdict-block'
 import { VoyageTimeline } from '@/components/desk/voyage-timeline'
@@ -34,6 +36,8 @@ interface VoyageDeskPageProps {
   solving: boolean
   error: string | null
   onNewQuote: () => void
+  /** Fill the form with a real SAIL lane and submit it, in one click. */
+  onRunExample: () => void
   /** P6: the vessel(s) actually supplied on this quote, for a real backhaul
    * sweep -- QuoteResult never echoes full vessel specs back. */
   vessels: VesselInput[]
@@ -61,11 +65,14 @@ export function VoyageDeskPage({
   solving,
   error,
   onNewQuote,
+  onRunExample,
   vessels,
 }: VoyageDeskPageProps) {
   const [mapFocus, setMapFocus] = useState<string | null>(null)
+  // The one artefact designed to leave the screen. See decision-brief.tsx.
+  const [briefOpen, setBriefOpen] = useState(false)
 
-  if (solving) return <SolveProgress stages={stages} />
+  if (solving) return <SolveProgress stages={stages} pipeline={QUOTE_PIPELINE} />
 
   if (!envelope) {
     return (
@@ -123,8 +130,29 @@ export function VoyageDeskPage({
             </ul>
 
             <div className="border-t border-border px-4 py-3">
-              <Button variant="primary" size="lg" className="w-full" onClick={onNewQuote}>
-                New charter quote
+              {/* Two buttons, and the order matters.
+;
+                  The form needs an origin, a destination, a tonnage and a
+                  laycan before anything happens -- seven fields, and the
+                  first two require already knowing which of sixteen ports
+                  this desk trades. Someone seeing it for the first time
+                  cannot get to an answer without being told what to type,
+                  which means the product's first impression depends on
+                  someone standing next to them.
+
+                  The example removes that. It is a real SAIL trade -- coking
+                  coal out of Newcastle into Paradip, the lane the problem
+                  statement itself names -- priced through exactly the same
+                  path as any other quote. Nothing about it is canned: it
+                  fills the form and submits it. */}
+              <Button variant="primary" size="lg" className="w-full" onClick={onRunExample}>
+                See a worked example
+              </Button>
+              <p className="mt-1.5 text-center text-micro text-muted-foreground">
+                Newcastle → Paradip, 75,000 t thermal coal, laycan in a fortnight
+              </p>
+              <Button size="md" className="mt-3 w-full" onClick={onNewQuote}>
+                Price my own cargo
               </Button>
               <p className="mt-2 text-center text-micro text-muted-foreground">
                 Every figure is computed from data on disk. Nothing here is simulated.
@@ -164,7 +192,25 @@ export function VoyageDeskPage({
           what to DO -- a reader had to assemble the verdict, the gap to the
           walk-away line and the entry window out of four separate panels
           before the screen meant anything. */}
+      {/* The brief sits on the verdict, not in a menu: the moment someone has
+          an answer is the moment they need to forward it to whoever approves
+          it. Burying it would recreate the gap it was built to close. */}
+      <div className="flex justify-end gap-1">
+        {/* Same argument as the brief, for the other half of "forward this":
+            a link reproduces the decision live and re-prices it, where the
+            brief freezes it as of now. Both belong on the verdict. */}
+        <CopyLinkButton />
+        <Button size="sm" onClick={() => setBriefOpen(true)}>
+          <FileText className="h-3.5 w-3.5" aria-hidden="true" />
+          One-page brief
+        </Button>
+      </div>
+
       <DecisionHeadline quote={quote} ports={ports} />
+
+      {briefOpen && (
+        <DecisionBrief quote={quote} ports={ports} onClose={() => setBriefOpen(false)} />
+      )}
 
       <SummaryStrip quote={quote} ports={ports} />
 

@@ -188,10 +188,18 @@ export function SeasonPlanPage({
   const portName = (code: string) =>
     prettyPort(ports.find((p) => p.code === code)?.name ?? code)
 
+  // A lot with non-positive tonnage isn't a business scenario the solver
+  // needs to reject for us -- it's the frontend accepting something no real
+  // cargo lot could be and then paying a round trip to find out. `volume_dwt`
+  // has no `required`/`min`-driven native validation the way the quote
+  // drawer's numeric fields do (this table isn't wrapped in a <form>), so the
+  // check has to live here.
+  const parcelsValid = parcels.every((p) => p.volume_dwt > 0)
   const ready =
     parcels.length > 0 &&
     vessels.length > 0 &&
     parcels.every((p) => p.origin_port && p.dest_port && p.origin_port !== p.dest_port) &&
+    parcelsValid &&
     vessels.every((v) => v.current_port && v.vessel_id.trim())
 
   function run() {
@@ -221,6 +229,7 @@ export function SeasonPlanPage({
     <div className="grid h-full auto-rows-min content-start gap-2 overflow-auto" id="season-plan">
       <Panel
         title="Season Plan"
+        soWhat={'The whole season\'s cargo book scheduled across a fleet in one solve, rather than one voyage at a time. This is where a decision that looks fine alone shows up as a clash with the rest of the programme.'}
         meta={
           // The pricing date is stated, not implied. It is the day whose real
           // market data the whole plan is costed against, and a plan is not
@@ -229,7 +238,21 @@ export function SeasonPlanPage({
         }
         hint="Schedules a whole book of cargo lots across your fleet in one solve, rather than pricing them one at a time. One vessel cannot serve two overlapping laycans, and only a joint solve can see that -- so a lot rejected here is a real constraint finding, not a per-lot failure."
         actions={
-          <Button variant="primary" size="sm" onClick={run} disabled={!ready || loading}>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={run}
+            disabled={!ready || loading}
+            title={
+              loading
+                ? 'Solving…'
+                : !parcelsValid
+                  ? 'Every lot needs a positive tonnage.'
+                  : !ready
+                    ? 'Every lot needs a load port and a discharge port (and they must differ), and every vessel needs an ID and a current port.'
+                    : 'Build the plan'
+            }
+          >
             {loading ? 'Solving…' : plan ? 'Re-solve' : 'Build the plan'}
           </Button>
         }
@@ -309,12 +332,19 @@ export function SeasonPlanPage({
                       <td>
                         <input
                           type="number"
+                          min={1}
                           value={p.volume_dwt}
                           onChange={(e) =>
                             patchParcel(p.key, { volume_dwt: Number(e.target.value) || 0 })
                           }
                           aria-label={`Tonnes for ${p.parcel_id}`}
-                          className={cn(inputCls, 'w-24 text-right font-mono')}
+                          aria-invalid={p.volume_dwt <= 0}
+                          title={p.volume_dwt <= 0 ? 'Needs a positive tonnage.' : undefined}
+                          className={cn(
+                            inputCls,
+                            'w-24 text-right font-mono',
+                            p.volume_dwt <= 0 && 'border-risk focus:border-risk focus:ring-risk/40',
+                          )}
                         />
                       </td>
                       <td>
@@ -363,6 +393,14 @@ export function SeasonPlanPage({
                 </tbody>
               </table>
             </div>
+            {/* Visible, not a hover title -- the whole point of catching this
+                before the round trip is that the reader sees it without
+                having to find a tooltip first. */}
+            {!parcelsValid && (
+              <p className="mt-1 text-body text-risk">
+                Every lot needs a positive tonnage — the highlighted field(s) above.
+              </p>
+            )}
           </div>
 
           {/* Fleet */}
@@ -539,6 +577,7 @@ function SeasonResult({
     <>
       <Panel
         title="The Plan"
+        soWhat={'The chosen schedule and what it costs. If a lot lands at the wrong time for the plant, move that lot\'s window and re-solve rather than editing the answer by hand.'}
         meta={`${plan.solver_status} · ${plan.n_assigned} of ${plan.n_parcels} lots covered`}
         hint="Each bar is one vessel's voyage on the shared time axis, in hours from the earliest vessel availability. Bars on the same row are the same ship: seeing them end to end is what a period charter would be covering."
       >
@@ -708,6 +747,7 @@ function SeasonResult({
       <div className="grid gap-2 lg:grid-cols-2">
         <Panel
           title="Voyages Scheduled"
+        soWhat={'Each sailing the plan commits to, with its ship and dates. Use it as the working list to take to your owners and brokers.'}
           meta={`${plan.assignments.length}`}
           hint="Each row is one vessel assigned to one lot, with the solver's own timings and profit."
           flush
@@ -753,6 +793,7 @@ function SeasonResult({
 
         <Panel
           title="Lots Not Covered"
+        soWhat={'The cargoes the plan could not fit, and why. Each one needs a decision from you: widen its window, add tonnage, or accept that it moves late.'}
           meta={`${plan.unassigned.length}`}
           hint="Every lot you sent is accounted for — assigned, or listed here with the real reason. A lot with no revenue is unassigned by construction rather than by any constraint, and says so."
           flush
@@ -827,6 +868,7 @@ function PeriodCoverPanel({
   return (
     <Panel
       title="Period Cover"
+        soWhat={'Whether taking a ship on hire for a stretch of the season beats fixing each voyage on the day. It wins when you have steady volume and rates are heading up; it loses when your volume is uncertain.'}
       meta={`break-even hire · priced from ${asOf}`}
       hint="The highest daily rate at which chartering in the tonnage to cover this plan still breaks even, against the real published spot TC average for the class. The benchmark is a spot index, not a period quote — this system holds no period charter rate, and does not invent one."
     >

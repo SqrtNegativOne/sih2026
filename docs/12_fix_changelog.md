@@ -126,6 +126,23 @@ the number/behaviour changed, not just that code was edited.
 | F-94 | Major | All 128 PortWatch files were 19 days stale — congestion, waiting times, tightness and anchorage calibration all served figures from old data, because the harvester was a one-shot nothing re-ran | ✅ done |
 | F-94a | Major | The port refresh updated the CSVs but not `master_long`, so the tonnage screen would have gone current while the forecast's congestion features stayed 19 days behind | ✅ done |
 | F-95 | Minor | Route map replaced with the 3D globe from `origin/3d_globe_intergration`, ported rather than copied so the desk-wide currency setting survives | ✅ done |
+| F-96 | Critical | `GET /ledger/replay` cost 22.4 minutes cold and cached only in memory, so `--reload` discarded it on any file save — a judge clicking one button could end the demo | ✅ done |
+| F-97 | Major | No printable one-page brief: nothing could leave the screen, so a verdict could not be forwarded to whoever approves it | ✅ done |
+| F-97a | Critical | `solve_lock_or_wait` re-derived the vessel class from cargo tonnage and filtered the forecast fans to it, so a Supramax quote was priced against Panamax fans — the brief header and its explanation named different classes | ✅ done |
+| F-98 | Major | Layer 2 missing across the desk: every panel showed an answer and its evidence, none said what question it answered or what to do when the number was bad | ✅ done |
+| F-99 | Major | The fragility `variables` fast path existed on the backend and in the client types; nothing ever sent it, so every user paid the full eight-variable sweep | ✅ done |
+| F-100 | Major | `POST /fragility` discarded the per-variable progress the engine already emitted — a ~20s sweep showed a spinner and no evidence anything was running | ✅ done |
+| F-100a | Major | `SolveProgress` hard-coded the eight quote stages; pointed at a fragility sweep it would have rendered a checklist of steps that never run, greyed as "pending" | ✅ done |
+| F-100b | Major | `fragility.engine._emit` hard-coded `elapsed_ms=0.0`; once a caller rendered the field, a 1.5-second variable search reported itself as `<1 ms` | ✅ done |
+| F-101 | Major | The nav rail advertised thirteen modules and delivered five — six were anchors wearing borrowed Veson-style module names, none matching the panel they scrolled to | ✅ done |
+| F-102 | Major | No URL state: a refresh lost the quote, and a decision could not be sent to anyone | ✅ done |
+| F-102a | Major | The URL-sync effect rewrote the hash to a bare `#/desk` on mount, erasing an incoming shared quote before the auto-run effect could read it | ✅ done |
+| F-102b | Major | A hash-only change does not reload the document, so a link pasted into an already-open tab did nothing while the same link from an email worked | ✅ done |
+| F-103 | Minor | 847 KB single JS bundle; the 138 KB Natural Earth land file loaded before the desk could appear | ✅ done |
+| F-104 | Minor | The remaining explanatory `title=` attributes (percentile headers, `$/mt`, backhaul scores, freight caveat) never opened on keyboard focus or on touch | ✅ done |
+| F-105 | Major | Season Plan's per-lot tonnage input had no client-side validation; a zero/negative/blank value was submitted as-is and rejected by the backend's `gt=0` constraint only after a round trip | ✅ done |
+| F-106 | Major | Fragility's cargo-tonnes field is a plain text input (no `type="number"`, no `min`); non-numeric or non-positive text silently became `0` via `Number(cargo) \|\| 0` and was submitted, rather than being caught before the request | ✅ done |
+| F-107 | Minor | Portfolio's contract-term field has the same `\|\| 0` fallback; an empty/negative term silently became `0`, which fails the backend's `gt=0` constraint (its other three numeric fields default to a backend-valid `0`, so only this one actually mattered) | ✅ done |
 
 Legend: ⬜ not started · 🔶 in progress · ✅ done · ⏸️ deferred (with reason) · ➖ no action needed
 
@@ -3927,3 +3944,83 @@ console errors and zero failed requests in both.
 `tsc` clean, `npm run build` clean, oxlint unchanged at its 10 pre-existing warnings, and the
 synthetic-data tripwire run explicitly — worth doing, because ~500 lines of new frontend drawing
 code is exactly where a `Math.random()` jitter would be tempting.
+
+---
+
+## 2026-09-03 — Judge review execution (F-96 … F-104)
+
+A full pass against `docs/15_judge_review_and_ux_plan.md`, which carries the detailed per-item log
+for this work. This entry is the register summary; read that file for the reasoning.
+
+**What was done**, in the priority order recorded in §B.1 of that file:
+
+1. **The 22-minute replay is gone** (F-96). `opt/replay.py` now persists to disk under a key that
+   fingerprints every input that could change the answer — contract term, broker spread, PSO and
+   MC settings and seeds, model version, data version, and the gated frozen-test file's size and
+   mtime (never its contents). `src/data_builders/build_replay_snapshot.py` precomputes it;
+   `backend/main.py` warms it on startup without ever blocking the lifespan; `--reload` was removed
+   from `run.bat` / `run.ps1` and split into new `run-dev.*` launchers.
+2. **The one-page brief** (F-97) and, found while building it, a genuine numerical bug: the fleet
+   mix chose a Supramax while `solve_lock_or_wait` re-derived Panamax from tonnage and filtered the
+   forecast fans to it, so the ceiling was computed from the wrong class's fans (F-97a). Fixed with
+   a `vessel_class_override` parameter defaulting to `None`, so no existing caller changes
+   behaviour. Ceiling moved $20,687 → $19,444; the verdict stayed WAIT.
+3. **Layer 2** (F-98): a visible "what this answers / what to do if it's bad" line on 44 panel call
+   sites, behind an Explain toggle that defaults on and persists per browser.
+4. **Honest progress** (F-99, F-100, F-100a, F-100b): a quick/full sweep choice, `POST
+   /fragility/stream`, and two defects the streaming exposed — a checklist that would have promised
+   steps that never run, and a hardcoded `elapsed_ms` that would have reported a 1.5-second search
+   as sub-millisecond.
+5. **Navigation honesty** (F-101) and Portfolio promoted to second in the rail.
+6. **Robustness** (F-102, F-102a, F-102b, F-103) — hash routing with shareable quote links, and the
+   bundle cut from 847 KB to 586 KB.
+7. **The `title=` fallbacks** (F-104).
+
+**Verified.** `npm run build` (tsc -b + vite) clean. `uv run ruff check src backend` — all checks
+passed. `tests/backend`, `tests/fragility` and the synthetic-data tripwire: **245 passed**. A live
+browser pass over the desk and all six secondary screens: **zero console errors, zero failed
+requests**, every panel rendering its Layer-2 line, the rail highlighting correctly on each screen,
+and a quote URL surviving a full reload to the same verdict. Measured at 1366×768:
+`body.scrollWidth === clientWidth === 1366`, no clipped panels.
+
+The full 1038-test suite was not run — targeted areas only, by instruction.
+
+**Still owed before a demo:** `uv run python -m data_builders.build_replay_snapshot` (~20 min,
+once). The backend logs the exact command on startup if the file is absent.
+
+---
+
+## 2026-09-03 (later) — Client-side validation on three forms (F-105, F-106, F-107)
+
+A teammate reported the app "showing infinite screens" on some invalid inputs. Investigated first
+rather than guessing: drove the live app and the API directly with a wide battery of edge cases —
+zero/negative/huge cargo, same-port routes, inverted laycans, out-of-range risk tolerance, garbage
+port codes, a 100-year laycan window, adversarial deep-link URLs (including rapid hash-flipping and
+malformed query params) — and found no loop, no runaway render, and no hang anywhere. The backend's
+Pydantic models reject bad input in well under a second with a specific message in every case tried.
+Could not reproduce "infinite screens" as reported; most likely explanation is the 22-minute replay
+cold-start this session's earlier work (F-96) already fixed.
+
+That investigation did surface a real, narrower gap: three forms parse their numeric fields with a
+`Number(x) || 0` fallback and submit unconditionally, so an invalid entry doesn't fail closed at the
+input — it silently becomes `0` and pays a network round trip to be told `0` isn't allowed. Fixed by
+adding explicit validity checks (`Number.isFinite(x) && x > 0`, matching each field's real backend
+constraint) that gate the action button, mark the offending input (`aria-invalid`, a `border-risk`
+outline), and show a plain-language reason inline rather than only in a disabled button's `title`:
+
+- **Season Plan** (F-105): per-lot tonnage now requires `> 0`, matching the backend's
+  `volume_dwt: Field(..., gt=0)`. "Build the plan" disables and names the reason; no request fires.
+- **Fragility** (F-106): the cargo-tonnes field became `type="number" min={1}`, and both sweep
+  buttons — plus the error state's "Try again" retry, which calls `runSweep` directly and bypassed
+  the button-level guard — now check validity before submitting.
+- **Portfolio** (F-107): contract term now requires `> 0`, matching `contract_term_days: Field(...,
+  gt=0)`. Left the other three numeric fields (`plant_burden_cover_days`, `stockout_cost_usd`,
+  `spot_sourcing_hazard_rate_per_day`) alone — checked the backend model first and they're all
+  `ge=0`, so `|| 0` on a cleared field already lands on a value the backend accepts.
+
+**Verified live**, not just by reading the code: for each of the three, filled the surrounding form
+with real values, broke only the one field, and confirmed via network-request interception that
+**zero requests fired** while the button was disabled, then fixed the field and confirmed the button
+re-enabled and a real request succeeded end-to-end (Season Plan: filled both lots' ports and the
+vessel's port through the real comboboxes, broke lot 1's tonnage, confirmed a click produced no
+`/season-plan` request, fixed it, confirmed a real solve returned a plan).

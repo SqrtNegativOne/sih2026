@@ -1,12 +1,7 @@
 import {
   Anchor,
-  ArrowLeftRight,
-  Boxes,
-  CalendarClock,
   CalendarRange,
-  FileText,
   Gauge,
-  Globe,
   LayoutGrid,
   type LucideIcon,
   PieChart,
@@ -36,13 +31,24 @@ interface RailItem {
   notImplemented?: boolean
 }
 
+// Six of these used to be scroll-to-anchor links wearing borrowed
+// commercial-chartering module names -- Cargoes, Estimates, Fixtures, Market,
+// Matching, Scheduling. A charterer recognises those words from Veson IMOS or
+// Sea/net and expects those modules; none of them existed here, and none of
+// the labels even matched the panel it scrolled to ("Cargoes" went to
+// `summary`, "Estimates" to `fleet`). The rail advertised thirteen modules and
+// delivered five.
+//
+// Honest labelling is something this project otherwise does carefully, and
+// that was the one place it lapsed. The six anchors are now one honest item --
+// the desk itself -- leaving a rail where every row is a real destination.
 const ITEMS: RailItem[] = [
-  { icon: Boxes, label: 'Cargoes', target: 'summary', view: 'desk' },
-  { icon: LayoutGrid, label: 'Estimates', target: 'fleet', view: 'desk' },
-  { icon: FileText, label: 'Fixtures', target: 'decision', view: 'desk' },
-  { icon: Globe, label: 'Market', target: 'forecast', view: 'desk' },
-  { icon: ArrowLeftRight, label: 'Matching', target: 'assignments', view: 'desk' },
-  { icon: CalendarClock, label: 'Scheduling', target: 'ports', view: 'desk' },
+  { icon: LayoutGrid, label: 'Voyage Desk', target: 'decision', view: 'desk' },
+  // Second, not eleventh. The problem statement's literal ask is "period
+  // contracts covering multiple voyages, at a rate fixed in advance", and
+  // this screen optimises exactly that spot/period/COA coverage mix against
+  // a real stockout penalty. It was buried below Fragility and Ledger.
+  { icon: PieChart, label: 'Portfolio', view: 'portfolio' },
   // The many-lot view. Every item above this line is one voyage at a time;
   // this is the one that answers the problem statement's actual question --
   // a whole season's cargo book scheduled across a fleet in a single solve.
@@ -51,7 +57,6 @@ const ITEMS: RailItem[] = [
   { icon: Gauge, label: 'Tonnage Field', view: 'tonnage-field' },
   { icon: Zap, label: 'Fragility', view: 'fragility' },
   { icon: ScrollText, label: 'Ledger', view: 'ledger' },
-  { icon: PieChart, label: 'Portfolio', view: 'portfolio' },
   // TC In / TC Out were listed here as visibly disabled "not implemented"
   // items (P7). That was the honest treatment for a real chartering concept
   // this system does not implement -- but two greyed rows at the bottom of
@@ -106,10 +111,8 @@ export function IconRail({
         // the caller had nothing real to report -- which was always true on
         // the Voyage Desk itself, since it has six of these targets and
         // nothing here tracks which one is actually scrolled into view.
-        // No default now: on the desk, none of the six section links claims
-        // to be "the" current one (honest, since none of them is), and the
-        // four real secondary screens (Port Twin, Tonnage Field, Fragility,
-        // Ledger) still highlight correctly via the real view name passed in.
+        // No default now: every row is a real view, and each highlights only
+        // when the caller says that view is the one on screen.
         const isActive = active != null && label === active
         return (
           <button

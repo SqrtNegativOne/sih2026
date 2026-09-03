@@ -8,6 +8,15 @@ import { transition } from '@/lib/motion'
 import type { PortListing, QuoteResult } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
+/** The panel's plain-English Layer 2 (see Panel's `soWhat` prop). Declared
+ *  once here because this component renders the same panel in several states
+ *  -- loading, error, empty, populated -- and the explanation is the same in
+ *  all of them. */
+const SO_WHAT =
+  'Day by day, where the ship is and what it is doing, from loading to ' +
+  'discharge. If the arrival lands after the plant needs the cargo, either ' +
+  'move the laycan earlier or accept a faster, more expensive ship.'
+
 /**
  * The whole voyage on one axis.
  *
@@ -94,7 +103,8 @@ export function VoyageTimeline({ quote, ports }: { quote: QuoteResult; ports: Po
   const transit = quote.assumed_transit_days
   if (transit == null) {
     return (
-      <Panel className="h-full" id="timeline" title="Voyage Timeline" hint={hint}>
+      <Panel className="h-full" id="timeline" title="Voyage Timeline"
+      soWhat={SO_WHAT} hint={hint}>
         <PanelEmpty
           title="No transit estimate for this route"
           hint="The timeline needs a real transit duration to place the voyage on an axis, and none was computed for this origin and destination."
@@ -169,6 +179,7 @@ export function VoyageTimeline({ quote, ports }: { quote: QuoteResult; ports: Po
       className="h-full"
       id="timeline"
       title="Voyage Timeline"
+      soWhat={SO_WHAT}
       hint={hint}
       meta={`${Math.round(free)} days to free at ${portName(quote.dest_port)}`}
     >

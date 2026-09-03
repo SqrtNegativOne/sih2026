@@ -86,6 +86,7 @@ export function PortChecksTable({
       className="h-full"
       id="ports"
       title="Port Constraints"
+      soWhat={'Whether the chosen ship can physically enter and work at both ports — depth, length, beam, air draft. A failed check is not a warning: that ship cannot call there, so change the ship or the port.'}
       hint="Berth limits and current queue at the load and discharge ports, shown side by side. Wait marked * is an estimate, not live data. Congestion buckets the live wait against the port's own normal."
       flush
     >

@@ -1,3 +1,4 @@
+import { Tooltip } from '@/components/ui/tooltip'
 import { useState } from 'react'
 import { Panel } from '@/components/desk/panel'
 import { Badge } from '@/components/ui/badge'
@@ -8,6 +9,15 @@ import type { DataProvenance, LandedCostBreakdown, PortCode, VesselClass } from 
 import { componentLabel, humanizeReason, wasRewritten } from '@/lib/humanize'
 import { PROVENANCE, type ProvenanceKind } from '@/lib/vocabulary'
 import { cn } from '@/lib/utils'
+
+/** The panel's plain-English Layer 2 (see Panel's `soWhat` prop). Declared
+ *  once here because this component renders the same panel in several states
+ *  -- loading, error, empty, populated -- and the explanation is the same in
+ *  all of them. */
+const SO_WHAT =
+  'What one tonne of this cargo costs delivered to the plant gate, freight ' +
+  'and port charges included. This is the number to compare against buying ' +
+  'the same tonne domestically; if it is higher, the import does not pay.'
 
 function ProvenanceBadge({ provenance }: { provenance: DataProvenance | null }) {
   if (!provenance) return null
@@ -46,9 +56,20 @@ function ComponentRow({
   return (
     <div className="flex items-center justify-between gap-2 border-b border-border/60 px-2 py-1 last:border-b-0">
       <div className="flex min-w-0 flex-col">
-        <span className="text-body font-medium text-foreground" title={title}>
-          {label}
-        </span>
+        {/* A real Tooltip when there is something to explain, plain text when
+            there is not -- `title` never opens on keyboard focus or on touch,
+            and the Freight row's caveat (which of this desk's three different
+            $/mt figures this one is) is precisely the sort of thing a reader
+            has to be able to reach. */}
+        {title ? (
+          <Tooltip content={title} className="cursor-help">
+            <span className="border-b border-dotted border-muted-foreground/50 text-body font-medium text-foreground">
+              {label}
+            </span>
+          </Tooltip>
+        ) : (
+          <span className="text-body font-medium text-foreground">{label}</span>
+        )}
         {/* The API's own reason strings carry raw field names and endpoint
             paths ("opex_usd_per_day is not available at the /quote level --
             see POST /landed-cost"). The caveat is exactly right and stays; the
@@ -152,7 +173,8 @@ export function LandedCostPanel({
 
   if (!shown) {
     return (
-      <Panel className="h-full" title="Landed Cost" meta="$/MT">
+      <Panel className="h-full" title="Landed Cost"
+      soWhat={SO_WHAT} meta="$/MT">
         <div className="flex h-full items-center justify-center text-center text-body text-muted-foreground">
           No real transit-day estimate for this route -- freight can't be converted to $/MT yet.
         </div>
@@ -166,6 +188,7 @@ export function LandedCostPanel({
     <Panel
       className="h-full"
       title="Landed Cost"
+      soWhat={SO_WHAT}
       meta={`${shown.components_included.length}/5 components real`}
       hint="What a tonne actually costs delivered: freight, waiting time, handling, demurrage and the commodity itself, each labelled with where its figure came from. A component that cannot be priced states why instead of quietly counting as zero. Fill in your own handling, demurrage, laytime and commodity assumptions below to complete the total — this desk will never substitute an invented default for a commercial term you have not given it."
       flush

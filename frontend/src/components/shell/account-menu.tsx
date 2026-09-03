@@ -1,3 +1,4 @@
+import { Tooltip } from '@/components/ui/tooltip'
 import { LogOut, ShieldCheck, User as UserIcon } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -77,13 +78,16 @@ export function AccountMenu({ onOpenAccounts }: { onOpenAccounts: () => void }) 
     // in unlocks something. What it actually does is attribute your ledger
     // entries to you, which is what the label says.
     return (
-      <span
-        className="hidden items-center gap-1 rounded-sm px-1.5 py-0.5 text-caption text-navbar-muted sm:inline-flex"
-        title="This deployment does not require a sign-in. Set DESK_REQUIRE_AUTH on the backend to close it."
-      >
-        <UserIcon className="h-3.5 w-3.5" aria-hidden="true" />
-        Open desk
-      </span>
+      // A real Tooltip: "Open desk" without its explanation reads as a
+      // button, and the one thing this chip has to convey -- that the desk is
+      // deliberately unauthenticated and how to change that -- was sitting
+      // behind an attribute that never opens on keyboard focus or on touch.
+      <Tooltip content="This deployment does not require a sign-in. Set DESK_REQUIRE_AUTH on the backend to close it.">
+        <span className="hidden items-center gap-1 rounded-sm px-1.5 py-0.5 text-caption text-navbar-muted sm:inline-flex">
+          <UserIcon className="h-3.5 w-3.5" aria-hidden="true" />
+          Open desk
+        </span>
+      </Tooltip>
     )
   }
 

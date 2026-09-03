@@ -118,6 +118,7 @@ function LiveLedgerSection() {
   return (
     <Panel
       title="Live Decision Ledger"
+        soWhat={'Every recommendation this system has made, kept so it can be marked right or wrong later. This is how you check whether to trust it — a model that will not record its own calls cannot be held to them.'}
       meta="Real recommendations this system made, forward-only — never seeded or historical"
       hint="Every real /quote call appends an entry here automatically. Starts empty and fills forward -- nothing here is seeded or historical."
       actions={
@@ -248,6 +249,7 @@ function ReplaySection() {
   return (
     <Panel
       title="Historical Model Replay"
+        soWhat={'What this system would have advised on past dates, scored against what the market actually did. Read the regret figure as the money the advice would have cost or saved per day, versus fixing immediately.'}
       meta="A retrospective backtest — not real decisions this system made"
       actions={<Badge variant="destructive" className="text-micro">retrospective simulation</Badge>}
     >

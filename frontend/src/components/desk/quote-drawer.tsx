@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { X } from 'lucide-react'
+import { TermText } from '@/components/desk/term'
 import { Combobox, type ComboOption } from '@/components/ui/combobox'
 import { prettyPort } from '@/lib/format'
 import type { PortListing, QuoteRequest, VesselClass, VesselInput } from '@/lib/types'
@@ -595,8 +596,11 @@ function Field({
 }) {
   return (
     <label className="flex flex-col gap-1">
+      {/* Every glossary word in the label becomes explainable on hover and on
+          keyboard focus. This form had zero <Term> uses before -- the one
+          screen where someone meets "laycan" for the first time. */}
       <span className="text-caption font-semibold uppercase tracking-wide text-muted-foreground">
-        {label}
+        <TermText text={label} />
       </span>
       {children}
       {hint && <span className="text-micro leading-tight text-muted-foreground">{hint}</span>}

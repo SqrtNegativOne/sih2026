@@ -17,8 +17,8 @@ Two environment variables are set here, before any test module imports
     same environment logic the module uses rather than the value this file has
     already overridden.
 
-``DESK_DISABLE_ALERT_LOOP=1``, ``DESK_DISABLE_RATE_REFRESH=1`` and
-``DESK_DISABLE_PORT_REFRESH=1``
+``DESK_DISABLE_ALERT_LOOP``, ``DESK_DISABLE_RATE_REFRESH``,
+``DESK_DISABLE_PORT_REFRESH`` and ``DESK_DISABLE_WARMUP``
     The app starts background work on a timer: evaluating standing alerts,
     fetching the day's Baltic index and route rates, and topping up 128 port-call
     files. None of it belongs in a test run. Left on, merely constructing a
@@ -38,3 +38,4 @@ os.environ.setdefault("DESK_REQUIRE_AUTH", "0")
 os.environ.setdefault("DESK_DISABLE_ALERT_LOOP", "1")
 os.environ.setdefault("DESK_DISABLE_RATE_REFRESH", "1")
 os.environ.setdefault("DESK_DISABLE_PORT_REFRESH", "1")
+os.environ.setdefault("DESK_DISABLE_WARMUP", "1")

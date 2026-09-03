@@ -187,6 +187,14 @@ def run_optimizer(
             basis_table=inputs.basis,
             risk_tolerance=inputs.risk_tolerance,
             weather_delay_days=weather_delay_days,
+            # Price the decision as the class we are actually recommending.
+            # Without this the ceiling was built from the forecast fans of a
+            # class derived from cargo tonnage alone, while `tc_quote` above
+            # is the fleet-mix class's rate -- two different ships in one
+            # decision. It also produced a flat contradiction in the output:
+            # `target_vessel_class` said Supramax while the explanation text
+            # said Panamax for the same quote.
+            vessel_class_override=target_class,
         )
 
     start_day = None

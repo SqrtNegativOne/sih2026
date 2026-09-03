@@ -1,3 +1,4 @@
+import { Tooltip } from '@/components/ui/tooltip'
 import { useState } from 'react'
 import { Panel } from '@/components/desk/panel'
 import { fetchBackhaul } from '@/lib/api'
@@ -13,23 +14,27 @@ function ResultRow({ r }: { r: BackhaulOpportunityScore }) {
     <div className="border-b border-border p-2 last:border-b-0">
       <div className="flex items-center justify-between gap-2">
         <span className="text-body font-semibold">{prettyPort(r.candidate_load_port)}</span>
+        {/* Real Tooltips rather than the native `title` attribute: these two
+            are what tells a reader whether the number beside them is money or
+            a bare ranking score, and `title` never opens on keyboard focus or
+            on touch. */}
         {r.score_usd != null ? (
-          <span
-            className={cn(
-              'desk-num text-body font-semibold',
-              r.score_usd > 0 ? 'text-go' : 'text-muted-foreground',
-            )}
-            title="P(cargo) x today's real TC quote x window - real ballast fuel cost. Same class-level rate at every port -- see the panel hint."
-          >
-            {moneyCompact(r.score_usd)}
-          </span>
+          <Tooltip content="P(cargo) x today's real TC quote x window - real ballast fuel cost. Same class-level rate at every port -- see the panel hint.">
+            <span
+              className={cn(
+                'desk-num text-body font-semibold',
+                r.score_usd > 0 ? 'text-go' : 'text-muted-foreground',
+              )}
+            >
+              {moneyCompact(r.score_usd)}
+            </span>
+          </Tooltip>
         ) : (
-          <span
-            className="desk-num text-body font-semibold text-muted-foreground"
-            title="No real TC quote for this class/date -- ranked by cargo probability alone."
-          >
-            score {formatNumber(r.score, 3)}
-          </span>
+          <Tooltip content="No real TC quote for this class/date -- ranked by cargo probability alone.">
+            <span className="desk-num text-body font-semibold text-muted-foreground">
+              score {formatNumber(r.score, 3)}
+            </span>
+          </Tooltip>
         )}
       </div>
       <div className="mt-0.5 flex flex-wrap gap-1">
@@ -85,6 +90,7 @@ export function BackhaulPanel({
     <Panel
       className="h-full"
       title="Backhaul Opportunity"
+      soWhat={'Whether there is a paying cargo for the return leg instead of sailing home empty. A real backhaul lowers the rate an owner will accept — if one exists, say so in the negotiation.'}
       meta="informational -- never moves the recommendation"
       hint="Score = P(class-appropriate cargo within the window) x today's real TC quote x window - real ballast fuel cost, after this vessel discharges here. The TC quote is class-level, identical at every port shown (no route-level rate geography yet) -- so this ranks by real cargo likelihood and real ballast cost, not by 'rates are better here'. credit_usd_per_mt is always null -- no rate field exists in the data to validate one against."
       actions={

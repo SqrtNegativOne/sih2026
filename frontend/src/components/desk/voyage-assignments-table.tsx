@@ -30,6 +30,7 @@ export function VoyageAssignmentsTable({
       className="h-full"
       id="assignments"
       title="Voyage Assignments"
+      soWhat={'Which ship carries which parcel, and when. If a vessel is doing two things at once or arriving after the laycan closes, the plan is infeasible — widen the laycan or add tonnage and re-solve.'}
       hint="CP-SAT profit-maximising assignment of your supplied vessels to this cargo, plus repositioning advice for any idle vessel. Times are days from now; profit needs a cargo revenue figure in the quote form."
       meta={`${assigns.length} assigned · total ${moneyCompact(rec.total_voyage_profit_usd)}`}
       flush

@@ -137,7 +137,8 @@ export function PortTwinPage({ ports }: { ports: PortListing[] }) {
   return (
     <div className="flex h-full flex-col gap-2 overflow-hidden p-2" id="port-twin">
       {/* Query bar */}
-      <Panel title="Port Twin" meta="Real berth constraints, tide rules, and empirical wait/handling data, per port">
+      <Panel title="Port Twin"
+        soWhat={'What a port can actually take, from its own published rules and its recorded ship calls. Check it before promising an owner a berth — a ship that cannot enter is not a cheaper ship.'} meta="Real berth constraints, tide rules, and empirical wait/handling data, per port">
         <div className="flex flex-wrap items-end gap-2 p-1">
           <Field label="Port" className="w-56">
             <Combobox
@@ -224,6 +225,7 @@ export function PortTwinPage({ ports }: { ports: PortListing[] }) {
           {/* Verdict + constraint */}
           <Panel
             title="Feasibility Verdict"
+        soWhat={'Whether this specific ship can work at this specific port. A fail is a hard stop, not a caution: change the ship, the load, or the port.'}
             meta={reality.as_of}
             className="lg:col-span-1"
             actions={<SourceQualityBadge quality={reality.source_quality} />}
@@ -293,7 +295,8 @@ export function PortTwinPage({ ports }: { ports: PortListing[] }) {
           </Panel>
 
           {/* Tide */}
-          <Panel title="Tide Assessment" meta={reality.tide.authority ?? 'no tide data'}>
+          <Panel title="Tide Assessment"
+        soWhat={'Whether the ship needs a high tide to enter or leave, and on whose rule. If it does, the ship can only move in a window each day — build that into the laycan rather than discovering it at the berth.'} meta={reality.tide.authority ?? 'no tide data'}>
             <div className="flex flex-col gap-2 p-1">
               <Badge
                 variant={
@@ -324,7 +327,8 @@ export function PortTwinPage({ ports }: { ports: PortListing[] }) {
           </Panel>
 
           {/* Observed vs declared */}
-          <Panel title="Observed Envelope" meta={`${reality.observed_envelope.n_calls} real calls`}>
+          <Panel title="Observed Envelope"
+        soWhat={'The largest ships that have genuinely called here, from real port records. If the ship you are considering is bigger than anything in this list, treat the paper limit with suspicion and ask the agent.'} meta={`${reality.observed_envelope.n_calls} real calls`}>
             <div className="flex flex-col gap-1 p-1">
               <StatRow label="Max observed draft" value={fmtOrDash(reality.observed_envelope.max_draft_m, 'm')} />
               <StatRow label="Max observed LOA" value={fmtOrDash(reality.observed_envelope.max_loa_m, 'm')} />
@@ -349,6 +353,7 @@ export function PortTwinPage({ ports }: { ports: PortListing[] }) {
           {/* Wait distributions */}
           <Panel
             title="Empirical Wait Distribution"
+        soWhat={'How long ships have actually waited here, not how long the port says they should. Use the P90, not the average, when you are deciding how much demurrage risk to accept.'}
             meta={waits ? (waits.status === 'OK' ? 'real data' : 'baseline only') : undefined}
             className="lg:col-span-2"
           >
@@ -393,7 +398,8 @@ export function PortTwinPage({ ports }: { ports: PortListing[] }) {
           </Panel>
 
           {/* Handling */}
-          <Panel title="Handling Productivity">
+          <Panel title="Handling Productivity"
+        soWhat={'How fast this port actually loads or discharges. A slow port turns a cheap freight rate into an expensive voyage — check this before choosing the port on rate alone.'}>
             {reality.handling?.is_sufficient ? (
               <div className="flex flex-col gap-1 p-1">
                 <StatRow label="Norm (median)" value={`${formatNumber(reality.handling.norm_tpd_median ?? 0)} t/d`} />
@@ -417,6 +423,7 @@ export function PortTwinPage({ ports }: { ports: PortListing[] }) {
           {/* Berth register */}
           <Panel
             title="Berth Register"
+        soWhat={'The individual berths, with what each can take. If the port passes overall but the one berth that handles your cargo does not, you still have a problem.'}
             meta={berths ? `${berths.status}${berths.berths.length ? ` · ${berths.berths.length} berths` : ''}` : undefined}
             className="lg:col-span-3"
             flush
@@ -465,6 +472,7 @@ export function PortTwinPage({ ports }: { ports: PortListing[] }) {
           {/* Recent real vessel calls */}
           <Panel
             title="Recent Vessel Calls"
+        soWhat={'The ships that have been here lately, as evidence behind everything above. If this list is short or old, the port\'s numbers on this screen rest on thin ground.'}
             meta={calls ? (calls.status === 'OK' ? `${calls.total} real rows` : 'no ingested history') : undefined}
             className="lg:col-span-3"
             flush

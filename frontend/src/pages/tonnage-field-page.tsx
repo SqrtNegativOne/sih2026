@@ -73,6 +73,7 @@ function CurrentTightnessPanel({ data }: { data: TonnageFieldResponse }) {
   return (
     <Panel
       title="Current Tightness"
+        soWhat={'Whether ships are scarce or plentiful right now. Tight means owners have the upper hand: expect to pay up, and do not expect to negotiate the rate down by waiting a week.'}
       meta={`as of ${data.as_of}`}
       hint="Trailing export flow / free-tonnage stock, per class, all basins pooled. Higher = capacity being drawn down faster relative to what exists."
       actions={<ProvenanceTag kind="MODEL_DERIVED" />}
@@ -103,6 +104,7 @@ function BasinBreakdownPanel({ data }: { data: TonnageFieldResponse }) {
   return (
     <Panel
       title="Basin × Class Breakdown"
+        soWhat={'Where the scarcity actually is, by region and ship size. Tightness in one basin does not bind you if your cargo loads in another — check your own row before reacting to the headline.'}
       meta={`${data.tightness_by_basin_class.length} cells`}
       actions={<ProvenanceTag kind="MODEL_DERIVED" />}
       flush
@@ -140,6 +142,7 @@ function EvidenceQualityPanel({ data }: { data: TonnageFieldResponse }) {
   return (
     <Panel
       title="Evidence Quality"
+        soWhat={'How much real data sits behind the tightness reading. A thin sample is a weak signal: if the count here is low, do not let this screen override what your brokers are telling you.'}
       hint="How much of the real port-call universe this reconstruction actually covers, and how it checks against real third-party ballaster counts."
       actions={<ProvenanceTag kind="OBSERVED" />}
     >
@@ -243,6 +246,7 @@ function ForwardTightnessPanel({ forward }: { forward: TonnageFieldForwardRespon
   return (
     <Panel
       title="Forward Tightness"
+        soWhat={'Where the model thinks scarcity is heading over the coming weeks. Loosening ahead is an argument for waiting; tightening ahead is an argument for fixing now.'}
       meta={forward ? `p10 / p50 / p90, +${forward.projections.at(-1)?.horizon_days ?? 0}d` : undefined}
       hint="Persistence / random-walk-with-drift extrapolation of the recent trailing trend -- not a forecast model. The band widens as sqrt(horizon), honestly reflecting that nothing beyond recent port activity is known this far out."
       actions={<ProvenanceTag kind="MODEL_DERIVED" />}
@@ -364,6 +368,7 @@ function ValidationPanel() {
   return (
     <Panel
       title="Does this actually improve the forecast?"
+        soWhat={'An honest scoreboard of whether adding this signal made the rate forecast better or worse. If it did not help, that is reported here rather than hidden — and you should weight this screen accordingly.'}
       meta="Forecast alone vs. forecast + this page's tightness signal"
       hint="The real test that decides whether this page's tightness signal is actually used in pricing: does adding it measurably improve the freight forecast, out-of-sample, on the real frozen holdout?"
       className="lg:col-span-3"
@@ -489,6 +494,7 @@ export function TonnageFieldPage() {
     <div className="flex h-full flex-col gap-2 overflow-hidden p-2" id="tonnage-field">
       <Panel
         title="Tonnage Field"
+        soWhat={'A map of where the world\'s ships are and how tightly they are spoken for. Use it to explain WHY the rate is where it is, before you argue about the rate itself.'}
         meta={`Physical supply-pressure signal · computed ${new Date(data.computed_at).toLocaleString()}${data.stale ? ' · STALE (last-good)' : ''}`}
         actions={
           <>

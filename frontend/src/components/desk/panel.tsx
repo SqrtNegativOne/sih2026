@@ -1,6 +1,8 @@
 import { Info, TriangleAlert } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { TermText } from '@/components/desk/term'
 import { Tooltip } from '@/components/ui/tooltip'
+import { useExplainMode } from '@/lib/explain'
 import { cn } from '@/lib/utils'
 
 interface PanelProps {
@@ -9,6 +11,20 @@ interface PanelProps {
   meta?: ReactNode
   /** One-line description of what the panel shows, surfaced on the ⓘ hover. */
   hint?: string
+  /**
+   * The panel's plain-English Layer 2: what question it answers and what to do
+   * when the number is bad. Rendered as a visible strip under the header
+   * whenever explain mode is on (see `lib/explain.ts`) — not on hover, because
+   * the reader who needs this does not know there is anything to hover over.
+   *
+   * Write it as one or two full sentences addressed to a chartering manager
+   * who has never used this desk, and make the second half ACTIONABLE: "…if
+   * the margin is under 0.3 m, ask the agent for a fresh survey before
+   * fixing", not "…indicates operational fragility". A restatement of the
+   * title is worse than nothing; it teaches the reader that these lines are
+   * decorative and they stop reading the ones that are not.
+   */
+  soWhat?: string
   /** Right-aligned controls in the header strip. */
   actions?: ReactNode
   className?: string
@@ -24,7 +40,18 @@ interface PanelProps {
  * shadow so a white panel separates from the grey ground it sits on — never
  * from lift on hover.
  */
-export function Panel({ title, meta, hint, actions, className, flush, children, id }: PanelProps) {
+export function Panel({
+  title,
+  meta,
+  hint,
+  soWhat,
+  actions,
+  className,
+  flush,
+  children,
+  id,
+}: PanelProps) {
+  const explain = useExplainMode()
   return (
     <section
       id={id}
@@ -87,6 +114,20 @@ export function Panel({ title, meta, hint, actions, className, flush, children, 
         </div>
         {actions != null && <div className="flex shrink-0 items-center gap-1">{actions}</div>}
       </header>
+      {/* Layer 2. Sits between the header and the content, inside the panel's
+          own border, so it reads as this panel's explanation rather than as
+          page copy that happens to be nearby. `shrink-0` keeps it whole when
+          the panel is in one of the desk's fixed-height rows -- the body below
+          already scrolls, so the cost of this line is that content scrolls
+          slightly sooner, never that anything is clipped away. */}
+      {explain && soWhat && (
+        <p className="shrink-0 border-b border-border bg-surface-2/60 px-2 py-1.5 text-caption leading-snug text-muted-foreground">
+          {/* Run it through the glossary too: these sentences are written to
+              avoid jargon, but a few terms (laycan, demurrage, ballast) have
+              no plain-English substitute that is still accurate. */}
+          <TermText text={soWhat} />
+        </p>
+      )}
       <div className={cn('min-h-0 flex-1', flush ? 'overflow-auto' : 'overflow-auto p-2')}>
         {children}
       </div>

@@ -3,6 +3,16 @@ import { formatNumber } from '@/lib/format'
 import type { CIIRating, VesselCIIProjection, VoyageEmissions } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
+/** The panel's plain-English Layer 2 (see Panel's `soWhat` prop). Declared
+ *  once here because this component renders the same panel in several states
+ *  -- loading, error, empty, populated -- and the explanation is the same in
+ *  all of them. */
+const SO_WHAT =
+  'The IMO fuel-efficiency grade this ship earns on this voyage, A to E. A ' +
+  'D or E rating is a commercial problem, not just a green one: it ' +
+  'restricts where the ship can trade next year, and owners price that into ' +
+  'the rate.'
+
 // A/B use the go tokens (better than or in line with required), C uses wait
 // (moderate), D/E use risk (worse than required) -- the same three-tone
 // convention CONGESTION_CLASS (port-checks-table.tsx) already uses, reused
@@ -61,6 +71,7 @@ export function CIIPanel({ emissions }: { emissions: VoyageEmissions | null }) {
         className="h-full"
         id="cii"
         title="Carbon Intensity (CII)"
+      soWhat={SO_WHAT}
         hint="IMO Carbon Intensity Indicator projection for each real vessel on this quote's route: attained vs required CII (gCO2/dwt·nm) and the A-E rating those two numbers imply."
       >
         <div className="flex h-full items-center justify-center text-center text-lead text-muted-foreground">
@@ -75,6 +86,7 @@ export function CIIPanel({ emissions }: { emissions: VoyageEmissions | null }) {
       className="h-full"
       id="cii"
       title="Carbon Intensity (CII)"
+      soWhat={SO_WHAT}
       hint="IMO Carbon Intensity Indicator projection for each real vessel on this quote's route: attained vs required CII (gCO2/dwt·nm) and the A-E rating those two numbers imply. Ballast fuel to reach the load port is charged against the laden leg's transport work -- the conservative reading; see emissions.projection's docstring."
       meta={`${emissions.projections.length} vessel${emissions.projections.length === 1 ? '' : 's'} · ${emissions.rating_year} rating`}
       flush

@@ -78,6 +78,7 @@ export function RiskFeed({ assessment }: { assessment: RiskAssessment }) {
       className="h-full"
       id="risk"
       title="Risk Feed"
+      soWhat={'The things that could make this quote wrong, listed worst first. Anything flagged here should be checked with the agent or the owner before you fix — the model has priced the voyage, not the surprise.'}
       hint="Real-data early warnings: unusual rate-regime shifts, port congestion spikes, chokepoint traffic drops (Suez, Hormuz, Malacca, Bab-el-Mandeb, Cape), and real per-basin, per-week cyclone strike climatology for the ports on this quote. Each alert shows its metric vs threshold."
       meta={`${alerts.length} alert${alerts.length === 1 ? '' : 's'} · ${assessment.as_of}`}
       flush

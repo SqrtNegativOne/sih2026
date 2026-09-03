@@ -6,6 +6,15 @@ import { drawPath, transition } from '@/lib/motion'
 import type { QuoteResult } from '@/lib/types'
 import { useMoney } from '@/lib/money-context'
 
+/** The panel's plain-English Layer 2 (see Panel's `soWhat` prop). Declared
+ *  once here because this component renders the same panel in several states
+ *  -- loading, error, empty, populated -- and the explanation is the same in
+ *  all of them. */
+const SO_WHAT =
+  'The highest rate at which this cargo still clears its own cost. If ' +
+  'today\'s market is above this line, fixing now loses money on paper — go ' +
+  'back to the broker, or wait for the market to come to you.'
+
 const H = 168
 const PAD = { t: 14, r: 12, b: 20, l: 52 }
 
@@ -45,7 +54,8 @@ export function WalkAwayCurve({ quote }: { quote: QuoteResult }) {
 
   if (!stopping || stopping.exercise_boundary_usd_per_day.length === 0) {
     return (
-      <Panel className="h-full" id="walkaway" title="Walk-Away Line" hint={hint}>
+      <Panel className="h-full" id="walkaway" title="Walk-Away Line"
+      soWhat={SO_WHAT} hint={hint}>
         <PanelEmpty
           title="No optimal-stopping solution for this quote"
           hint="The boundary needs a forecast fan the solver can calibrate against; none was available for this route and date."
@@ -136,6 +146,7 @@ export function WalkAwayCurve({ quote }: { quote: QuoteResult }) {
       className="h-full"
       id="walkaway"
       title="Walk-Away Line"
+      soWhat={SO_WHAT}
       hint={hint}
       meta={`${n}-day horizon · ${stopping.n_paths.toLocaleString('en-US')} simulated paths`}
       flush

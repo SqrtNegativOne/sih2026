@@ -28,10 +28,14 @@ disclosed limitation, not hidden behind the "HISTORICAL_MODEL_REPLAY" label.
 """
 from __future__ import annotations
 
+import hashlib
+import json
+import logging
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Final
 
 import polars as pl
@@ -47,7 +51,12 @@ __all__ = [
     "ReplaySnapshot",
     "clear_replay_cache",
     "get_replay_snapshot",
+    "snapshot_cache_path",
+    "snapshot_key",
+    "write_snapshot_to_disk",
 ]
+
+LOGGER: Final[logging.Logger] = logging.getLogger(__name__)
 
 #: The exact, unmistakable label the API/UI must show next to every replay
 #: figure -- requirement 11, verbatim intent.
@@ -133,18 +142,189 @@ def _compute() -> ReplaySnapshot:
     )
 
 
+# ---------------------------------------------------------------------------
+# Disk persistence -- turning a 22-minute request cost into a build cost
+# ---------------------------------------------------------------------------
+#
+# The cache above is process-lifetime only, and that is a demo-killer rather
+# than a performance note: this computation takes about twenty-two minutes,
+# every backend restart throws it away, and the launchers run uvicorn with
+# ``--reload``, so saving any Python file discards it too. The first person to
+# open the Replay screen pays the full twenty-two minutes -- and at a
+# competition, that person is a judge.
+#
+# The numbers do not change. They are simply computed once, at build time,
+# instead of once per process. That is faithful to CLAUDE.md's network policy
+# in spirit: a build-time artefact under ``src/data/``, consumed offline, with
+# the consumer degrading to "compute it now" rather than failing when it is
+# absent.
+#
+# The key is the whole safety argument
+# ------------------------------------
+# A cached snapshot served after its inputs have changed would be a
+# fabricated number of the worst kind -- one that used to be true. The key
+# therefore covers everything that can change the result:
+#
+#   * every constant that defines the run (seeds, particle and iteration
+#     counts, simulation counts, contract term, broker spread);
+#   * the trained model files, by modification time (``current_model_version``);
+#   * the market data vintage (``current_data_version``);
+#   * the frozen test file's own size and mtime -- WITHOUT reading it, so
+#     computing a cache key never counts as touching the test set.
+#
+# Any of those moving produces a different key, and a different key means the
+# stored file is ignored and the work is redone. There is no "close enough".
+
+CACHE_DIR: Final[Path] = Path(__file__).resolve().parents[2] / "src" / "data" / "snapshots"
+FROZEN_TEST_PATH: Final[Path] = (
+    Path(__file__).resolve().parents[2] / "src" / "data" / "samples_test.parquet"
+)
+
+#: Bumped by hand when the SHAPE of the stored file changes, so an old file is
+#: never deserialised into a newer dataclass that has different fields.
+SNAPSHOT_FORMAT: Final[int] = 1
+
+
+def _frozen_test_fingerprint() -> str:
+    """Identify the frozen test split without opening it.
+
+    Reading ``samples_test.parquet`` is gated by ``ml.frozen_test`` and is
+    meant to happen exactly once, for the report. Computing a cache key is not
+    a report, so this uses the file's size and modification time -- enough to
+    notice the split changing, and not a read.
+    """
+    if not FROZEN_TEST_PATH.exists():
+        return "missing"
+    st = FROZEN_TEST_PATH.stat()
+    return f"{st.st_size}:{int(st.st_mtime)}"
+
+
+def snapshot_key() -> str:
+    """A short hash of everything that can change the snapshot's contents."""
+    from opt.ledger import current_data_version, current_model_version
+
+    material = json.dumps(
+        {
+            "format": SNAPSHOT_FORMAT,
+            "contract_term_days": CONTRACT_TERM_DAYS,
+            "broker_spread": BROKER_SPREAD,
+            "n_particles": N_PARTICLES,
+            "n_iterations": N_ITERATIONS,
+            "mc_calibrate": MC_NUM_SIMULATIONS_CALIBRATE,
+            "mc_report": MC_NUM_SIMULATIONS_REPORT,
+            "pso_seed": PSO_SEED,
+            "mc_seed": MC_SEED,
+            "model": current_model_version(),
+            "data": current_data_version(),
+            "frozen_test": _frozen_test_fingerprint(),
+        },
+        sort_keys=True,
+    )
+    return hashlib.sha256(material.encode()).hexdigest()[:16]
+
+
+def snapshot_cache_path(key: str | None = None) -> Path:
+    return CACHE_DIR / f"replay_{key or snapshot_key()}.json"
+
+
+def _to_json(snap: ReplaySnapshot) -> dict:
+    return {
+        "format": SNAPSHOT_FORMAT,
+        "key": snapshot_key(),
+        "label": snap.label,
+        "computed_at": snap.computed_at.isoformat(),
+        "compute_seconds": snap.compute_seconds,
+        "contract_term_days": snap.contract_term_days,
+        "broker_spread": snap.broker_spread,
+        "calibration": asdict(snap.calibration),
+        "n_test_rows": snap.n_test_rows,
+        "summaries": [asdict(s) for s in snap.summaries],
+    }
+
+
+def _from_json(raw: dict) -> ReplaySnapshot:
+    return ReplaySnapshot(
+        label=raw["label"],
+        computed_at=datetime.fromisoformat(raw["computed_at"]),
+        compute_seconds=raw["compute_seconds"],
+        contract_term_days=raw["contract_term_days"],
+        broker_spread=raw["broker_spread"],
+        calibration=CalibrationResult(**raw["calibration"]),
+        n_test_rows=raw["n_test_rows"],
+        summaries=tuple(BacktestSummary(**s) for s in raw["summaries"]),
+        # `stale` describes a failed recompute, not an old file. A snapshot
+        # loaded from disk under a MATCHING key is exactly as true as one
+        # computed a second ago -- the key is what guarantees that.
+        stale=False,
+    )
+
+
+def _load_from_disk() -> ReplaySnapshot | None:
+    path = snapshot_cache_path()
+    if not path.exists():
+        return None
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        if raw.get("format") != SNAPSHOT_FORMAT:
+            LOGGER.info("Replay snapshot %s is an older format; ignoring it.", path.name)
+            return None
+        snap = _from_json(raw)
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        # A corrupt cache must never take the app down, and must never be
+        # partially believed. Ignore it and recompute.
+        LOGGER.warning("Replay snapshot %s unreadable (%s); recomputing.", path.name, exc)
+        return None
+    LOGGER.info(
+        "Replay snapshot loaded from disk (computed %s, %.0fs of work skipped)",
+        snap.computed_at.date().isoformat(),
+        snap.compute_seconds,
+    )
+    return snap
+
+
+def write_snapshot_to_disk(snap: ReplaySnapshot) -> Path:
+    """Store a computed snapshot under the current key.
+
+    Written to a temp file and moved into place, so an interrupted write
+    cannot leave a half-file that the loader would then have to distrust.
+    """
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    path = snapshot_cache_path()
+    tmp = path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(_to_json(snap), indent=1), encoding="utf-8")
+    tmp.replace(path)
+    LOGGER.info("Replay snapshot written to %s", path)
+    return path
+
+
 def get_replay_snapshot(force_refresh: bool = False) -> ReplaySnapshot:
-    """Process-lifetime cached (see tonnage.field for the identical pattern)
-    -- PSO calibration plus the test-split report take real minutes; this
-    runs once per process, not once per request. Falls back to the
-    last-good snapshot, marked stale, on a real recompute failure rather
-    than raising into a caller that already has a real (if older) answer."""
+    """Memory, then disk, then compute.
+
+    PSO calibration plus the test-split report take about twenty-two real
+    minutes. Process-lifetime caching alone meant every restart paid that
+    again; the disk layer (see above) makes it a build cost paid once, keyed
+    so a snapshot whose inputs have moved is never served.
+
+    Falls back to the last-good snapshot, marked stale, on a real recompute
+    failure rather than raising into a caller that already has a real -- if
+    older -- answer.
+    """
     global _snapshot
     with _lock:
         if _snapshot is not None and not force_refresh:
             return _snapshot
+        if not force_refresh:
+            from_disk = _load_from_disk()
+            if from_disk is not None:
+                _snapshot = from_disk
+                return _snapshot
         try:
             _snapshot = _compute()
+            try:
+                write_snapshot_to_disk(_snapshot)
+            except OSError as exc:
+                # Failing to CACHE a real result must not discard it.
+                LOGGER.warning("Could not persist the replay snapshot: %s", exc)
         except Exception:
             if _snapshot is not None:
                 from dataclasses import replace

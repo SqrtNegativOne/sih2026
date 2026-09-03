@@ -1,7 +1,10 @@
-import { Bell, CircleHelp, Settings, Ship } from 'lucide-react'
+import { Bell, CircleHelp, Database, Lightbulb, Settings, Ship } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { AccountMenu } from '@/components/shell/account-menu'
+import { Tooltip } from '@/components/ui/tooltip'
 import { fetchAlerts } from '@/lib/api'
+import { setExplainMode, useExplainMode } from '@/lib/explain'
+import { cn } from '@/lib/utils'
 import { ThemeToggle } from '@/components/shell/theme-toggle'
 
 const SECTIONS = [
@@ -13,6 +16,8 @@ const SECTIONS = [
 ]
 
 interface TopBarProps {
+  /** The real last day of market data on disk. Null until /meta answers. */
+  dataThrough: string | null
   onNewQuote: () => void
   onOpenSettings: () => void
   onOpenHelp: () => void
@@ -54,6 +59,7 @@ function scrollTo(id: string) {
 }
 
 export function TopBar({
+  dataThrough,
   onNewQuote,
   onOpenSettings,
   onOpenHelp,
@@ -61,6 +67,7 @@ export function TopBar({
   onOpenAlerts,
   alertsRefreshKey,
 }: TopBarProps) {
+  const explain = useExplainMode()
   // The bell shows a real count or it shows nothing. It polls at a slow,
   // deliberate cadence: the backend evaluates on its own interval and the
   // market data behind it only changes when a harvester runs, so a fast poll
@@ -121,6 +128,62 @@ export function TopBar({
       </div>
 
       <div className="flex items-center gap-2">
+        {/* A judge's second question is always "is this live data?", and until
+            now the screen had no answer -- `latest_data_date` was fetched at
+            startup and handed only to the quote form. It costs one chip to
+            answer it before it is asked, and to answer it honestly: this is
+            the last day the market data actually covers, not today's date. */}
+        {dataThrough && (
+          <Tooltip
+            content={
+              <>
+                <span className="font-semibold text-foreground">
+                  Market data through {dataThrough}
+                </span>
+                <span className="mt-1 block">
+                  Every figure on this desk is priced from data on disk up to this date. The desk
+                  fetches the day&apos;s published rates once every 24 hours; where a source
+                  publishes on a lag, the screen shows that source&apos;s own latest rather than
+                  filling the gap.
+                </span>
+              </>
+            }
+          >
+            <span className="hidden items-center gap-1.5 rounded-sm border border-white/15 px-2 py-0.5 text-micro text-navbar-muted lg:inline-flex">
+              <Database className="h-3 w-3" aria-hidden="true" />
+              <span className="font-mono tabular-nums">Data through {dataThrough}</span>
+            </span>
+          </Tooltip>
+        )}
+        {/* Explain mode. The one control that turns the desk from a trading
+            screen into something a chartering manager can read cold: every
+            panel gains a plain-English line saying what it answers and what to
+            do when the number is bad. On by default; a trader who does not
+            need the commentary turns it off once and the browser remembers. */}
+        <Tooltip
+          content={
+            explain
+              ? 'Plain-English notes are showing under each panel heading. Turn them off for a denser desk.'
+              : 'Show a plain-English line under each panel heading: what it answers, and what to do if the number is bad.'
+          }
+        >
+          <button
+            type="button"
+            onClick={() => setExplainMode(!explain)}
+            aria-pressed={explain}
+            className={cn(
+              'hidden items-center gap-1.5 rounded-md px-2 py-1 text-caption font-semibold transition-colors lg:inline-flex',
+              'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current',
+              explain
+                ? 'bg-white/15 text-primary-foreground'
+                : 'text-primary-foreground/70 hover:bg-white/10 hover:text-primary-foreground',
+            )}
+          >
+            <Lightbulb className="h-3.5 w-3.5" aria-hidden="true" />
+            <span>Explain</span>
+          </button>
+        </Tooltip>
+
         {/*
           F-35 disabled Search / Notifications / Settings / Help with honest
           "not implemented" tooltips, which was the right call at the time: a

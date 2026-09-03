@@ -580,3 +580,108 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #8b95a3;
 }
+
+/* ---------------------------------------------------------------------------
+   Printing the decision brief
+   ---------------------------------------------------------------------------
+   The desk is a screen product and prints badly by nature: a dark ground eats
+   toner, twelve panels do not fit a page, and the nav rail is meaningless on
+   paper. So printing is not "print the app" -- it is "print the one artefact
+   that was designed to leave the screen".
+
+   When the brief is open, everything else is removed from the printed page and
+   the brief becomes the document. When it is not open, printing is disabled
+   rather than producing a wasted page of dark panels: `Ctrl+P` on the desk now
+   prints a single line telling the reader where the printable version is. That
+   is a deliberate refusal, in the same spirit as the rest of the product --
+   better to say "not this" than to hand someone a broken artefact.
+--------------------------------------------------------------------------- */
+/* The indeterminate progress sliver in SolveProgress, used when the number of
+   steps is not known in advance (the fragility sweep skips variables whose
+   flip point is meaningless for the given inputs, so there is no honest
+   denominator to draw a percentage against). Respects reduced-motion: the
+   sliver holds still rather than sliding, and the "N done" counter beside it
+   still carries the real progress. */
+@keyframes indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(300%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-\[indeterminate_1\.4s_ease-in-out_infinite\] {
+    animation: none;
+  }
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 14mm;
+  }
+
+  /* Paper is white. Force it, rather than inheriting whichever theme the
+     viewer happened to be in -- a dark-theme print is unreadable and wastes
+     an entire cartridge. */
+  html,
+  body {
+    background: #ffffff !important;
+    color: #10161d !important;
+  }
+
+  /* The app chrome never prints. */
+  body > #root > div > header,
+  body > #root > div > div > nav,
+  .brief-backdrop,
+  .brief-controls,
+  .skip-link {
+    display: none !important;
+  }
+
+  /* With the brief open it becomes the page: unpinned from its fixed
+     overlay, unscrolled, and laid flat. */
+  .brief-shell {
+    position: static !important;
+    inset: auto !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    z-index: auto !important;
+  }
+
+  .brief-page {
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    max-width: none !important;
+  }
+
+  /* Nothing in the brief may be split across a page break -- a
+     recommendation whose caveats landed on page two would be the exact
+     failure this artefact exists to prevent. */
+  .brief-page section,
+  .brief-page header,
+  .brief-page footer {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Printing the desk itself, with no brief open: refuse, and say where to
+     go. `.brief-shell` is absent from the DOM in that case, so this rule is
+     what the reader gets. */
+  body:not(:has(.brief-shell)) #root {
+    display: none !important;
+  }
+  body:not(:has(.brief-shell))::after {
+    content: 'The desk is a screen tool and does not print usefully. Open a quote and choose "Brief" to print the one-page decision brief instead.';
+    display: block;
+    padding: 24mm 0;
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    font-size: 12pt;
+    line-height: 1.6;
+    color: #10161d;
+    max-width: 34em;
+  }
+}

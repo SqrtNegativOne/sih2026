@@ -9,7 +9,6 @@ import {
   useRef,
   useState,
 } from 'react'
-import landRaw from '@/assets/ne_110m_land.json'
 import { Panel } from '@/components/desk/panel'
 import { useElementSize } from '@/hooks/use-element-size'
 import { prettyPort } from '@/lib/format'
@@ -26,7 +25,27 @@ import type {
 } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
-const land = landRaw as unknown as FeatureCollection
+/**
+ * Natural Earth 1:110m land polygons, fetched rather than bundled.
+ *
+ * This file is 138 KB of the app's 847 KB entry chunk -- 19% of everything a
+ * user downloads before the desk appears -- and it is coastline outlines: the
+ * globe is fully usable without them for the fraction of a second they take to
+ * arrive. Routes, ports, chokepoints, the graticule and the drag surface are
+ * all drawn from data already in hand, so what the user sees first is a real
+ * globe with their voyage on it, and the coastlines paint in behind.
+ *
+ * Module-level promise, not per-mount: the map remounts whenever the desk
+ * re-renders a new quote, and this must be one request for the life of the
+ * page. Vite gives the JSON its own chunk, so the browser caches it normally.
+ */
+let landPromise: Promise<FeatureCollection> | null = null
+function loadLand(): Promise<FeatureCollection> {
+  landPromise ??= import('@/assets/ne_110m_land.json').then(
+    (m) => m.default as unknown as FeatureCollection,
+  )
+  return landPromise
+}
 const graticule = geoGraticule().step([10, 10])()
 
 // Theme tokens, not literals. These used to be hardcoded light-theme hexes,
@@ -123,6 +142,18 @@ export function RouteMap({
   const { moneyCompact } = useMoney()
   const [box, ref] = useElementSize<HTMLDivElement>()
   const reduceMotion = useReducedMotion()
+  // null until the coastline chunk lands (see loadLand above); the globe
+  // renders complete in every other respect meanwhile.
+  const [land, setLand] = useState<FeatureCollection | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    loadLand().then((fc) => {
+      if (!cancelled) setLand(fc)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
   const [hidden, setHidden] = useState<Set<SolverRouteKind>>(new Set())
   const [showRejected, setShowRejected] = useState(false)
   const [hoverId, setHoverId] = useState<string | null>(null)
@@ -463,6 +494,7 @@ export function RouteMap({
       className="h-full"
       id="map"
       title="Route Exploration"
+      soWhat={'The same routes drawn on the water, so you can see what the ship actually passes through. Use it to sanity-check the cost table: a route that looks wrong on the map usually is.'}
       hint="Every routing the solver evaluated, on an orthographic globe. Solid = chosen, dashed = considered, dotted red = rejected (toggle on), fine dots = no real waterway route resolved for that hop (straight-line estimate). Routes sharing a leg are fanned apart. Drag to rotate, scroll to zoom, hover to isolate a route, click one to spin the globe to it, click empty space to reset. The far hemisphere is hidden by the horizon, as on a real globe."
       meta={`${routes.length} routes`}
       flush
@@ -577,7 +609,7 @@ export function RouteMap({
             opacity={0.6}
             pointerEvents="none"
           />
-          {land.features.map((f: Feature, i: number) => (
+          {land?.features.map((f: Feature, i: number) => (
             <path
               key={i}
               d={pathGen(f) ?? ''}

@@ -419,6 +419,7 @@ def solve_lock_or_wait(
     seed: int = 0,
     *,
     weather_delay_days: float = 0.0,
+    vessel_class_override: VesselClass | None = None,
 ) -> tuple[LockWaitResult, StoppingResult | None]:
     """The production lock/wait decision -- option-value-aware when there's
     enough real forecast data to calibrate a price path, gracefully falling
@@ -467,6 +468,7 @@ def solve_lock_or_wait(
         today_quote_usd_per_day=today_quote_usd_per_day,
         basis_table=basis_table,
         risk_tolerance=risk_tolerance,
+        vessel_class_override=vessel_class_override,
     )
     route_family = route_family_for_origin(origin_port)
     basis = (basis_table or {}).get(route_family)

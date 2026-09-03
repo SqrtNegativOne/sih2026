@@ -312,12 +312,21 @@ export function PortfolioPage({ ports }: { ports: PortListing[] }) {
     setForm((f) => ({ ...f, [key]: value }))
   }
 
+  // `contract_term_days` is the one field here the backend requires strictly
+  // positive (`gt=0`); the other three numeric inputs accept 0 (`ge=0`), so
+  // `Number(...) || 0` degrading a blank/invalid field to 0 is actually a
+  // valid submission for them. It is not valid here -- an empty or negative
+  // term silently became 0 and was submitted anyway, paying a round trip for
+  // a 422 the client could catch instantly.
+  const contractTermValid = Number.isFinite(Number(form.contractTermDays)) && Number(form.contractTermDays) > 0
+
   function run() {
+    if (!contractTermValid) return
     setLoading(true)
     setError(null)
     fetchPortfolio({
       vesselClass: form.vesselClass,
-      contractTermDays: Number(form.contractTermDays) || 0,
+      contractTermDays: Number(form.contractTermDays),
       plantBurdenCoverDays: Number(form.plantBurdenCoverDays) || 0,
       stockoutCostUsd: Number(form.stockoutCostUsd) || 0,
       spotSourcingHazardRatePerDay: Number(form.spotSourcingHazardRatePerDay) || 0,
@@ -334,6 +343,7 @@ export function PortfolioPage({ ports }: { ports: PortListing[] }) {
     <div className="flex h-full flex-col gap-2 overflow-hidden p-2" id="portfolio">
       <Panel
         title="Portfolio Mix"
+        soWhat={'How much of the season\'s tonnage to lock on long-term contracts now versus leave to the spot market. Locking everything removes risk but gives up any fall in rates; locking nothing does the opposite.'}
         meta="spot / period TC / COA"
         hint="The PS's own stated objective: moving from multiple single spot contracts to short/medium term multiple-voyage coverage. Optimizes the mix of spot, period-TC, and COA (contract of affreightment) coverage against a real stockout-risk penalty."
       >
@@ -355,7 +365,11 @@ export function PortfolioPage({ ports }: { ports: PortListing[] }) {
             <Input
               type="number"
               min={1}
-              className="h-7 w-24 text-body"
+              aria-invalid={!contractTermValid}
+              className={cn(
+                'h-7 w-24 text-body',
+                !contractTermValid && 'border-risk focus:border-risk focus:ring-risk/40',
+              )}
               value={form.contractTermDays}
               onChange={(e) => set('contractTermDays', e.target.value)}
             />
@@ -402,11 +416,22 @@ export function PortfolioPage({ ports }: { ports: PortListing[] }) {
             variant="primary"
             size="md"
             onClick={run}
-            disabled={loading}
-            title={loading ? 'A real optimisation is running.' : 'Optimise the coverage mix'}
+            disabled={loading || !contractTermValid}
+            title={
+              loading
+                ? 'A real optimisation is running.'
+                : !contractTermValid
+                  ? 'Contract term needs to be a positive number of days.'
+                  : 'Optimise the coverage mix'
+            }
           >
             {loading ? 'Solving…' : result ? 'Re-run analysis' : 'Run analysis'}
           </Button>
+          {!contractTermValid && (
+            <span className="self-center text-caption text-risk">
+              Contract term needs to be a positive number of days.
+            </span>
+          )}
         </div>
 
         <div className="border-t border-border px-2 pb-2 pt-1">
@@ -460,6 +485,7 @@ export function PortfolioPage({ ports }: { ports: PortListing[] }) {
         <div className="grid min-h-0 flex-1 auto-rows-min grid-cols-1 content-start gap-2 overflow-auto lg:grid-cols-2">
           <Panel
             title="Recommended Mix"
+        soWhat={'The split the optimiser would choose given your appetite for risk. If it recommends more period cover than you can actually contract this quarter, take the next-best point on the frontier below.'}
             meta={`k = ${result.recommended.risk_aversion_k}`}
             hint="The coverage split the optimiser picks at your current risk-aversion setting, and what it costs relative to simply buying every voyage on the spot market."
             className="lg:col-span-1"
@@ -488,7 +514,8 @@ export function PortfolioPage({ ports }: { ports: PortListing[] }) {
             </div>
           </Panel>
 
-          <Panel title="Scenario Context" className="lg:col-span-1">
+          <Panel title="Scenario Context"
+        soWhat={'The demand and rate assumptions this mix was optimised against. If your own view of the season differs, change these and re-run — the recommendation is only as good as the scenario.'} className="lg:col-span-1">
             <div className="flex flex-col gap-1 p-1">
               <StatRow label="Vessel class" value={result.vessel_class} />
               <StatRow label="As of" value={result.as_of} />
@@ -506,6 +533,7 @@ export function PortfolioPage({ ports }: { ports: PortListing[] }) {
 
           <Panel
             title="Efficient Frontier"
+        soWhat={'Every sensible trade-off between expected cost and how badly a bad year could go. Points below the curve are simply worse on both counts; pick your point on the curve, not off it.'}
             meta="cost vs. risk"
             hint="Each point is the optimal mix at a different risk_aversion_k -- moving right-to-left trades expected cost for lower variance. The filled dot is your current k setting above."
             className="lg:col-span-2"

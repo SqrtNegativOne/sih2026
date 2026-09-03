@@ -175,33 +175,41 @@ export async function fetchQuote(req: QuoteRequest): Promise<QuoteEnvelope> {
   return parseOrThrow<QuoteEnvelope>(res)
 }
 
-interface StreamHandlers {
+interface StreamHandlers<TResult> {
   onStage: (stage: ProgressStage) => void
-  onResult: (envelope: QuoteEnvelope) => void
+  onResult: (result: TResult) => void
   onError: (err: ApiRequestError) => void
 }
 
 /**
- * POST /quote/stream and dispatch its Server-Sent Events. `stage` events feed
- * the live progress checklist; a single `result` event carries the envelope;
- * an `error` event (or a transport failure) becomes an ApiRequestError.
+ * The shared Server-Sent Events reader.
+ *
+ * Two endpoints stream now -- `/quote/stream` and `/fragility/stream` -- and
+ * they emit byte-identical event shapes on purpose, so this is one parser
+ * rather than two that have to be kept in step. The result payload is the only
+ * thing that differs, so it is the only thing the type parameter carries.
  */
-export async function streamQuote(req: QuoteRequest, handlers: StreamHandlers): Promise<void> {
+async function streamSse<TResult>(
+  path: string,
+  body: unknown,
+  handlers: StreamHandlers<TResult>,
+  unreachableMessage: string,
+): Promise<void> {
   let res: Response
   try {
-    res = await api(`/quote/stream`, {
+    res = await api(path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(req),
+      body: JSON.stringify(body),
     })
   } catch {
-    handlers.onError(new ApiRequestError(0, 'Could not reach the optimizer. Is the backend running?'))
+    handlers.onError(new ApiRequestError(0, unreachableMessage))
     return
   }
 
   if (!res.ok || !res.body) {
-    const body = (await res.json().catch(() => null)) as ApiError | null
-    handlers.onError(new ApiRequestError(res.status, body?.detail ?? res.statusText))
+    const err = (await res.json().catch(() => null)) as ApiError | null
+    handlers.onError(new ApiRequestError(res.status, err?.detail ?? res.statusText))
     return
   }
 
@@ -228,12 +236,21 @@ export async function streamQuote(req: QuoteRequest, handlers: StreamHandlers): 
       const payload = JSON.parse(dataLines.join('\n'))
 
       if (event === 'stage') handlers.onStage(payload as ProgressStage)
-      else if (event === 'result') handlers.onResult(payload as QuoteEnvelope)
+      else if (event === 'result') handlers.onResult(payload as TResult)
       else if (event === 'error') {
         handlers.onError(new ApiRequestError(payload.status_code ?? 500, payload.detail ?? 'Solve failed.'))
       }
     }
   }
+}
+
+/**
+ * POST /quote/stream and dispatch its Server-Sent Events. `stage` events feed
+ * the live progress checklist; a single `result` event carries the envelope;
+ * an `error` event (or a transport failure) becomes an ApiRequestError.
+ */
+export function streamQuote(req: QuoteRequest, handlers: StreamHandlers<QuoteEnvelope>): Promise<void> {
+  return streamSse('/quote/stream', req, handlers, 'Could not reach the optimizer. Is the backend running?')
 }
 
 // ---------------------------------------------------------------------------
@@ -253,22 +270,45 @@ export interface FragilityRequest {
   variables?: FragilityVariable[]
 }
 
+/** The wire shape both fragility endpoints take. */
+function fragilityBody(req: FragilityRequest): Record<string, unknown> {
+  return {
+    cargo_volume_dwt: req.cargoVolumeDwt,
+    origin_port: req.originPort,
+    dest_port: req.destPort,
+    laycan_start: req.laycanStart,
+    laycan_end: req.laycanEnd,
+    contract_term_days: req.contractTermDays,
+    commodity: req.commodity,
+    as_of: req.asOf,
+    risk_tolerance: req.riskTolerance,
+    variables: req.variables,
+  }
+}
+
+/**
+ * The streaming sweep. Same report as `fetchFragility`, but the caller sees
+ * each variable's search start and finish as it happens -- which for a
+ * genuinely multi-second computation is the difference between "working" and
+ * "hung".
+ */
+export function streamFragility(
+  req: FragilityRequest,
+  handlers: StreamHandlers<FragilityReport>,
+): Promise<void> {
+  return streamSse(
+    '/fragility/stream',
+    fragilityBody(req),
+    handlers,
+    'Could not reach the fragility engine. Is the backend running?',
+  )
+}
+
 export async function fetchFragility(req: FragilityRequest): Promise<FragilityReport> {
   const res = await api(`/fragility`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      cargo_volume_dwt: req.cargoVolumeDwt,
-      origin_port: req.originPort,
-      dest_port: req.destPort,
-      laycan_start: req.laycanStart,
-      laycan_end: req.laycanEnd,
-      contract_term_days: req.contractTermDays,
-      commodity: req.commodity,
-      as_of: req.asOf,
-      risk_tolerance: req.riskTolerance,
-      variables: req.variables,
-    }),
+    body: JSON.stringify(fragilityBody(req)),
   })
   return parseOrThrow<FragilityReport>(res)
 }

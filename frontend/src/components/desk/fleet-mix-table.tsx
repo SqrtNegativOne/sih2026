@@ -1,3 +1,4 @@
+import { Tooltip } from '@/components/ui/tooltip'
 import { Panel } from '@/components/desk/panel'
 import { ExplanationBlock } from '@/components/desk/explanation'
 import { Grade, scoreToGrade } from '@/components/desk/grade'
@@ -74,6 +75,7 @@ export function FleetMixTable({
       className="h-full"
       id="fleet"
       title="Fleet Mix Frontier"
+      soWhat={'Whether it is cheaper to move this cargo in one big ship or several smaller ones, once port limits are taken into account. If the recommended mix needs a ship size your usual owners do not offer, price the next option down before committing.'}
       hint="Cheapest feasible vessel-class configurations for this cargo and route, priced under the real forecast. Rel. is a reliability grade (fewer ships, no transshipment = higher). T/S marks a transshipment leg. Greyed rows were ruled out; reasons below."
       meta={`${formatNumber(frontier.requirement_dwt)} dwt required`}
       flush
@@ -87,11 +89,12 @@ export function FleetMixTable({
             <th className="text-right">Total cap</th>
             <th className="text-right">Voy d</th>
             <th className="text-right">Cost p50</th>
-            <th
-              className="text-right"
-              title="This configuration's own cost p50 ÷ cargo tonnes -- the actual chosen fleet mix, not the Rate Forecast panel's open-market class quote or the Landed Cost panel's freight component."
-            >
-              $/mt
+            <th className="text-right">
+              <Tooltip content="This configuration's own cost p50 ÷ cargo tonnes -- the actual chosen fleet mix, not the Rate Forecast panel's open-market class quote or the Landed Cost panel's freight component." className="cursor-help">
+                <span className="border-b border-dotted border-muted-foreground/50">
+                  $/mt
+                </span>
+              </Tooltip>
             </th>
             <th className="text-right">p10–p90</th>
             <th className="text-center">Rel.</th>

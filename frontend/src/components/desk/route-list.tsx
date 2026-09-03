@@ -34,6 +34,7 @@ export function RouteList({
     <Panel
       className="h-full"
       title="Routes"
+      soWhat={'Every sea route this cargo could take, and what each costs. If the cheapest route is one you cannot actually use — a canal that is closed, a port your shipper will not call — pick the next one and re-price.'}
       hint="Every routing the solver evaluated. Click one to zoom the map to it."
       meta={`${routes.length}`}
       flush

@@ -343,6 +343,7 @@ def lock_or_wait_for_cargo(
     today_quote_usd_per_day: float,
     basis_table: Mapping[RouteFamily, BasisEntry] | None = None,
     risk_tolerance: float = 0.0,
+    vessel_class_override: VesselClass | None = None,
 ) -> LockWaitResult:
     """The main lock/wait decision, from what a charterer actually has: a
     cargo lot to move, where it's going, a contract length, and today's
@@ -374,8 +375,23 @@ def lock_or_wait_for_cargo(
         The route-family -> BasisEntry calibration table. When the derived
         route family has no entry, the BASE (class-level) forecast is used
         unadjusted -- same graceful behaviour as ``lock_or_wait`` itself.
+    vessel_class_override:
+        Price the decision as this class instead of the one derived from
+        cargo size. Callers that have already run the fleet-mix frontier
+        should pass its chosen class: the frontier accounts for real port
+        limits and cost, the tonnage lookup does not, and the two genuinely
+        disagree (75,000 dwt derives Panamax while the frontier picks
+        Supramax for Newcastle->Paradip). Leaving this None derives as
+        before.
     """
-    vessel_class = select_vessel_class_for_cargo(cargo_volume_dwt)
+    # An explicit class wins over the tonnage lookup. The lookup answers
+    # "what size ship naturally carries this lot" from cargo size alone; the
+    # fleet-mix frontier answers "what size ship should actually carry it"
+    # using real port limits, transshipment and cost. When a caller has run
+    # the frontier it knows better, and passing that class keeps the forecast
+    # fans, today's quote and the class shown to the user all describing the
+    # same ship. Left None, behaviour is exactly as before.
+    vessel_class = vessel_class_override or select_vessel_class_for_cargo(cargo_volume_dwt)
     route_family = route_family_for_origin(origin_port)
     basis = (basis_table or {}).get(route_family)
 

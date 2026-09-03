@@ -5,6 +5,16 @@ import { formatIsoShort, formatNumber, formatRelativeAge, prettyPort } from '@/l
 import type { AnchorageConfidence, AnchoragePortCode, AnchorageCensus } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
+/** The panel's plain-English Layer 2 (see Panel's `soWhat` prop). Declared
+ *  once here because this component renders the same panel in several states
+ *  -- loading, error, empty, populated -- and the explanation is the same in
+ *  all of them. */
+const SO_WHAT =
+  'How many ships are sitting outside this port right now, counted from ' +
+  'satellite images rather than from a schedule. A crowd means real ' +
+  'waiting: budget the extra days, or send the ship to a less congested ' +
+  'berth.'
+
 // Same three-tone convention CIIPanel/FracturePanel already use -- calm/high
 // confidence reads go, a rough-sea/low-confidence count reads risk, so a
 // reader distrusts a low-confidence count on sight, not just from the label.
@@ -191,7 +201,8 @@ export function AnchoragePanel({ port }: { port: AnchoragePortCode }) {
 
   if (loading) {
     return (
-      <Panel className="h-full" id="anchorage" title="Anchorage Census (Satellite)" hint={hint}>
+      <Panel className="h-full" id="anchorage" title="Anchorage Census (Satellite)"
+      soWhat={SO_WHAT} hint={hint}>
         <div className="flex h-full items-center justify-center text-center text-lead text-muted-foreground">
           Loading…
         </div>
@@ -201,7 +212,8 @@ export function AnchoragePanel({ port }: { port: AnchoragePortCode }) {
 
   if (error) {
     return (
-      <Panel className="h-full" id="anchorage" title="Anchorage Census (Satellite)" hint={hint}>
+      <Panel className="h-full" id="anchorage" title="Anchorage Census (Satellite)"
+      soWhat={SO_WHAT} hint={hint}>
         <div className="flex h-full items-center justify-center text-center text-lead text-risk">{error}</div>
       </Panel>
     )
@@ -209,7 +221,8 @@ export function AnchoragePanel({ port }: { port: AnchoragePortCode }) {
 
   if (!census) {
     return (
-      <Panel className="h-full" id="anchorage" title="Anchorage Census (Satellite)" hint={hint}>
+      <Panel className="h-full" id="anchorage" title="Anchorage Census (Satellite)"
+      soWhat={SO_WHAT} hint={hint}>
         <div className="flex h-full flex-col items-center justify-center gap-1 text-center text-lead text-muted-foreground">
           <span>No Sentinel-1 scene has been processed for {prettyPort(port)} yet.</span>
         </div>
@@ -222,6 +235,7 @@ export function AnchoragePanel({ port }: { port: AnchoragePortCode }) {
       className="h-full"
       id="anchorage"
       title="Anchorage Census (Satellite)"
+      soWhat={SO_WHAT}
       hint={hint}
       meta={`${prettyPort(census.port)} · destination`}
       flush={!imgFailed}

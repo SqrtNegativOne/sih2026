@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { QuoteDrawer } from '@/components/desk/quote-drawer'
 import { AccountsDrawer } from '@/components/shell/accounts-drawer'
 import { AlertsDrawer } from '@/components/shell/alerts-drawer'
@@ -8,6 +8,7 @@ import { SettingsDrawer } from '@/components/shell/settings-drawer'
 import { SignIn } from '@/components/shell/sign-in'
 import { TopBar } from '@/components/shell/top-bar'
 import { AuthProvider, useAuth } from '@/lib/auth-context'
+import { readDeepLink, writeDeepLink } from '@/lib/deep-link'
 import { loadSettings, type DeskSettings } from '@/lib/settings'
 import { MoneyProvider } from '@/lib/money-context'
 import type { MoneyContext } from '@/lib/format'
@@ -27,13 +28,43 @@ import type {
   QuoteRequest,
   VesselInput,
 } from '@/lib/types'
-import { FragilityPage } from '@/pages/fragility-page'
-import { LedgerPage } from '@/pages/ledger-page'
-import { PortfolioPage } from '@/pages/portfolio-page'
-import { PortTwinPage } from '@/pages/port-twin-page'
-import { SeasonPlanPage } from '@/pages/season-plan-page'
-import { TonnageFieldPage } from '@/pages/tonnage-field-page'
+// The Voyage Desk is what loads on arrival, so it stays a static import --
+// code-splitting the landing view only moves its cost into a second round
+// trip. The six secondary screens are `lazy` instead: the build was one
+// 847 KB chunk, of which these pages and the charting they pull in are the
+// bulk, and a user who never opens Season Plan should not download its
+// scheduler view to look at a quote.
 import { VoyageDeskPage } from '@/pages/voyage-desk-page'
+
+const FragilityPage = lazy(() =>
+  import('@/pages/fragility-page').then((m) => ({ default: m.FragilityPage })),
+)
+const LedgerPage = lazy(() =>
+  import('@/pages/ledger-page').then((m) => ({ default: m.LedgerPage })),
+)
+const PortfolioPage = lazy(() =>
+  import('@/pages/portfolio-page').then((m) => ({ default: m.PortfolioPage })),
+)
+const PortTwinPage = lazy(() =>
+  import('@/pages/port-twin-page').then((m) => ({ default: m.PortTwinPage })),
+)
+const SeasonPlanPage = lazy(() =>
+  import('@/pages/season-plan-page').then((m) => ({ default: m.SeasonPlanPage })),
+)
+const TonnageFieldPage = lazy(() =>
+  import('@/pages/tonnage-field-page').then((m) => ({ default: m.TonnageFieldPage })),
+)
+
+/** Shown for the fraction of a second a secondary screen's chunk is in
+ *  flight. It says "fetching the screen", not "computing" -- this desk has
+ *  several genuinely slow computations and the two must not look alike. */
+function ViewLoading() {
+  return (
+    <div className="flex h-full items-center justify-center p-8 text-lead text-muted-foreground">
+      Loading this screen…
+    </div>
+  )
+}
 
 export type DeskView =
   | 'desk'
@@ -45,6 +76,12 @@ export type DeskView =
   | 'portfolio'
 
 const VIEW_LABEL: Partial<Record<DeskView, string>> = {
+  // The desk can finally name itself here. It used to be left out on purpose
+  // (F-34): the rail carried six scroll-to-anchor links into the desk and
+  // nothing tracked which section was actually in view, so highlighting any
+  // one of them would have been a guess. The rail now has exactly one honest
+  // desk row, so "you are on the Voyage Desk" is a true statement again.
+  desk: 'Voyage Desk',
   'season-plan': 'Season Plan',
   'port-twin': 'Port Twin',
   'tonnage-field': 'Tonnage Field',
@@ -55,7 +92,21 @@ const VIEW_LABEL: Partial<Record<DeskView, string>> = {
 
 function Shell() {
   const auth = useAuth()
-  const [view, setView] = useState<DeskView>('desk')
+  // The URL as it was when the app opened, read exactly once.
+  //
+  // This must be captured rather than re-read later, and the reason is a bug
+  // this had on the first attempt: the effect that keeps the URL in sync runs
+  // on mount with no quote yet loaded, so it rewrites the hash to a bare
+  // `#/desk` -- and by the time the port list has arrived and the auto-run
+  // effect is ready to act, the cargo it was supposed to solve has been erased
+  // from the address bar by this app's own housekeeping. Reading at mount and
+  // holding the value makes the two effects independent of each other's
+  // ordering.
+  const [initialLink] = useState(() => readDeepLink())
+  // Initialised from the URL, not hardcoded to the desk -- a link to
+  // #/portfolio has to land on Portfolio, and it has to do so on the FIRST
+  // render rather than by flashing the desk and then swapping.
+  const [view, setView] = useState<DeskView>(initialLink.view)
   const [ports, setPorts] = useState<PortListing[]>([])
   const [portsError, setPortsError] = useState<string | null>(null)
   // 3.4: the static chokepoint reference table (real id/name/centre/radius)
@@ -71,6 +122,9 @@ function Shell() {
   // specs back (only vessel_id inside assignments/repositioning), so this
   // is the one place the real draft/beam/LOA/DWT the user typed still exists.
   const [lastVessels, setLastVessels] = useState<VesselInput[]>([])
+  // The request behind whatever is on screen. Kept so the URL can describe the
+  // current quote, and so a reload or a shared link re-solves the same cargo.
+  const [lastRequest, setLastRequest] = useState<QuoteRequest | null>(null)
   const [stages, setStages] = useState<ProgressStage[]>([])
   const [solving, setSolving] = useState(false)
   const [quoteError, setQuoteError] = useState<string | null>(null)
@@ -143,6 +197,7 @@ function Shell() {
     setQuoteError(null)
     setDrawerOpen(false)
     setLastVessels(req.vessels ?? [])
+    setLastRequest(req)
 
     void streamQuote(req, {
       onStage: (stage) => {
@@ -159,6 +214,93 @@ function Shell() {
         setEnvelope(null)
         setSolving(false)
       },
+    })
+  }
+
+  // A shared link, or a reload of one, re-solves its cargo once the app is
+  // admitted and the port list has arrived.
+  //
+  // The guard matters more than it looks. `admitted` and `ports` both settle
+  // asynchronously and this effect depends on them, so without a ref it would
+  // re-submit the same quote every time either changed -- the desk would
+  // appear to work, and would be solving the same cargo two or three times
+  // over on every cold load. One link, one solve.
+  const deepLinkRan = useRef(false)
+  useEffect(() => {
+    if (deepLinkRan.current || !admitted || ports.length === 0) return
+    deepLinkRan.current = true
+    if (!initialLink.quote) return
+    setDrawerOpen(false)
+    handleSubmit(initialLink.quote)
+    // handleSubmit is redeclared each render and is not a dependency worth
+    // stabilising for a one-shot effect that is already ref-guarded.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [admitted, ports.length, initialLink])
+
+  // Someone pasting a link into a tab that is ALREADY open.
+  //
+  // Changing only the fragment does not reload the document, so without this
+  // the link that works perfectly from an email does nothing at all when
+  // pasted into the address bar of a desk the reader already has in front of
+  // them -- and "the link is broken" is what they will report, reasonably.
+  //
+  // Safe to honour in full, quote included: `writeDeepLink` uses
+  // `replaceState`, which by specification does NOT fire `hashchange`, so this
+  // handler only ever sees a navigation a person actually performed.
+  useEffect(() => {
+    function onHashChange() {
+      const link = readDeepLink()
+      setView(link.view)
+      if (link.quote) {
+        setDrawerOpen(false)
+        handleSubmit(link.quote)
+      }
+    }
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Keep the URL describing what is on screen. `replaceState` only, so the
+  // Back button still leaves the app rather than stepping backwards through
+  // panel changes -- see lib/deep-link.ts.
+  //
+  // Held back until the incoming link has been consumed above, so the address
+  // bar never briefly loses the cargo the user is waiting on -- a URL that
+  // blinks from a full quote to `#/desk` and back reads as the link having
+  // failed, right at the moment the recipient is deciding whether to trust it.
+  useEffect(() => {
+    if (!deepLinkRan.current && initialLink.quote) return
+    writeDeepLink(view, lastRequest)
+  }, [view, lastRequest, initialLink])
+
+  /**
+   * The worked example: a real lane, submitted through the ordinary path.
+   *
+   * Newcastle to Paradip is the trade the problem statement itself names, and
+   * every figure it produces is computed exactly as any other quote's is --
+   * this fills the request and submits it, it does not return a stored
+   * answer. The laycan is set a fortnight out from the real last day of
+   * market data rather than from the wall clock, for the same reason the
+   * quote form resyncs to it (F-02): pricing from a date the dataset does not
+   * reach is not a demo, it is a wrong answer.
+   */
+  function handleRunExample() {
+    const anchor = latestDate ?? new Date().toISOString().slice(0, 10)
+    const start = new Date(`${anchor}T00:00:00Z`)
+    start.setUTCDate(start.getUTCDate() + 14)
+    const end = new Date(start)
+    end.setUTCDate(end.getUTCDate() + 7)
+    handleSubmit({
+      cargo_volume_dwt: 75_000,
+      origin_port: 'NEWCASTLE_AU',
+      dest_port: 'PARADIP',
+      laycan_start: start.toISOString().slice(0, 10),
+      laycan_end: end.toISOString().slice(0, 10),
+      contract_term_days: 30,
+      commodity: 'Thermal Coal',
+      as_of: anchor,
+      risk_tolerance: 0,
     })
   }
 
@@ -214,6 +356,7 @@ function Shell() {
         Skip to the desk
       </a>
       <TopBar
+        dataThrough={latestDate}
         onNewQuote={() => setDrawerOpen(true)}
         onOpenSettings={() => setSettingsOpen(true)}
         onOpenHelp={() => setHelpOpen(true)}
@@ -242,6 +385,7 @@ function Shell() {
           tabIndex={-1}
           className="relative z-50 min-w-0 flex-1 overflow-y-auto p-2 focus:outline-none"
         >
+          <Suspense fallback={<ViewLoading />}>
           {view === 'season-plan' ? (
             <SeasonPlanPage ports={ports} latestDate={latestDate} />
           ) : view === 'port-twin' ? (
@@ -263,9 +407,11 @@ function Shell() {
               solving={solving}
               error={quoteError}
               onNewQuote={() => setDrawerOpen(true)}
+              onRunExample={handleRunExample}
               vessels={lastVessels}
             />
           )}
+          </Suspense>
         </main>
       </div>
       <QuoteDrawer

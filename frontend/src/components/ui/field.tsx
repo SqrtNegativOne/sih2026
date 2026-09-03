@@ -1,3 +1,4 @@
+import { TermText } from '@/components/desk/term'
 import { Tooltip } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
@@ -48,7 +49,9 @@ export function Field({
           </span>
         </Tooltip>
       ) : (
-        <span className="stat-label">{label}</span>
+        <span className="stat-label">
+          <TermText text={label} />
+        </span>
       )}
       {children}
     </label>

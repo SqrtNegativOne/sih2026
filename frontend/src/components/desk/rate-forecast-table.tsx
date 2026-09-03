@@ -225,6 +225,7 @@ export function RateForecastTable({
       className="h-full"
       id="forecast"
       title="Rate Forecast"
+      soWhat={'Where the model thinks the freight rate goes over the next few weeks, with the range it could land in. A wide range means the model is not confident: treat the timing advice as weak and lean on the walk-away line instead.'}
       hint="What the model expects this vessel class to cost per day, 7 / 30 / 90 days out. The shaded band is the low-to-high range, the line is the expected case, and the dashed line is today's rate. Dir compares the expected case against today; Conf is how strongly the model agrees on that direction."
       meta="TC $/day"
       actions={<RouteEvidenceBadge evidence={routeEvidence} />}
@@ -241,30 +242,42 @@ export function RateForecastTable({
             {/* "p10 / p50 / p90" is statistics shorthand, not a shipping
                 term. The percentile stays in the tooltip for anyone who reads
                 it natively -- "Low" alone is less precise than what they had --
-                but it is no longer the first thing to decode. */}
-            <th className="cursor-help text-right" title={PERCENTILE.p10.definition}>
-              {PERCENTILE.p10.label}
-            </th>
-            <th className="cursor-help text-right" title={PERCENTILE.p50.definition}>
-              {PERCENTILE.p50.label}
-            </th>
-            <th className="cursor-help text-right" title={PERCENTILE.p90.definition}>
-              {PERCENTILE.p90.label}
-            </th>
+                but it is no longer the first thing to decode.
+
+                These three were the review's named example of "the two
+                highest-value explanations fall back to `title=`". A native
+                title waits about a second, renders in OS chrome, never opens
+                on keyboard focus and never opens on touch -- so the best
+                explanatory text on the panel was invisible to exactly the
+                people who needed it. Same real Tooltip the rest of the desk
+                uses; the text is unchanged. */}
+            {(['p10', 'p50', 'p90'] as const).map((k) => (
+              <th key={k} className="text-right">
+                <Tooltip content={PERCENTILE[k].definition} className="cursor-help">
+                  <span className="border-b border-dotted border-muted-foreground/50">
+                    {PERCENTILE[k].label}
+                  </span>
+                </Tooltip>
+              </th>
+            ))}
             {/* Was "$/mt (class÷transit)" -- the parenthetical was the
                 formula, which belongs in the explanation, not the header. */}
-            <th
-              className="cursor-help text-right"
-              title="Freight per tonne, derived by dividing the class-wide day rate by the transit days -- a unit conversion, not itself a route-specific quote unless the badge above says route-validated. A different figure from the Fleet Mix panel's $/mt (the actual chosen vessel configuration) and the Landed Cost panel's Freight row (one component of a fuller delivered-cost breakdown)."
-            >
-              $/tonne
+            <th className="text-right">
+              <Tooltip
+                content="Freight per tonne, derived by dividing the class-wide day rate by the transit days -- a unit conversion, not itself a route-specific quote unless the badge above says route-validated. A different figure from the Fleet Mix panel's $/mt (the actual chosen vessel configuration) and the Landed Cost panel's Freight row (one component of a fuller delivered-cost breakdown)."
+                className="cursor-help"
+              >
+                <span className="border-b border-dotted border-muted-foreground/50">$/tonne</span>
+              </Tooltip>
             </th>
             <th className="text-center">Dir</th>
-            <th
-              className="text-right"
-              title="Confidence in the direction shown (Dir), not in the forecast overall -- by construction this is always >=50%, since Dir always names whichever direction the forecast favours."
-            >
-              Conf
+            <th className="text-right">
+              <Tooltip
+                content="Confidence in the direction shown (Dir), not in the forecast overall -- by construction this is always >=50%, since Dir always names whichever direction the forecast favours."
+                className="cursor-help"
+              >
+                <span className="border-b border-dotted border-muted-foreground/50">Conf</span>
+              </Tooltip>
             </th>
           </tr>
         </thead>

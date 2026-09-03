@@ -44,6 +44,7 @@ assumed):
 """
 from __future__ import annotations
 
+import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import date, timedelta
@@ -131,7 +132,13 @@ class _Memo:
         return self._cache[key]
 
 
-def _emit(on_progress: ProgressCallback | None, key: str, label: str, status: str) -> None:
+def _emit(
+    on_progress: ProgressCallback | None,
+    key: str,
+    label: str,
+    status: str,
+    timers: dict[str, float] | None = None,
+) -> None:
     """The fragility sweep's own progress, one start/done pair per variable
     -- NOT a forwarding of quote_envelope's own internal sub-stages into
     every one of a search's ~10 evaluations, which would spam a caller with
@@ -139,9 +146,31 @@ def _emit(on_progress: ProgressCallback | None, key: str, label: str, status: st
     ProgressCallback/ProgressStage types as everywhere else in opt --
     requirement 9 asks for the existing mechanism, not a second one, and
     this is that mechanism, used at the granularity that's actually useful
-    to report."""
-    if on_progress is not None:
-        on_progress(ProgressStage(key=key, label=label, status=status, elapsed_ms=0.0))
+    to report.
+
+    ``elapsed_ms`` on a ``done`` stage is real wall time, measured from this
+    key's own ``start``. It used to be hardcoded to 0.0, which was harmless
+    only for as long as nothing consumed it -- the moment a caller rendered
+    the field (the desk's sweep checklist now does), a variable search that
+    genuinely takes several hundred milliseconds was reporting itself as
+    "<1 ms". A number nobody reads is still a number this codebase should
+    not be inventing.
+
+    ``timers`` is created per ``analyze_fragility`` call rather than held at
+    module scope: the FastAPI route runs sweeps in a threadpool, and a shared
+    dict would let two concurrent sweeps attribute each other's timings.
+    """
+    if on_progress is None:
+        return
+    elapsed_ms = 0.0
+    if timers is not None:
+        if status == "start":
+            timers[key] = time.perf_counter()
+        else:
+            t0 = timers.pop(key, None)
+            if t0 is not None:
+                elapsed_ms = (time.perf_counter() - t0) * 1000.0
+    on_progress(ProgressStage(key=key, label=label, status=status, elapsed_ms=elapsed_ms))
 
 
 def _binding_port_verdict(
@@ -299,8 +328,12 @@ def analyze_fragility(
     )
     memo = _Memo()
     total_evaluations = 0
+    # Per-sweep, never module scope -- see _emit's docstring. Holds the
+    # perf_counter reading for each stage that has started but not finished,
+    # so a `done` event can report the real wall time it took.
+    _timers: dict[str, float] = {}
 
-    _emit(on_progress, "fragility_baseline", "Computing current recommendation", "start")
+    _emit(on_progress, "fragility_baseline", "Computing current recommendation", "start", _timers)
     current_decision = memo.get_or_compute(
         ("tier3", cargo_volume_dwt, origin_port, dest_port, laycan_start, laycan_end,
          contract_term_days, commodity, resolved_as_of, risk_tolerance),
@@ -311,7 +344,7 @@ def analyze_fragility(
         ),
     )
     total_evaluations += 1
-    _emit(on_progress, "fragility_baseline", "Computing current recommendation", "done")
+    _emit(on_progress, "fragility_baseline", "Computing current recommendation", "done", _timers)
 
     wanted = set(variables) if variables is not None else set(VariableId)
     findings: list[FlipPoint] = []
@@ -328,7 +361,7 @@ def analyze_fragility(
     all_fans = [f for cf in _fans_by_class.values() for f in cf]
 
     if VariableId.CARGO_VOLUME_DWT in wanted:
-        _emit(on_progress, "fragility_cargo_volume_dwt", "Searching cargo_volume_dwt", "start")
+        _emit(on_progress, "fragility_cargo_volume_dwt", "Searching cargo_volume_dwt", "start", _timers)
         base_sig = tier1_cargo_class_signature(cargo_volume_dwt)
 
         def eval_cargo(x: float) -> DecisionSignature:
@@ -342,7 +375,7 @@ def analyze_fragility(
         )
         findings.append(fp)
         total_evaluations += fp.evaluations_used
-        _emit(on_progress, "fragility_cargo_volume_dwt", "Searching cargo_volume_dwt", "done")
+        _emit(on_progress, "fragility_cargo_volume_dwt", "Searching cargo_volume_dwt", "done", _timers)
 
     if {VariableId.VESSEL_DRAFT_M, VariableId.PERMISSIBLE_DRAFT_M} & wanted:
         binding_port, binding_verdict = _binding_port_verdict(
@@ -362,7 +395,7 @@ def analyze_fragility(
         )
 
         if VariableId.VESSEL_DRAFT_M in wanted:
-            _emit(on_progress, "fragility_vessel_draft_m", "Searching vessel_draft_m", "start")
+            _emit(on_progress, "fragility_vessel_draft_m", "Searching vessel_draft_m", "start", _timers)
             if draft_untested:
                 findings.append(FlipPoint(
                     variable=VariableId.VESSEL_DRAFT_M, tier=Tier.TIER1_CLOSED_FORM,
@@ -395,10 +428,10 @@ def analyze_fragility(
                 )
                 findings.append(fp.model_copy(update={"berth_truth_context": binding_context}))
                 total_evaluations += fp.evaluations_used
-            _emit(on_progress, "fragility_vessel_draft_m", "Searching vessel_draft_m", "done")
+            _emit(on_progress, "fragility_vessel_draft_m", "Searching vessel_draft_m", "done", _timers)
 
         if VariableId.PERMISSIBLE_DRAFT_M in wanted:
-            _emit(on_progress, "fragility_permissible_draft_m", "Searching permissible_draft_m", "start")
+            _emit(on_progress, "fragility_permissible_draft_m", "Searching permissible_draft_m", "start", _timers)
             if draft_untested:
                 findings.append(FlipPoint(
                     variable=VariableId.PERMISSIBLE_DRAFT_M, tier=Tier.TIER1_CLOSED_FORM,
@@ -440,7 +473,7 @@ def analyze_fragility(
                 )
                 findings.append(fp.model_copy(update={"berth_truth_context": binding_context}))
                 total_evaluations += fp.evaluations_used
-            _emit(on_progress, "fragility_permissible_draft_m", "Searching permissible_draft_m", "done")
+            _emit(on_progress, "fragility_permissible_draft_m", "Searching permissible_draft_m", "done", _timers)
 
     for wait_var, wait_port in ((VariableId.ORIGIN_WAIT_DAYS, origin_port), (VariableId.DEST_WAIT_DAYS, dest_port)):
         if wait_var in wanted:
@@ -456,7 +489,7 @@ def analyze_fragility(
             ))
 
     if VariableId.LAYCAN_WIDTH_DAYS in wanted:
-        _emit(on_progress, "fragility_laycan_width_days", "Searching laycan_width_days", "start")
+        _emit(on_progress, "fragility_laycan_width_days", "Searching laycan_width_days", "start", _timers)
         base_width = float((laycan_end - laycan_start).days)
 
         def eval_laycan(width: float) -> DecisionSignature:
@@ -479,10 +512,10 @@ def analyze_fragility(
         )
         findings.append(fp)
         total_evaluations += fp.evaluations_used
-        _emit(on_progress, "fragility_laycan_width_days", "Searching laycan_width_days", "done")
+        _emit(on_progress, "fragility_laycan_width_days", "Searching laycan_width_days", "done", _timers)
 
     if VariableId.RISK_TOLERANCE in wanted:
-        _emit(on_progress, "fragility_risk_tolerance", "Searching risk_tolerance", "start")
+        _emit(on_progress, "fragility_risk_tolerance", "Searching risk_tolerance", "start", _timers)
 
         def eval_risk(x: float) -> DecisionSignature:
             return memo.get_or_compute(
@@ -503,10 +536,10 @@ def analyze_fragility(
         )
         findings.append(fp)
         total_evaluations += fp.evaluations_used
-        _emit(on_progress, "fragility_risk_tolerance", "Searching risk_tolerance", "done")
+        _emit(on_progress, "fragility_risk_tolerance", "Searching risk_tolerance", "done", _timers)
 
     if VariableId.CONTRACT_TERM_DAYS in wanted:
-        _emit(on_progress, "fragility_contract_term_days", "Searching contract_term_days", "start")
+        _emit(on_progress, "fragility_contract_term_days", "Searching contract_term_days", "start", _timers)
 
         def eval_term_tier2(x: float) -> DecisionSignature:
             days = max(1, round(x))
@@ -549,7 +582,7 @@ def analyze_fragility(
 
         findings.append(fp)
         total_evaluations += fp.evaluations_used
-        _emit(on_progress, "fragility_contract_term_days", "Searching contract_term_days", "done")
+        _emit(on_progress, "fragility_contract_term_days", "Searching contract_term_days", "done", _timers)
 
     return FragilityReport(
         current_decision=current_decision,

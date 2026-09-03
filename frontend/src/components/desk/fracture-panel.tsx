@@ -3,6 +3,16 @@ import { formatNumber } from '@/lib/format'
 import type { ChokepointFracture, FractureBand, QuoteFractureSummary } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
+/** The panel's plain-English Layer 2 (see Panel's `soWhat` prop). Declared
+ *  once here because this component renders the same panel in several states
+ *  -- loading, error, empty, populated -- and the explanation is the same in
+ *  all of them. */
+const SO_WHAT =
+  'How exposed this voyage is to the world\'s narrow shipping passages — ' +
+  'Suez, Hormuz, Malacca. A high reading means one incident far away can ' +
+  'reroute your ship and add weeks: keep a longer laycan and do not commit ' +
+  'the whole volume to one sailing.'
+
 // Same three-tone convention CIIPanel's RATING_CLASS and risk-feed.tsx's
 // SEVERITY_DOT already use, extended for a fourth (critical) band by
 // intensity rather than a new color -- 'watch' and 'elevated' both read as
@@ -76,6 +86,7 @@ export function FracturePanel({ fracture }: { fracture: QuoteFractureSummary | n
         className="h-full"
         id="fracture"
         title="Chokepoint Fracture Index"
+      soWhat={SO_WHAT}
         hint="A combined 0-100 disruption score per chokepoint on this route -- real PortWatch transit anomaly, real GDELT conflict-coverage anomaly, and real Joint War Committee Listed Area membership, fused. A score built from fewer than the full signal set is capped at 'Watch', however high its raw index -- see opt.fracture's own module docstring."
       >
         <div className="flex h-full items-center justify-center text-center text-lead text-muted-foreground">
@@ -91,6 +102,7 @@ export function FracturePanel({ fracture }: { fracture: QuoteFractureSummary | n
         className="h-full"
         id="fracture"
         title="Chokepoint Fracture Index"
+      soWhat={SO_WHAT}
         hint="A combined 0-100 disruption score per chokepoint on this route -- real PortWatch transit anomaly, real GDELT conflict-coverage anomaly, and real Joint War Committee Listed Area membership, fused."
       >
         <div className="flex h-full items-center justify-center text-center text-lead text-muted-foreground">
@@ -105,6 +117,7 @@ export function FracturePanel({ fracture }: { fracture: QuoteFractureSummary | n
       className="h-full"
       id="fracture"
       title="Chokepoint Fracture Index"
+      soWhat={SO_WHAT}
       hint="A combined 0-100 disruption score per chokepoint on this route -- real PortWatch transit anomaly, real GDELT conflict-coverage anomaly, and real Joint War Committee Listed Area membership, fused. A score built from fewer than the full signal set is capped at 'Watch', however high its raw index -- see opt.fracture's own module docstring. 'Inputs' says exactly which signals fed each row, so a one-signal score is never mistaken for a four-signal one."
       meta={`${fracture.chokepoints.length} chokepoint${fracture.chokepoints.length === 1 ? '' : 's'}`}
       flush
