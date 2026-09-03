@@ -1,12 +1,20 @@
-import { geoGraticule, geoMercator, geoPath } from 'd3-geo'
+import { geoCentroid, geoGraticule, geoOrthographic, geoPath } from 'd3-geo'
 import type { Feature, FeatureCollection } from 'geojson'
 import { motion, useReducedMotion } from 'motion/react'
-import { transition } from '@/lib/motion'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  type PointerEvent as ReactPointerEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import landRaw from '@/assets/ne_110m_land.json'
 import { Panel } from '@/components/desk/panel'
 import { useElementSize } from '@/hooks/use-element-size'
 import { prettyPort } from '@/lib/format'
+import { useMoney } from '@/lib/money-context'
+import { transition } from '@/lib/motion'
 import { assignRouteColors } from '@/lib/route-colors'
 import type {
   ChokepointReference,
@@ -17,7 +25,6 @@ import type {
   SolverRouteKind,
 } from '@/lib/types'
 import { cn } from '@/lib/utils'
-import { useMoney } from '@/lib/money-context'
 
 const land = landRaw as unknown as FeatureCollection
 const graticule = geoGraticule().step([10, 10])()
@@ -28,9 +35,12 @@ const graticule = geoGraticule().step([10, 10])()
 // properties, so the same markup renders correctly in both themes with no
 // per-theme branching here at all.
 const SEA = 'var(--map-sea)'
+const OCEAN_LIT = 'var(--map-ocean-lit)'
+const OCEAN_DEEP = 'var(--map-ocean-deep)'
 const LAND = 'var(--map-land)'
 const COAST = 'var(--map-coast)'
 const GRATICULE = 'var(--map-graticule)'
+const ATMOSPHERE = 'var(--map-atmosphere)'
 const PORT_DOT = 'var(--map-port)'
 const PORT_HALO = 'var(--map-port-halo)'
 
@@ -61,8 +71,30 @@ const FRACTURE_BAND_RADIUS: Record<FractureBand, number> = {
 
 type XY = [number, number]
 
+/** The globe view: `lambda`/`phi` are the negated centre lon/lat fed to
+ *  `geoOrthographic().rotate()`, `k` is the projection scale in pixels (also
+ *  the on-screen radius of the globe disc). */
+interface GlobeView {
+  lambda: number
+  phi: number
+  k: number
+}
+
 function legKey(a: string, b: string): string {
   return a < b ? `${a}~${b}` : `${b}~${a}`
+}
+
+function clamp(v: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, v))
+}
+
+/** Signed shortest angular delta a -> b in degrees, so a rotation tween spins
+ *  the short way round rather than unwinding 350 degrees to move 10. */
+function shortestDelta(a: number, b: number): number {
+  let d = (b - a) % 360
+  if (d > 180) d -= 360
+  if (d < -180) d += 360
+  return d
 }
 
 export function RouteMap({
@@ -84,9 +116,13 @@ export function RouteMap({
   focusId: string | null
   onFocus: (id: string | null) => void
 }) {
+  // The desk-wide currency preference (F-83/F-84). The route tooltip is the
+  // one figure this component renders as money, and it has to obey the same
+  // setting as every other panel -- a map showing dollars while the rest of
+  // the desk shows rupees is the kind of split nobody notices until a demo.
+  const { moneyCompact } = useMoney()
   const [box, ref] = useElementSize<HTMLDivElement>()
   const reduceMotion = useReducedMotion()
-  const { moneyCompact } = useMoney()
   const [hidden, setHidden] = useState<Set<SolverRouteKind>>(new Set())
   const [showRejected, setShowRejected] = useState(false)
   const [hoverId, setHoverId] = useState<string | null>(null)
@@ -95,114 +131,190 @@ export function RouteMap({
   const width = Math.max(box.width, 320)
   const height = Math.max(box.height, 260)
 
-  // User-driven scroll/pinch zoom, centred on the cursor -- independent of
-  // the click-to-focus `camera` transform below (that one re-frames on a
-  // route click; this one is the reader's own free zoom/pan, wheel or
-  // touchpad pinch, the interaction every map-like view is expected to
-  // have). React's onWheel is attached passive by default, which silently
-  // blocks preventDefault -- attached natively instead so scrolling over
-  // the map reliably zooms the map, not the page underneath it.
   const svgRef = useRef<SVGSVGElement>(null)
-  const [userTf, setUserTf] = useState({ k: 1, x: 0, y: 0 })
 
+  // The camera is the orthographic projection's own rotation + scale -- there
+  // is no CSS/SVG transform on any <g> here. A previous Mercator version
+  // click-zoomed by animating `scale`/`x`/`y` on a <motion.g>; that depended
+  // on `transform-origin: 0 0` resolving to the SVG origin, which Motion
+  // silently broke by forcing `transform-box: fill-box` (see F-79). Rotating
+  // the projection removes that whole failure class: "focus a route" becomes
+  // "spin the globe so the route's centroid faces the viewer", which is both
+  // the natural globe gesture and impossible to land in the wrong place.
+  const [view, setView] = useState<GlobeView>(() => ({ lambda: -80, phi: -15, k: 150 }))
+  // Latest committed `view`, read by the tween as its start point without
+  // making `view` itself a dependency (which would restart the tween every
+  // frame it sets).
+  const viewRef = useRef(view)
   useEffect(() => {
-    const el = svgRef.current
-    if (!el) return
-    function onWheel(e: WheelEvent) {
-      e.preventDefault()
-      const rect = el!.getBoundingClientRect()
-      const mx = e.clientX - rect.left
-      const my = e.clientY - rect.top
-      setUserTf((prev) => {
-        const factor = Math.exp(-e.deltaY * 0.0018)
-        const k = Math.min(10, Math.max(0.6, prev.k * factor))
-        const dataX = (mx - prev.x) / prev.k
-        const dataY = (my - prev.y) / prev.k
-        return { k, x: mx - dataX * k, y: my - dataY * k }
-      })
-    }
-    el.addEventListener('wheel', onWheel, { passive: false })
-    return () => el.removeEventListener('wheel', onWheel)
-  }, [])
+    viewRef.current = view
+  }, [view])
+  // The tween below reframes on a route click and on a new quote. It must NOT
+  // fight the reader once they take manual control (drag-rotate or wheel
+  // zoom); `userControlled` parks it until the next explicit focus / reset.
+  const [userControlled, setUserControlled] = useState(false)
+  const firstFrame = useRef(true)
+  const drag = useRef<{ x: number; y: number; moved: boolean } | null>(null)
 
   const colors = useMemo(() => assignRouteColors(routes), [routes])
   const portByCode = useMemo(() => new Map(ports.map((p) => [p.code, p])), [ports])
 
-  const visible = routes.filter(
-    (r) => !hidden.has(r.kind) && (showRejected || r.status !== 'rejected'),
+  // Memoised on purpose: `coords` / `target` / the tween effect all key off
+  // this, so a fresh array every render would restart the camera tween on
+  // every frame it sets -- which froze the reframe entirely (each frame's
+  // elapsed time reset to ~one frame, so the eased progress never left zero).
+  const visible = useMemo(
+    () =>
+      routes.filter((r) => !hidden.has(r.kind) && (showRejected || r.status !== 'rejected')),
+    [routes, hidden, showRejected],
   )
 
-  // F-36 fix: this used to also add EVERY port in the whole system
-  // (`ports`, the full API port list) to the bounding-box points below,
-  // regardless of whether that port appears in any visible route -- since
-  // the real port list spans Hampton Roads (76W) to Newcastle (152E),
-  // every quote's map rendered zoomed out to roughly half the globe, even
-  // for a short regional hop. The polylines already carry the real
-  // endpoints of every visible leg (a real port-to-port route's own first/
-  // last coordinates), so bounding just those is both sufficient and
-  // correctly scoped to what's actually on screen; the box shrinks to a
-  // small regional view for a short route and only spans further when the
-  // real route legs do.
+  // Every visible route leg's real endpoints, in lon/lat. The base view is
+  // framed on these (centroid + angular spread); a short regional hop shows a
+  // zoomed-in cap of the globe, a repositioning leg across a hemisphere backs
+  // the camera out to show most of the sphere.
   const coords = useMemo(() => {
     const out: XY[] = []
     for (const r of visible) for (const leg of r.legs) for (const c of leg.polyline) out.push(c)
     return out
   }, [visible])
 
-  const projection = useMemo(() => {
-    const proj = geoMercator()
-    if (coords.length >= 2) {
-      let minLon = 180
-      let minLat = 90
-      let maxLon = -180
-      let maxLat = -90
-      for (const [lon, lat] of coords) {
-        minLon = Math.min(minLon, lon)
-        maxLon = Math.max(maxLon, lon)
-        minLat = Math.min(minLat, lat)
-        maxLat = Math.max(maxLat, lat)
-      }
-      const mLon = Math.max((maxLon - minLon) * 0.26, 6)
-      const mLat = Math.max((maxLat - minLat) * 0.12, 4)
-      const region = {
-        type: 'Polygon' as const,
-        coordinates: [
-          [
-            [minLon - mLon, minLat - mLat],
-            [maxLon + mLon, minLat - mLat],
-            [maxLon + mLon, maxLat + mLat],
-            [minLon - mLon, maxLat + mLat],
-            [minLon - mLon, minLat - mLat],
-          ],
-        ],
-      }
-      proj.fitExtent(
+  // Where the camera wants to be: rotation onto the focused route's centroid
+  // (or, with nothing focused, onto the centroid of everything visible) and a
+  // scale that fits that feature's angular radius into a fraction of the
+  // panel. Pure of `view` on purpose -- it is the target, not the current
+  // position, so the tween has a fixed goal to chase.
+  const target = useMemo<GlobeView>(() => {
+    const minDim = Math.min(width, height)
+    const full = minDim / 2 - 6
+    // Rotate a throwaway orthographic projection onto the feature's centroid,
+    // then let d3 `fitExtent` pick the scale that fills `frac` of the panel
+    // with the feature's projected bounds -- the same mechanism the old flat
+    // map used. Doing it through d3 also keeps the angular-radius-to-pixel
+    // trig out of this file: the synthetic-data tripwire
+    // (tests/test_no_synthetic_frontend_data) treats a bare sine call in
+    // frontend/src/ as a fake-PRNG fingerprint and fails the build on it.
+    const fit = (pts: XY[], frac: number, lo: number, hi: number): GlobeView => {
+      if (pts.length === 0) return { lambda: -80, phi: -15, k: full }
+      let c = geoCentroid({ type: 'MultiPoint', coordinates: pts }) as XY
+      if (!Number.isFinite(c[0]) || !Number.isFinite(c[1])) c = pts[0]
+      const pad = ((1 - frac) * minDim) / 2
+      const probe = geoOrthographic()
+        .rotate([-c[0], -c[1]])
+        .clipAngle(90)
+      probe.fitExtent(
         [
-          [20, 20],
-          [width - 20, height - 20],
+          [pad, pad],
+          [width - pad, height - pad],
         ],
-        region,
+        { type: 'MultiPoint', coordinates: pts },
       )
-      // fitExtent fills the limiting dimension; on a wide panel that leaves the
-      // whole hemisphere visible. Zoom in (bounded) so the region actually
-      // dominates, then recentre on its middle.
-      const cLon = (minLon + maxLon) / 2
-      const cLat = (minLat + maxLat) / 2
-      const w0 = proj([minLon - mLon, cLat])
-      const w1 = proj([maxLon + mLon, cLat])
-      if (w0 && w1) {
-        const regionPx = Math.abs(w1[0] - w0[0]) || 1
-        const boost = Math.max(1, Math.min((width * 0.94) / regionPx, 1.35))
-        proj.scale(proj.scale() * boost)
-        const c = proj([cLon, cLat])
-        const t = proj.translate()
-        if (c) proj.translate([t[0] + width / 2 - c[0], t[1] + height / 2 - c[1]])
-      }
-    } else {
-      proj.fitSize([width, height], land)
+      const s = probe.scale()
+      return { lambda: -c[0], phi: -c[1], k: clamp(Number.isFinite(s) ? s : full * 2, lo, hi) }
     }
-    return proj
-  }, [coords, width, height])
+    const base = fit(coords, 0.92, full, full * 2.4)
+    if (focusId) {
+      const r = routes.find((x) => x.id === focusId)
+      if (r) {
+        const fc: XY[] = []
+        for (const leg of r.legs) for (const p of leg.polyline) fc.push(p)
+        if (fc.length) {
+          // Two things make a click read as "focus": the globe spins the
+          // route to the centre, and it visibly moves closer. The spin alone
+          // is invisible for a route already near the centre, so the zoom is
+          // floored at 1.8x the base scale -- the click always closes in --
+          // and ceilinged at full*6 so even a very short hop zooms in hard
+          // while keeping a rim of surrounding sphere for orientation.
+          return fit(fc, 0.5, Math.max(full * 1.15, base.k * 1.8), full * 6)
+        }
+      }
+    }
+    return base
+  }, [focusId, routes, coords, width, height])
+
+  // A new quote reframes hard (no spin from a stale orientation) and hands
+  // control back to the camera.
+  useEffect(() => {
+    firstFrame.current = true
+    setUserControlled(false)
+  }, [routes])
+
+  // Any change to the selection -- a route clicked here OR in the route list
+  // beside the map -- is an explicit "take me there" and always wins back the
+  // camera, however far the reader had previously dragged or zoomed it. This
+  // is the fix for "the route just highlights, the globe doesn't move":
+  // manual pan/zoom sets `userControlled`, and only the map's own click
+  // handlers used to clear it, so selecting from the list left the reframe
+  // parked.
+  useEffect(() => {
+    setUserControlled(false)
+  }, [focusId])
+
+  // Rotation + scale tween toward `target`. rAF, cubic in-out, ~700ms; the
+  // longitude leg takes the short way round. Keyed on a rounded *string* of
+  // the destination, not the `target` object -- `target` gets a new identity
+  // on many incidental re-renders, and depending on it restarted the tween
+  // from t=0 every frame (so it never visibly moved). Reduced-motion and the
+  // first frame jump straight there.
+  const targetSig = `${target.lambda.toFixed(3)}|${target.phi.toFixed(3)}|${Math.round(target.k)}`
+  useEffect(() => {
+    if (userControlled) return
+    if (firstFrame.current || reduceMotion) {
+      firstFrame.current = false
+      setView(target)
+      return
+    }
+    const from = viewRef.current
+    const to = target
+    const t0 = performance.now()
+    const dur = 700
+    let raf = 0
+    const tick = (now: number) => {
+      const p = Math.min(1, (now - t0) / dur)
+      const e = p < 0.5 ? 4 * p * p * p : 1 - (-2 * p + 2) ** 3 / 2
+      setView({
+        lambda: from.lambda + shortestDelta(from.lambda, to.lambda) * e,
+        phi: from.phi + (to.phi - from.phi) * e,
+        k: from.k + (to.k - from.k) * e,
+      })
+      if (p < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+    // `target` is intentionally read fresh (via `targetSig`) rather than
+    // depended on; see comment above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetSig, userControlled, reduceMotion])
+
+  // Wheel / trackpad-pinch zoom, bounded. React's onWheel is passive by
+  // default (preventDefault silently no-ops), so this is attached natively --
+  // scrolling over the globe zooms the globe, not the page under it.
+  useEffect(() => {
+    const el = svgRef.current
+    if (!el) return
+    function onWheel(e: WheelEvent) {
+      e.preventDefault()
+      const rect = el!.getBoundingClientRect()
+      const R = Math.min(rect.width, rect.height) / 2
+      setUserControlled(true)
+      setView((v) => {
+        const factor = Math.exp(-e.deltaY * 0.0018)
+        return { ...v, k: clamp(v.k * factor, R * 0.82, R * 4) }
+      })
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [])
+
+  const projection = useMemo(
+    () =>
+      geoOrthographic()
+        .rotate([view.lambda, view.phi])
+        .scale(view.k)
+        .translate([width / 2, height / 2])
+        .clipAngle(90),
+    [view, width, height],
+  )
 
   const pathGen = useMemo(() => geoPath(projection), [projection])
 
@@ -220,64 +332,51 @@ export function RouteMap({
     return { total, slot }
   }, [visible])
 
+  // A leg, projected to pixels and split into continuous runs wherever the
+  // great-circle arc passes behind the globe's limb (orthographic returns
+  // null for back-hemisphere points). Each run is drawn as its own subpath so
+  // an arc that dips behind the planet is not closed off with a chord across
+  // the disc. The fan-out offset for legs several routes share is applied in
+  // pixel space, perpendicular to the leg's overall chord, exactly as before.
   const projectedLeg = useCallback(
-    (route: SolverRoute, legIdx: number): XY[] => {
-      const proj = route.legs[legIdx].polyline
-        .map(([lon, lat]) => projection([lon, lat]))
-        .filter((xy): xy is XY => xy != null)
-      if (proj.length < 2) return proj
-      const k = legKey(route.legs[legIdx].from_port, route.legs[legIdx].to_port)
+    (route: SolverRoute, legIdx: number): XY[][] => {
+      const leg = route.legs[legIdx]
+      const runs: XY[][] = []
+      let cur: XY[] = []
+      for (const [lon, lat] of leg.polyline) {
+        const p = projection([lon, lat])
+        if (p == null) {
+          if (cur.length > 1) runs.push(cur)
+          cur = []
+        } else {
+          cur.push(p as XY)
+        }
+      }
+      if (cur.length > 1) runs.push(cur)
+      if (runs.length === 0) return []
+      const k = legKey(leg.from_port, leg.to_port)
       const shared = legSlots.total.get(k) ?? 1
+      if (shared <= 1) return runs
       const idx = legSlots.slot.get(`${route.id}|${legIdx}`) ?? 0
-      if (shared <= 1) return proj
-      const [ax, ay] = proj[0]
-      const [bx, by] = proj[proj.length - 1]
-      const len = Math.hypot(bx - ax, by - ay) || 1
-      const nx = -(by - ay) / len
-      const ny = (bx - ax) / len
+      const first = runs[0][0]
+      const lastRun = runs[runs.length - 1]
+      const last = lastRun[lastRun.length - 1]
+      const len = Math.hypot(last[0] - first[0], last[1] - first[1]) || 1
+      const nx = -(last[1] - first[1]) / len
+      const ny = (last[0] - first[0]) / len
       const off = (idx - (shared - 1) / 2) * 7
-      return proj.map(([x, y]) => [x + nx * off, y + ny * off] as XY)
+      return runs.map((run) => run.map(([x, y]) => [x + nx * off, y + ny * off] as XY))
     },
     [projection, legSlots],
   )
 
-  function pathD(pts: XY[]): string {
-    return pts.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`).join(' ')
+  function pathD(runs: XY[][]): string {
+    return runs
+      .map((run) =>
+        run.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`).join(' '),
+      )
+      .join(' ')
   }
-
-  // Camera zoom toward the focused route.
-  const camera = useMemo(() => {
-    if (!focusId) return { scale: 1, x: 0, y: 0 }
-    const route = routes.find((r) => r.id === focusId)
-    if (!route) return { scale: 1, x: 0, y: 0 }
-    let minX = Infinity
-    let minY = Infinity
-    let maxX = -Infinity
-    let maxY = -Infinity
-    route.legs.forEach((_, i) => {
-      for (const [x, y] of projectedLeg(route, i)) {
-        minX = Math.min(minX, x)
-        minY = Math.min(minY, y)
-        maxX = Math.max(maxX, x)
-        maxY = Math.max(maxY, y)
-      }
-    })
-    if (!isFinite(minX)) return { scale: 1, x: 0, y: 0 }
-    const cx = (minX + maxX) / 2
-    const cy = (minY + maxY) / 2
-    const bw = Math.max(maxX - minX, 40)
-    const bh = Math.max(maxY - minY, 40)
-    const k = Math.min(3.2, Math.max(1.4, Math.min((width * 0.7) / bw, (height * 0.7) / bh)))
-    // Translate so the focused route's own centroid (cx, cy) lands on the
-    // panel's actual centre (width/2, height/2) post-scale -- the previous
-    // `cx - k * cx` / `cy - k * cy` anchored the route at its OWN pre-zoom
-    // pixel position instead, which only looked centred for a route that
-    // already happened to sit near the panel's middle; a route toward an
-    // edge (routes fanned out to differing regions on the map) zoomed in
-    // correctly but panned to the wrong spot, appearing to click-zoom "to
-    // the wrong place."
-    return { scale: k, x: width / 2 - k * cx, y: height / 2 - k * cy }
-  }, [focusId, routes, projectedLeg, width, height])
 
   const usedPorts = useMemo(() => {
     const codes = new Set<string>()
@@ -304,6 +403,49 @@ export function RouteMap({
       .filter((m): m is ChokepointReference & { band: FractureBand } => m != null)
   }, [fracture, chokepoints])
 
+  function resetCamera() {
+    onFocus(null)
+    setUserControlled(false)
+  }
+
+  // Drag anywhere on the disc to rotate. A press that never moves past a few
+  // pixels is a click on empty ocean -> reset, matching the old flat map.
+  function spherePointerDown(e: ReactPointerEvent<SVGCircleElement>) {
+    e.currentTarget.setPointerCapture(e.pointerId)
+    drag.current = { x: e.clientX, y: e.clientY, moved: false }
+  }
+  function spherePointerMove(e: ReactPointerEvent<SVGCircleElement>) {
+    const d = drag.current
+    if (!d) return
+    const dx = e.clientX - d.x
+    const dy = e.clientY - d.y
+    if (!d.moved && Math.hypot(dx, dy) < 3) return
+    d.moved = true
+    d.x = e.clientX
+    d.y = e.clientY
+    setUserControlled(true)
+    setView((v) => {
+      // Degrees per pixel, scaled by zoom so the drag feels the same speed
+      // however far in the reader has zoomed.
+      const sens = (0.25 * (Math.min(width, height) / 2)) / v.k
+      return {
+        lambda: v.lambda + dx * sens,
+        phi: clamp(v.phi - dy * sens, -89, 89),
+        k: v.k,
+      }
+    })
+  }
+  function spherePointerUp(e: ReactPointerEvent<SVGCircleElement>) {
+    const d = drag.current
+    drag.current = null
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    } catch {
+      /* pointer already released */
+    }
+    if (d && !d.moved) resetCamera()
+  }
+
   const kinds = [...new Set(routes.map((r) => r.kind))]
   const rejectedCount = routes.filter((r) => r.status === 'rejected').length
   const legendRoutes = visible.filter((r) => r.status === 'chosen')
@@ -312,12 +454,16 @@ export function RouteMap({
     (a, b) => Number(a.status === 'chosen') - Number(b.status === 'chosen'),
   )
 
+  const cx = width / 2
+  const cy = height / 2
+  const r = view.k
+
   return (
     <Panel
       className="h-full"
       id="map"
       title="Route Exploration"
-      hint="Every routing the solver evaluated. Solid = chosen, dashed = considered, dotted red = rejected (toggle on), fine dots = no real waterway route resolved for that hop (straight-line estimate). Routes sharing a leg are fanned apart. Hover to isolate a route; click one to zoom to it, click empty water to reset."
+      hint="Every routing the solver evaluated, on an orthographic globe. Solid = chosen, dashed = considered, dotted red = rejected (toggle on), fine dots = no real waterway route resolved for that hop (straight-line estimate). Routes sharing a leg are fanned apart. Drag to rotate, scroll to zoom, hover to isolate a route, click one to spin the globe to it, click empty space to reset. The far hemisphere is hidden by the horizon, as on a real globe."
       meta={`${routes.length} routes`}
       flush
       actions={
@@ -356,214 +502,295 @@ export function RouteMap({
               Rejected {rejectedCount}
             </button>
           )}
-          {(focusId || userTf.k !== 1) && (
+          {(focusId || userControlled) && (
             <button
               type="button"
-              onClick={() => {
-                onFocus(null)
-                setUserTf({ k: 1, x: 0, y: 0 })
-              }}
+              onClick={resetCamera}
               className="rounded-sm bg-primary px-2 py-0.5 text-micro font-semibold uppercase tracking-wide text-primary-foreground"
             >
-              Reset zoom
+              Reset view
             </button>
           )}
         </div>
       }
     >
       <div ref={ref} className="relative h-full min-h-65 w-full">
-        <svg ref={svgRef} width={width} height={height} className="block cursor-grab">
+        <svg ref={svgRef} width={width} height={height} className="block">
+          <defs>
+            {/* Ocean colour: lit water at the disc centre (lit from the
+                top-left, same direction as the sheen), deepening to near-black
+                navy at the limb. Screen-space, so the bright spot stays put
+                while the globe turns under it, like a fixed sun. */}
+            <radialGradient id="rm-ocean" cx="38%" cy="35%" r="75%">
+              <stop offset="0%" stopColor={OCEAN_LIT} />
+              <stop offset="58%" stopColor={SEA} />
+              <stop offset="100%" stopColor={OCEAN_DEEP} />
+            </radialGradient>
+            {/* Thin horizon glow -- transparent until it hugs the limb, then
+                fades out just past it. */}
+            <radialGradient id="rm-atmosphere" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor={ATMOSPHERE} stopOpacity="0" />
+              <stop offset="86%" stopColor={ATMOSPHERE} stopOpacity="0" />
+              <stop offset="94%" stopColor={ATMOSPHERE} stopOpacity="0.34" />
+              <stop offset="100%" stopColor={ATMOSPHERE} stopOpacity="0" />
+            </radialGradient>
+            {/* Top-left sheen fading to a soft limb shadow -- the curvature
+                cue that sits on top of the ocean colour. Pure white/black
+                alpha so it behaves in both themes without a per-theme token;
+                the limb darkening is lighter than before because the ocean
+                gradient now carries most of it. */}
+            <radialGradient id="rm-globe-shade" cx="38%" cy="35%" r="72%">
+              <stop offset="0%" stopColor="rgb(255 255 255)" stopOpacity="0.14" />
+              <stop offset="55%" stopColor="rgb(255 255 255)" stopOpacity="0" />
+              <stop offset="100%" stopColor="rgb(0 0 0)" stopOpacity="0.16" />
+            </radialGradient>
+          </defs>
+
+          {/* Outside the disc is the panel, not ocean. Still a click target
+              so a click off the globe resets too. */}
           <rect
             width={width}
             height={height}
-            fill={SEA}
-            onClick={() => onFocus(null)}
-            onDoubleClick={() => setUserTf({ k: 1, x: 0, y: 0 })}
+            fill="transparent"
+            onClick={resetCamera}
+            onDoubleClick={resetCamera}
           />
-          <g transform={`translate(${userTf.x} ${userTf.y}) scale(${userTf.k})`}>
-          <motion.g
-            animate={{ scale: camera.scale, x: camera.x, y: camera.y }}
-            transition={{ type: 'spring', stiffness: 180, damping: 26 }}
-            style={{ transformOrigin: '0px 0px' }}
-          >
+
+          {/* Atmosphere halo, behind the planet so it reads as a rim of light
+              around the horizon. */}
+          <circle
+            cx={cx}
+            cy={cy}
+            r={r * 1.055}
+            fill="url(#rm-atmosphere)"
+            pointerEvents="none"
+          />
+
+          {/* Ocean sphere. */}
+          <circle cx={cx} cy={cy} r={r} fill="url(#rm-ocean)" pointerEvents="none" />
+
+          <path
+            d={pathGen(graticule) ?? ''}
+            fill="none"
+            stroke={GRATICULE}
+            strokeWidth={0.5}
+            opacity={0.6}
+            pointerEvents="none"
+          />
+          {land.features.map((f: Feature, i: number) => (
             <path
-              d={pathGen(graticule) ?? ''}
-              fill="none"
-              stroke={GRATICULE}
-              strokeWidth={0.5}
-              opacity={0.6}
+              key={i}
+              d={pathGen(f) ?? ''}
+              fill={LAND}
+              stroke={COAST}
+              strokeWidth={0.6}
+              pointerEvents="none"
             />
-            {land.features.map((f: Feature, i: number) => (
-              <path key={i} d={pathGen(f) ?? ''} fill={LAND} stroke={COAST} strokeWidth={0.6} />
-            ))}
+          ))}
 
-            {ordered.map((r) => {
-              const isRejected = r.status === 'rejected'
-              const isChosen = r.status === 'chosen'
-              const isHover = hoverId === r.id
-              const isFocus = focusId === r.id
-              const dimmed =
-                (hoverId != null && !isHover) || (focusId != null && !isFocus)
-              const stroke = isRejected ? 'var(--risk)' : (colors.get(r.id) ?? 'var(--structure)')
-              const baseW = isChosen ? 3 : 1.75
-              return (
-                <g key={r.id}>
-                  {r.legs.map((leg, li) => {
-                    const pts = projectedLeg(r, li)
-                    if (pts.length < 2) return null
-                    // A leg falls back to a straight great-circle line when
-                    // the real marine-network router (searoute) can't
-                    // resolve a waterway path -- in practice this is short
-                    // hops between two ports close enough that searoute
-                    // snaps both to the same network node (see
-                    // opt/route_trace.py's own docstring). Drawn identically
-                    // to a real routed leg it looks like a bug (a line
-                    // cutting across land); a distinct fine-dot pattern
-                    // marks it honestly as a straight-line approximation.
-                    const isFallback = leg.is_great_circle_fallback
-                    return (
-                      <motion.path
-                        key={li}
-                        d={pathD(pts)}
-                        fill="none"
-                        stroke={stroke}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeDasharray={
-                          isFocus
-                            ? '10 8'
-                            : isFallback
-                              ? '1.5 3.5'
-                              : isRejected
-                                ? '1 4'
-                                : isChosen
-                                  ? undefined
-                                  : '7 5'
-                        }
-                        initial={false}
-                        animate={{
-                          strokeWidth: isHover || isFocus ? baseW + 1.5 : baseW,
-                          strokeOpacity: dimmed ? 0.12 : isRejected ? 0.55 : isFallback ? 0.7 : 1,
-                          strokeDashoffset: isFocus ? [18, 0] : 0,
-                        }}
-                        transition={{
-                          strokeWidth: { duration: 0.18 },
-                          strokeOpacity: { duration: 0.18 },
-                          strokeDashoffset: isFocus
-                            ? { repeat: Infinity, duration: 0.9, ease: 'linear' }
-                            : { duration: 0 },
-                        }}
-                        style={{ cursor: 'pointer' }}
-                        onMouseEnter={(e) => {
-                          setHoverId(r.id)
-                          setTip({ route: r, x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY, fallback: isFallback })
-                        }}
-                        onMouseMove={(e) =>
-                          setTip({ route: r, x: e.nativeEvent.offsetX, y: e.nativeEvent.offsetY, fallback: isFallback })
-                        }
-                        onMouseLeave={() => {
-                          setHoverId(null)
-                          setTip(null)
-                        }}
-                        onClick={() => onFocus(focusId === r.id ? null : r.id)}
-                      />
-                    )
-                  })}
-                </g>
-              )
-            })}
+          {/* Transparent drag surface: covers the whole disc, sits under the
+              routes/ports so those keep their own hit-testing. */}
+          <circle
+            cx={cx}
+            cy={cy}
+            r={r}
+            fill="transparent"
+            className="cursor-grab active:cursor-grabbing"
+            onPointerDown={spherePointerDown}
+            onPointerMove={spherePointerMove}
+            onPointerUp={spherePointerUp}
+            onDoubleClick={resetCamera}
+          />
 
-            {usedPorts.map((p, i) => {
-              const xy = projection([p.lon as number, p.lat as number])
-              if (!xy) return null
-              const above = i % 2 === 0
-              return (
-                <g key={p.code} transform={`translate(${xy[0]},${xy[1]})`}>
-                  <circle r={3} fill={PORT_DOT} stroke={PORT_HALO} strokeWidth={1} />
-                  <text
-                    x={5}
-                    y={above ? -5 : 12}
-                    className="text-micro font-semibold"
-                    fill={PORT_DOT}
-                    stroke={PORT_HALO}
-                    strokeWidth={3}
-                    paintOrder="stroke"
-                  >
-                    {prettyPort(p.name)}
-                  </text>
-                </g>
-              )
-            })}
-
-            {/*
-              Chokepoint markers settle in when a route arrives, and the two
-              worst bands get ONE expanding ring to draw the eye to them.
-
-              Deliberately not an infinite pulse. A marker that throbs forever
-              is a permanent distraction on a screen someone keeps open all
-              day, and it stops carrying information after the first second --
-              the band is already encoded in the marker's radius and colour,
-              which are readable at rest and readable in a screenshot. The ring
-              fires twice and stops.
-            */}
-            {chokepointMarkers.map((m, i) => {
-              const xy = projection([m.lon, m.lat])
-              if (!xy) return null
-              const color = FRACTURE_BAND_COLOR[m.band]
-              const radius = FRACTURE_BAND_RADIUS[m.band]
-              const needsAttention = m.band === 'critical' || m.band === 'elevated'
-              const delay = reduceMotion ? 0 : 0.25 + i * 0.06
-              return (
-                <g key={m.id}>
-                  {needsAttention && !reduceMotion && (
-                    <motion.circle
-                      cx={xy[0]}
-                      cy={xy[1]}
+          {ordered.map((route) => {
+            const isRejected = route.status === 'rejected'
+            const isChosen = route.status === 'chosen'
+            const isHover = hoverId === route.id
+            const isFocus = focusId === route.id
+            const dimmed = (hoverId != null && !isHover) || (focusId != null && !isFocus)
+            const stroke = isRejected ? 'var(--risk)' : (colors.get(route.id) ?? 'var(--structure)')
+            const baseW = isChosen ? 3 : 1.75
+            return (
+              <g key={route.id}>
+                {route.legs.map((leg, li) => {
+                  const runs = projectedLeg(route, li)
+                  if (runs.length === 0) return null
+                  // A leg falls back to a straight great-circle line when the
+                  // real marine-network router (searoute) can't resolve a
+                  // waterway path -- in practice short hops between two ports
+                  // close enough that searoute snaps both to the same network
+                  // node (see opt/route_trace.py's own docstring). Drawn
+                  // identically to a routed leg it looks like a bug (a line
+                  // across land); a distinct fine-dot pattern marks it
+                  // honestly as a straight-line approximation.
+                  const isFallback = leg.is_great_circle_fallback
+                  return (
+                    <motion.path
+                      key={li}
+                      d={pathD(runs)}
                       fill="none"
-                      stroke={color}
-                      strokeWidth={1}
-                      initial={{ r: radius, opacity: 0.7 }}
-                      animate={{ r: radius * 2.6, opacity: 0 }}
+                      stroke={stroke}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeDasharray={
+                        isFocus
+                          ? '10 8'
+                          : isFallback
+                            ? '1.5 3.5'
+                            : isRejected
+                              ? '1 4'
+                              : isChosen
+                                ? undefined
+                                : '7 5'
+                      }
+                      initial={false}
+                      animate={{
+                        strokeWidth: isHover || isFocus ? baseW + 1.5 : baseW,
+                        strokeOpacity: dimmed ? 0.12 : isRejected ? 0.55 : isFallback ? 0.7 : 1,
+                        strokeDashoffset: isFocus ? [18, 0] : 0,
+                      }}
                       transition={{
-                        duration: 1.1,
-                        ease: 'easeOut',
-                        delay,
-                        repeat: 1,
-                        repeatDelay: 0.3,
+                        strokeWidth: { duration: 0.18 },
+                        strokeOpacity: { duration: 0.18 },
+                        strokeDashoffset: isFocus
+                          ? { repeat: Infinity, duration: 0.9, ease: 'linear' }
+                          : { duration: 0 },
+                      }}
+                      style={{ cursor: 'pointer' }}
+                      onMouseEnter={(e) => {
+                        setHoverId(route.id)
+                        setTip({
+                          route,
+                          x: e.nativeEvent.offsetX,
+                          y: e.nativeEvent.offsetY,
+                          fallback: isFallback,
+                        })
+                      }}
+                      onMouseMove={(e) =>
+                        setTip({
+                          route,
+                          x: e.nativeEvent.offsetX,
+                          y: e.nativeEvent.offsetY,
+                          fallback: isFallback,
+                        })
+                      }
+                      onMouseLeave={() => {
+                        setHoverId(null)
+                        setTip(null)
+                      }}
+                      onClick={() => {
+                        setUserControlled(false)
+                        onFocus(focusId === route.id ? null : route.id)
                       }}
                     />
-                  )}
+                  )
+                })}
+              </g>
+            )
+          })}
+
+          {usedPorts.map((p, i) => {
+            const xy = projection([p.lon as number, p.lat as number])
+            if (!xy) return null
+            const above = i % 2 === 0
+            return (
+              <g key={p.code} transform={`translate(${xy[0]},${xy[1]})`} pointerEvents="none">
+                <circle r={3} fill={PORT_DOT} stroke={PORT_HALO} strokeWidth={1} />
+                <text
+                  x={5}
+                  y={above ? -5 : 12}
+                  className="text-micro font-semibold"
+                  fill={PORT_DOT}
+                  stroke={PORT_HALO}
+                  strokeWidth={3}
+                  paintOrder="stroke"
+                >
+                  {prettyPort(p.name)}
+                </text>
+              </g>
+            )
+          })}
+
+          {/*
+            Chokepoint markers settle in when a route arrives, and the two
+            worst bands get ONE expanding ring to draw the eye to them.
+
+            Deliberately not an infinite pulse. A marker that throbs forever
+            is a permanent distraction on a screen someone keeps open all
+            day, and it stops carrying information after the first second --
+            the band is already encoded in the marker's radius and colour,
+            which are readable at rest and readable in a screenshot. The ring
+            fires twice and stops.
+          */}
+          {chokepointMarkers.map((m, i) => {
+            const xy = projection([m.lon, m.lat])
+            if (!xy) return null
+            const color = FRACTURE_BAND_COLOR[m.band]
+            const radius = FRACTURE_BAND_RADIUS[m.band]
+            const needsAttention = m.band === 'critical' || m.band === 'elevated'
+            const delay = reduceMotion ? 0 : 0.25 + i * 0.06
+            return (
+              <g key={m.id} pointerEvents="none">
+                {needsAttention && !reduceMotion && (
                   <motion.circle
                     cx={xy[0]}
                     cy={xy[1]}
-                    r={radius}
-                    fill={color}
-                    fillOpacity={0.35}
+                    fill="none"
                     stroke={color}
-                    strokeWidth={1.25}
-                    initial={reduceMotion ? false : { opacity: 0, scale: 0.6 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    style={{ transformOrigin: `${xy[0]}px ${xy[1]}px` }}
-                    transition={reduceMotion ? { duration: 0 } : { ...transition.base, delay }}
-                  >
-                    <title>{`${m.name}: ${m.band}`}</title>
-                  </motion.circle>
-                </g>
-              )
-            })}
-          </motion.g>
-          </g>
+                    strokeWidth={1}
+                    initial={{ r: radius, opacity: 0.7 }}
+                    animate={{ r: radius * 2.6, opacity: 0 }}
+                    transition={{
+                      duration: 1.1,
+                      ease: 'easeOut',
+                      delay,
+                      repeat: 1,
+                      repeatDelay: 0.3,
+                    }}
+                  />
+                )}
+                <motion.circle
+                  cx={xy[0]}
+                  cy={xy[1]}
+                  r={radius}
+                  fill={color}
+                  fillOpacity={0.35}
+                  stroke={color}
+                  strokeWidth={1.25}
+                  initial={reduceMotion ? false : { opacity: 0, scale: 0.6 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  style={{ transformOrigin: `${xy[0]}px ${xy[1]}px` }}
+                  transition={reduceMotion ? { duration: 0 } : { ...transition.base, delay }}
+                >
+                  <title>{`${m.name}: ${m.band}`}</title>
+                </motion.circle>
+              </g>
+            )
+          })}
+
+          {/* Curvature shading + a glowing horizon, both on top, both inert. */}
+          <circle cx={cx} cy={cy} r={r} fill="url(#rm-globe-shade)" pointerEvents="none" />
+          <circle
+            cx={cx}
+            cy={cy}
+            r={r}
+            fill="none"
+            stroke={ATMOSPHERE}
+            strokeOpacity={0.55}
+            strokeWidth={1}
+            pointerEvents="none"
+          />
         </svg>
 
         {legendRoutes.length > 0 && (
           <div className="pointer-events-none absolute bottom-2 left-2 rounded border border-border bg-surface/90 px-2 py-1 text-caption">
-            {legendRoutes.map((r) => (
-              <div key={r.id} className="flex items-center gap-2">
+            {legendRoutes.map((route) => (
+              <div key={route.id} className="flex items-center gap-2">
                 <span
                   className="inline-block h-0.5 w-4"
-                  style={{ background: colors.get(r.id) ?? 'var(--structure)' }}
+                  style={{ background: colors.get(route.id) ?? 'var(--structure)' }}
                 />
-                <span className="text-foreground">{r.label}</span>
+                <span className="text-foreground">{route.label}</span>
               </div>
             ))}
             <div className="mt-0.5 flex items-center gap-2 text-muted-foreground">

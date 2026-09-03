@@ -125,6 +125,7 @@ the number/behaviour changed, not just that code was edited.
 | F-93b | Minor | Registering series ids made `test_families_with_zero_real_hits_are_unavailable` iterate nothing while still passing | ✅ done |
 | F-94 | Major | All 128 PortWatch files were 19 days stale — congestion, waiting times, tightness and anchorage calibration all served figures from old data, because the harvester was a one-shot nothing re-ran | ✅ done |
 | F-94a | Major | The port refresh updated the CSVs but not `master_long`, so the tonnage screen would have gone current while the forecast's congestion features stayed 19 days behind | ✅ done |
+| F-95 | Minor | Route map replaced with the 3D globe from `origin/3d_globe_intergration`, ported rather than copied so the desk-wide currency setting survives | ✅ done |
 
 Legend: ⬜ not started · 🔶 in progress · ✅ done · ⏸️ deferred (with reason) · ➖ no action needed
 
@@ -3874,3 +3875,55 @@ the sign-in screen offers to create the first administrator, three fields, and c
 straight on a working desk with backend data flowing and zero console errors.
 
 10 tests added on the incremental refresh and the parquet fold-in.
+
+### 2026-09-03 — F-95: the route map becomes a globe
+
+`origin/3d_globe_intergration` replaces the flat Mercator route map with an orthographic globe — a
+lit ocean gradient, sea-green land, an atmosphere halo, and drag-to-rotate. Ported onto this branch.
+
+#### It could not be taken as-is
+
+Two facts made a wholesale file swap wrong, and neither is visible without checking:
+
+**The branches share no history.** `git merge-base` returns nothing. That branch was created by
+"replacing branch contents with the full satellite-map project", so it is an unrelated history that
+happens to contain a copy of the same files. Nothing about it is a merge; every file is a
+side-by-side comparison.
+
+**Its `route-map.tsx` predates the currency work.** It calls
+`formatUsdCompact(tip.route.metric_usd)` — hardcoded dollars — where this branch calls
+`moneyCompact` from `useMoney()`, the desk-wide currency context added in F-83/F-84. Copying the
+file over would have left the route tooltip showing dollars while every other panel showed rupees:
+a split nobody notices until someone demos in INR.
+
+So the globe was ported *into* this branch rather than over it. The component is taken whole — the
+projection, rotation, drag and gradients are ~500 lines of coherent work and re-deriving them by
+hand would risk more than it saves — and the currency hook is re-applied on top: the import, the
+call site, and the `const { moneyCompact } = useMoney()` that the import is useless without.
+
+What the swap does drop is this branch's Mercator camera (`geoMercator` fit-to-region and the
+wheel-zoom from F-51). That is correct rather than a loss: the globe replaces it with its own
+rotate-and-scale camera, and keeping both would mean two cameras fighting over one viewport.
+
+#### Colours live in tokens, in both themes
+
+The globe needs three tokens this branch did not have — `--map-ocean-lit`, `--map-ocean-deep`,
+`--map-atmosphere` — and retuned values for the six it did. Both themes were updated, not just the
+dark one: the light theme restates the same relationships in its own inks, so the lit face is the
+palest value and the limb the deepest, and the sphere still reads as a sphere rather than inverting
+into a hole.
+
+Verified by resolving the custom properties in a live light-theme page rather than by reading the
+stylesheet: `--map-ocean-lit: #e6f2fb`, `--map-ocean-deep: #a6cae4`, `--map-atmosphere: #8fc2e6`,
+`--map-land: #ece6d4`.
+
+#### Verified
+
+Rendered a real quote in both themes. Dark: Newcastle to Paradip, the sphere clearly spherical with
+the route arcing across it. Light: Richards Bay to Vizag, the limb visible at the panel edge, land
+in warm tone against a pale ocean gradient, chosen route solid and considered routes dashed. Zero
+console errors and zero failed requests in both.
+
+`tsc` clean, `npm run build` clean, oxlint unchanged at its 10 pre-existing warnings, and the
+synthetic-data tripwire run explicitly — worth doing, because ~500 lines of new frontend drawing
+code is exactly where a `Math.random()` jitter would be tempting.

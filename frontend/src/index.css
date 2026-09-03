@@ -248,12 +248,22 @@
        dark build. Sea sits just above the panel it lives in so the map reads
        as a distinct surface; land is a desaturated slate that lets the route
        colours stay the brightest thing on it. */
-    --map-sea: #0e1720;
-    --map-land: #1c2733;
-    --map-coast: #2f3d4d;
-    --map-graticule: #18222d;
+    /* The globe reads as an actual planet rather than a flat disc:
+       `--map-ocean-lit` is the sunlit near side, fading through `--map-sea`
+       to `--map-ocean-deep` at the limb, with `--map-atmosphere` as the thin
+       horizon glow. Land is a desaturated sea-green so coastlines separate
+       from ocean without the whole sphere reading as one blue mass. All of it
+       lives here rather than as literals in route-map.tsx, so the light theme
+       can restate the same relationships with its own inks. */
+    --map-sea: #123047;
+    --map-ocean-lit: #1c4e70;
+    --map-ocean-deep: #081826;
+    --map-land: #2b4a3e;
+    --map-coast: #6fa3b8;
+    --map-graticule: #24455b;
+    --map-atmosphere: #48a3d6;
     --map-port: #e6ecf3;
-    --map-port-halo: #0b0f14;
+    --map-port-halo: #06121c;
 
     /*
      * Ambient depth.
@@ -359,10 +369,16 @@
     --elev-2:
         0 8px 24px -6px rgb(18 32 46 / 0.16), 0 2px 6px -2px rgb(18 32 46 / 0.08);
 
-    --map-sea: #e4edf6;
-    --map-land: #f0ede3;
-    --map-coast: #c4cdd8;
-    --map-graticule: #c4cdd8;
+    /* Same relationships, restated in light inks: the lit face is the palest
+       value and the limb the deepest, so the sphere still reads as a sphere
+       rather than inverting into a hole. */
+    --map-sea: #cfe3f2;
+    --map-ocean-lit: #e6f2fb;
+    --map-ocean-deep: #a6cae4;
+    --map-land: #ece6d4;
+    --map-coast: #9fb4c2;
+    --map-graticule: #bcd0dc;
+    --map-atmosphere: #8fc2e6;
     --map-port: #1c2b3a;
     --map-port-halo: #ffffff;
 
