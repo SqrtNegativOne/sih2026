@@ -35,8 +35,10 @@ Run as a script to do all three stages in order:
 from __future__ import annotations
 
 import csv
+import datetime
 import json
 import logging
+import re
 import time
 import urllib.error
 import urllib.parse
@@ -346,6 +348,224 @@ def pull_chokepoints(out_dir: Path = RAW_DATA, skip_existing: bool = True) -> No
         name = rows[0].get("portname", cp_id)
         LOGGER.info(f"[{i + 1}/{len(CHOKEPOINT_IDS)}] {cp_id} ({name}): {len(rows)} rows -> {out_path.name}")
 
+
+
+# ---------------------------------------------------------------------------
+# Incremental refresh -- keeping what was harvested current
+# ---------------------------------------------------------------------------
+#
+# The original harvest is a one-shot: `pull_ports` skips any port whose file
+# already exists, so re-running it changes nothing, and forcing it with
+# `skip_existing=False` re-downloads every port's full history and rewrites
+# 53 MB. Neither of those keeps the data current, and in practice nothing did:
+# every one of the 128 port files sat at the same stale date while the desk
+# quietly served congestion and tightness figures derived from them.
+#
+# This is the cheap path. Each port is asked only for rows NEWER than the last
+# date its own file already carries -- one small query per port instead of a
+# full re-download -- and the rows are appended. Nothing already on disk is
+# rewritten, for the same reason the rate harvester never rewrites a stored
+# figure: it is what the models were fitted on and what past recommendations
+# were priced against.
+
+
+@dataclass(frozen=True)
+class RefreshResult:
+    """What one incremental pass did."""
+
+    files_checked: int
+    files_updated: int
+    rows_added: int
+    newest_date: str | None
+    failures: tuple[str, ...] = ()
+    """Files that could not be refreshed, named. A silent partial refresh
+    would leave some ports current and others not, with nothing to say which."""
+
+
+def _existing_bounds(path: Path) -> tuple[str | None, str | None, list[str]]:
+    """(portid, latest date, fieldnames) for a harvested file.
+
+    The portid is read from the file's own rows rather than from the port
+    index, so a refresh cannot ask one port for another's data even if the
+    index and the directory have drifted apart.
+    """
+    try:
+        with path.open(newline="", encoding="utf-8") as fh:
+            reader = csv.DictReader(fh)
+            fieldnames = list(reader.fieldnames or [])
+            portid: str | None = None
+            latest: str | None = None
+            for row in reader:
+                pid = (row.get("portid") or "").strip()
+                if pid:
+                    if portid is None:
+                        portid = pid
+                    elif pid != portid:
+                        # Two ports in one file: refusing beats guessing.
+                        return None, None, fieldnames
+                day = (row.get("date") or "")[:10]
+                if day and (latest is None or day > latest):
+                    latest = day
+        return portid, latest, fieldnames
+    except OSError as exc:
+        LOGGER.warning(f"{path.name}: unreadable ({exc})")
+        return None, None, []
+
+
+def refresh_ports(out_dir: Path = RAW_DATA) -> RefreshResult:
+    """Append rows newer than each existing file's own latest date.
+
+    Only touches files that already exist: this brings a harvest up to date, it
+    does not start one. A port that has never been pulled needs `pull_ports`,
+    which is a deliberate, much heavier operation.
+    """
+    files = sorted(out_dir.glob("*_daily_portcalls.csv"))
+    checked = updated = added = 0
+    newest: str | None = None
+    failures: list[str] = []
+
+    for path in files:
+        checked += 1
+        portid, latest, fieldnames = _existing_bounds(path)
+        if not portid or not latest or not fieldnames:
+            failures.append(path.name)
+            continue
+        try:
+            # `date > DATE 'x'` is ArcGIS's own date-literal syntax, verified
+            # against the live service before this was written: the unfiltered
+            # query returns 2019 rows and the filtered one returns 2026-08-15
+            # onward, so the predicate is genuinely applied server-side rather
+            # than silently ignored.
+            rows = _pull_paginated(
+                DAILY_PORTS_QUERY, f"portid='{portid}' AND date > DATE '{latest}'"
+            )
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            # Offline-safe: one unreachable port must not abort the rest, and
+            # must not look like "this port had no new data".
+            LOGGER.info(f"{path.name}: refresh failed, left unchanged ({exc})")
+            failures.append(path.name)
+            continue
+
+        fresh = [r for r in rows if str(r.get("date", ""))[:10] > latest]
+        if not fresh:
+            continue
+
+        with path.open("a", newline="", encoding="utf-8") as fh:
+            writer = csv.DictWriter(fh, fieldnames=fieldnames, extrasaction="ignore")
+            for row in fresh:
+                writer.writerow({k: row.get(k, "") for k in fieldnames})
+        updated += 1
+        added += len(fresh)
+        for row in fresh:
+            day = str(row.get("date", ""))[:10]
+            if day and (newest is None or day > newest):
+                newest = day
+        LOGGER.info(f"{path.name}: +{len(fresh)} row(s)")
+
+    LOGGER.info(
+        f"port refresh: {checked} file(s) checked, {updated} updated, "
+        f"{added} row(s) added, newest {newest}"
+    )
+    if added:
+        update_master_ports(out_dir)
+    return RefreshResult(
+        files_checked=checked,
+        files_updated=updated,
+        rows_added=added,
+        newest_date=newest,
+        failures=tuple(failures),
+    )
+
+
+#: How build_master derives a series id from a port file's name. Duplicated
+#: here rather than imported so this module does not pull in the whole master
+#: build; `test_the_series_naming_matches_build_master` pins the two together.
+def _series_slug(path: Path) -> str:
+    return re.sub(r"[^A-Z0-9]+", "_", path.stem.split("_daily")[0].upper()).strip("_")
+
+
+def update_master_ports(out_dir: Path = RAW_DATA, master_path: Path | None = None) -> int:
+    """Fold newly appended port-call rows into master_long.parquet.
+
+    Without this the refresh only half-lands. `tonnage.stockflow.reconstruct`
+    reads the CSVs directly and so goes current immediately, but
+    `ml.features.congestion` reads ``PW_<PORT>_CALLS`` / ``_IMPORT_T`` /
+    ``_EXPORT_T`` out of the parquet -- those are **model features in the rate
+    forecast**. Leaving them behind would mean the tonnage screen advanced
+    while the forecast quietly kept using nineteen-day-old congestion.
+
+    Bounded exactly like the rate harvester: only ``PW_``-prefixed series that
+    master_long ALREADY carries, and only dates it does not. It never
+    introduces a new series -- the 342 series from the extended harvest that
+    the parquet has never carried are a separate, deliberate decision, not
+    something a daily top-up should make on anyone's behalf.
+    """
+    import polars as pl
+
+    path = master_path or (REPO_ROOT / "src" / "data" / "master_long.parquet")
+    if not path.exists():
+        LOGGER.info(f"No master at {path}; port series not updated.")
+        return 0
+
+    master = pl.read_parquet(path)
+    existing_pw = master.filter(pl.col("series_id").str.starts_with("PW_"))
+    if existing_pw.is_empty():
+        return 0
+    known_series = set(existing_pw["series_id"].unique().to_list())
+    known_keys = set(
+        zip(existing_pw["series_id"].to_list(), existing_pw["date"].to_list(), strict=True)
+    )
+
+    additions: list[dict] = []
+    for file in sorted(out_dir.glob("*_daily_portcalls.csv")):
+        slug = _series_slug(file)
+        wanted = {
+            f"PW_{slug}_CALLS": ("portcalls_dry_bulk", "calls"),
+            f"PW_{slug}_IMPORT_T": ("import_dry_bulk", "mt"),
+            f"PW_{slug}_EXPORT_T": ("export_dry_bulk", "mt"),
+        }
+        if not any(sid in known_series for sid in wanted):
+            continue
+        with file.open(newline="", encoding="utf-8") as fh:
+            for row in csv.DictReader(fh):
+                day_text = (row.get("date") or "")[:10]
+                if not day_text:
+                    continue
+                try:
+                    day = datetime.date.fromisoformat(day_text)
+                except ValueError:
+                    continue
+                for sid, (column, unit) in wanted.items():
+                    if sid not in known_series or (sid, day) in known_keys:
+                        continue
+                    raw_value = row.get(column)
+                    if raw_value in (None, ""):
+                        continue
+                    try:
+                        value = float(raw_value)
+                    except ValueError:
+                        continue
+                    additions.append(
+                        {
+                            "series_id": sid,
+                            "date": day,
+                            "value": value,
+                            "unit": unit,
+                            "source": "portwatch",
+                        }
+                    )
+
+    if not additions:
+        return 0
+
+    combined = pl.concat(
+        [master, pl.DataFrame(additions, schema=master.schema)], how="vertical"
+    ).sort(["series_id", "date"])
+    tmp = path.with_suffix(".parquet.tmp")
+    combined.write_parquet(tmp)
+    tmp.replace(path)
+    LOGGER.info(f"master_long: +{len(additions)} port row(s)")
+    return len(additions)
 
 def main() -> None:
     _setup_logging()

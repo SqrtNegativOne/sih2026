@@ -7,10 +7,13 @@ data_builders.harvest_portwatch.main() for the live run.
 from __future__ import annotations
 
 import csv
+import datetime
+import urllib.error
 from pathlib import Path
 
 import pytest
 
+from data_builders import harvest_portwatch as hp
 from data_builders._port_candidates import CANDIDATES, PortCandidate
 from data_builders.harvest_portwatch import (
     CHOKEPOINT_IDS,
@@ -276,3 +279,222 @@ def test_pull_paginated_continues_across_multiple_pages(monkeypatch: pytest.Monk
     assert len(rows) == 1500
     assert rows[0]["i"] == 0
     assert rows[-1]["i"] == 1499
+
+
+class TestIncrementalRefresh:
+    """Bringing a completed harvest up to date, without re-downloading it.
+
+    `pull_ports` is a one-shot: it skips any port whose file exists, so
+    re-running it changes nothing, and `skip_existing=False` re-downloads every
+    port's whole history and rewrites 53 MB. Neither keeps the data current,
+    and in practice nothing did -- all 128 files sat at one stale date while
+    the desk served congestion and tightness figures derived from them.
+
+    `refresh_ports` asks each port only for rows newer than its own file
+    already carries. What is tested here is that it appends and never rewrites.
+    """
+
+    @staticmethod
+    def _write(path: Path, portid: str, dates: list[str]) -> None:
+        with path.open("w", newline="", encoding="utf-8") as fh:
+            w = csv.DictWriter(fh, fieldnames=["date", "portid", "portcalls_dry_bulk"])
+            w.writeheader()
+            for d in dates:
+                w.writerow({"date": d, "portid": portid, "portcalls_dry_bulk": "1"})
+
+    def test_it_reads_the_portid_from_the_file_not_an_index(self, tmp_path: Path) -> None:
+        """So a refresh cannot ask one port for another's data even if the port
+        index and the directory have drifted apart."""
+        p = tmp_path / "Foo_daily_portcalls.csv"
+        self._write(p, "port883", ["2026-08-01", "2026-08-02"])
+        portid, latest, fields = hp._existing_bounds(p)
+        assert portid == "port883"
+        assert latest == "2026-08-02"
+        assert fields == ["date", "portid", "portcalls_dry_bulk"]
+
+    def test_a_file_holding_two_ports_is_refused(self, tmp_path: Path) -> None:
+        """Refusing beats guessing: appending one port's rows to a file that
+        already mixes two would deepen the corruption."""
+        p = tmp_path / "Mixed_daily_portcalls.csv"
+        with p.open("w", newline="", encoding="utf-8") as fh:
+            w = csv.DictWriter(fh, fieldnames=["date", "portid", "portcalls_dry_bulk"])
+            w.writeheader()
+            w.writerow({"date": "2026-08-01", "portid": "portA", "portcalls_dry_bulk": "1"})
+            w.writerow({"date": "2026-08-02", "portid": "portB", "portcalls_dry_bulk": "1"})
+        portid, _latest, _fields = hp._existing_bounds(p)
+        assert portid is None
+
+    def test_new_rows_are_appended_and_history_is_untouched(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        p = tmp_path / "Foo_daily_portcalls.csv"
+        self._write(p, "port883", ["2026-08-01", "2026-08-02"])
+        before = p.read_text(encoding="utf-8")
+
+        monkeypatch.setattr(
+            hp,
+            "_pull_paginated",
+            lambda _url, _where: [
+                {"date": "2026-08-03", "portid": "port883", "portcalls_dry_bulk": "4"},
+                {"date": "2026-08-04", "portid": "port883", "portcalls_dry_bulk": "5"},
+            ],
+        )
+        result = hp.refresh_ports(out_dir=tmp_path)
+
+        assert result.rows_added == 2
+        assert result.files_updated == 1
+        assert result.newest_date == "2026-08-04"
+        after = p.read_text(encoding="utf-8")
+        assert after.startswith(before), "existing rows must survive byte-identical"
+
+    def test_rows_not_actually_newer_are_dropped(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Belt and braces on the server-side date predicate. If the filter
+        were ever ignored, the whole history would come back and be appended
+        on top of itself."""
+        p = tmp_path / "Foo_daily_portcalls.csv"
+        self._write(p, "port883", ["2026-08-01", "2026-08-02"])
+        monkeypatch.setattr(
+            hp,
+            "_pull_paginated",
+            lambda _url, _where: [
+                {"date": "2026-08-01", "portid": "port883", "portcalls_dry_bulk": "9"},
+                {"date": "2026-08-02", "portid": "port883", "portcalls_dry_bulk": "9"},
+            ],
+        )
+        result = hp.refresh_ports(out_dir=tmp_path)
+        assert result.rows_added == 0
+        assert p.read_text(encoding="utf-8").count("2026-08-01") == 1
+
+    def test_the_query_asks_only_for_newer_rows(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        seen: list[str] = []
+
+        def capture(_url: str, where: str) -> list[dict]:
+            seen.append(where)
+            return []
+
+        p = tmp_path / "Foo_daily_portcalls.csv"
+        self._write(p, "port883", ["2026-08-01", "2026-08-14"])
+        monkeypatch.setattr(hp, "_pull_paginated", capture)
+        hp.refresh_ports(out_dir=tmp_path)
+        assert seen == ["portid='port883' AND date > DATE '2026-08-14'"]
+
+    def test_one_unreachable_port_does_not_stop_the_rest(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """And it is named, not just counted -- a partial refresh leaves some
+        ports current and others not, and "12 failed" does not tell anyone
+        which figures to distrust."""
+        good = tmp_path / "Good_daily_portcalls.csv"
+        bad = tmp_path / "Bad_daily_portcalls.csv"
+        self._write(good, "portGOOD", ["2026-08-01"])
+        self._write(bad, "portBAD", ["2026-08-01"])
+
+        def flaky(_url: str, where: str) -> list[dict]:
+            if "portBAD" in where:
+                raise urllib.error.URLError("down")
+            return [{"date": "2026-08-02", "portid": "portGOOD", "portcalls_dry_bulk": "2"}]
+
+        monkeypatch.setattr(hp, "_pull_paginated", flaky)
+        result = hp.refresh_ports(out_dir=tmp_path)
+        assert result.rows_added == 1
+        assert result.failures == ("Bad_daily_portcalls.csv",)
+
+    def test_it_refreshes_only_files_that_already_exist(self, tmp_path: Path) -> None:
+        """This brings a harvest up to date; it does not start one. A port
+        never pulled needs `pull_ports`, a deliberate and much heavier job."""
+        result = hp.refresh_ports(out_dir=tmp_path)
+        assert result.files_checked == 0
+        assert result.rows_added == 0
+
+    def test_new_rows_reach_the_parquet_the_forecast_reads(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """`tonnage.stockflow` reads the CSVs directly and goes current on its
+        own; `ml.features.congestion` reads PW_ series out of master_long, and
+        those are model features in the rate forecast. Without this the tonnage
+        screen would advance while the forecast quietly kept using old
+        congestion."""
+        import polars as pl
+
+        ports = tmp_path / "ports"
+        ports.mkdir()
+        f = ports / "Paradip_daily_portcalls.csv"
+        with f.open("w", newline="", encoding="utf-8") as fh:
+            w = csv.DictWriter(
+                fh,
+                fieldnames=["date", "portid", "portcalls_dry_bulk", "import_dry_bulk", "export_dry_bulk"],
+            )
+            w.writeheader()
+            for d, c in (("2026-08-01", 3), ("2026-08-02", 4)):
+                w.writerow({"date": d, "portid": "port883", "portcalls_dry_bulk": c,
+                            "import_dry_bulk": 1.0, "export_dry_bulk": 2.0})
+
+        master = tmp_path / "master_long.parquet"
+        pl.DataFrame(
+            {
+                "series_id": ["PW_PARADIP_CALLS", "SUPRAMAX_TCAVG"],
+                "date": [datetime.date(2026, 8, 1), datetime.date(2026, 8, 1)],
+                "value": [3.0, 20000.0],
+                "unit": ["calls", "usd/day"],
+                "source": ["portwatch", "handybulk"],
+            }
+        ).write_parquet(master)
+
+        added = hp.update_master_ports(out_dir=ports, master_path=master)
+        df = pl.read_parquet(master)
+        calls = df.filter(pl.col("series_id") == "PW_PARADIP_CALLS").sort("date")
+        assert added > 0
+        assert calls["date"].to_list()[-1] == datetime.date(2026, 8, 2)
+        # The already-present date keeps its original value.
+        assert calls["value"][0] == 3.0
+
+    def test_it_never_introduces_a_series_the_master_lacks(
+        self, tmp_path: Path
+    ) -> None:
+        """The 342 series from the extended harvest that the parquet has never
+        carried are a separate, deliberate decision -- not something a daily
+        top-up makes on anyone's behalf."""
+        import polars as pl
+
+        ports = tmp_path / "ports"
+        ports.mkdir()
+        f = ports / "Newport_daily_portcalls.csv"
+        with f.open("w", newline="", encoding="utf-8") as fh:
+            w = csv.DictWriter(
+                fh,
+                fieldnames=["date", "portid", "portcalls_dry_bulk", "import_dry_bulk", "export_dry_bulk"],
+            )
+            w.writeheader()
+            w.writerow({"date": "2026-08-02", "portid": "portNEW", "portcalls_dry_bulk": 9,
+                        "import_dry_bulk": 1.0, "export_dry_bulk": 2.0})
+
+        master = tmp_path / "master_long.parquet"
+        pl.DataFrame(
+            {
+                "series_id": ["PW_PARADIP_CALLS"],
+                "date": [datetime.date(2026, 8, 1)],
+                "value": [3.0],
+                "unit": ["calls"],
+                "source": ["portwatch"],
+            }
+        ).write_parquet(master)
+
+        before = set(pl.read_parquet(master)["series_id"].unique().to_list())
+        hp.update_master_ports(out_dir=ports, master_path=master)
+        after = set(pl.read_parquet(master)["series_id"].unique().to_list())
+        assert after == before
+
+    def test_the_series_naming_matches_build_master(self) -> None:
+        """This module duplicates build_master's slug rule rather than
+        importing it. If the two ever disagree, a daily top-up would write to
+        a series a full rebuild does not produce."""
+        from data_builders import build_master
+
+        source = Path(build_master.__file__).read_text(encoding="utf-8")
+        assert 're.sub(r"[^A-Z0-9]+", "_", file.stem.split("_daily")[0].upper()).strip("_")' in source
+        assert hp._series_slug(Path("Richards_Bay_ZA_daily_portcalls.csv")) == "RICHARDS_BAY_ZA"
+        assert hp._series_slug(Path("Paradip_daily_portcalls.csv")) == "PARADIP"

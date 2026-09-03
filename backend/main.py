@@ -220,6 +220,14 @@ RATE_REFRESH_DISABLED: Final[bool] = os.environ.get(
     "DESK_DISABLE_RATE_REFRESH", ""
 ).lower() in {"1", "true", "yes"}
 
+#: Port-call refresh, disable-able separately from rates because it is a
+#: different source with a very different cost: one small query per port,
+#: 128 of them, paced at the 400ms the original harvest established as safe.
+#: Roughly a minute per pass, once a day.
+PORT_REFRESH_DISABLED: Final[bool] = os.environ.get(
+    "DESK_DISABLE_PORT_REFRESH", ""
+).lower() in {"1", "true", "yes"}
+
 
 def _refresh_rates_once() -> int:
     """Harvest, fold into master_long, and return how many rows were added.
@@ -257,6 +265,35 @@ def _refresh_rates_once() -> int:
             added += harvest_route_rates.update_master(list(routes.quotes))
     except Exception:
         LOGGER.exception("Route-rate refresh failed; class averages are unaffected")
+
+    # Port calls. A third source, and the one behind congestion, waiting times
+    # and the tonnage field -- all of which were serving figures derived from
+    # data that had gone stale because nothing ever re-ran the harvest. This is
+    # the incremental path (`refresh_ports`), not the original full pull: each
+    # port is asked only for rows newer than its own file already carries.
+    if not PORT_REFRESH_DISABLED:
+        try:
+            from data_builders.harvest_portwatch import refresh_ports
+
+            ports = refresh_ports()
+            if ports.rows_added:
+                LOGGER.info(
+                    "Port refresh: +%d row(s) across %d port(s), now current to %s",
+                    ports.rows_added,
+                    ports.files_updated,
+                    ports.newest_date,
+                )
+            if ports.failures:
+                # Named, not counted: a partial refresh leaves some ports
+                # current and others not, and "12 failed" does not tell anyone
+                # which figures to distrust.
+                LOGGER.warning(
+                    "Port refresh: %d file(s) left unchanged: %s",
+                    len(ports.failures),
+                    ", ".join(ports.failures[:5]),
+                )
+        except Exception:
+            LOGGER.exception("Port refresh failed; rate data is unaffected")
 
     return added
 

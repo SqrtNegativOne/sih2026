@@ -123,6 +123,8 @@ the number/behaviour changed, not just that code was edited.
 | F-93 | Major | Route-level $/day evidence harvested, activating `opt.basis` for the first time — six origins no longer return an identical ceiling | ✅ done (F-05 partial) |
 | F-93a | Major | `_class_benchmark_series` silently returned None for every Handysize route series — "HANDYSIZE" begins HA, not the HS it tested for, so those observations would have been collected and discarded | ✅ done |
 | F-93b | Minor | Registering series ids made `test_families_with_zero_real_hits_are_unavailable` iterate nothing while still passing | ✅ done |
+| F-94 | Major | All 128 PortWatch files were 19 days stale — congestion, waiting times, tightness and anchorage calibration all served figures from old data, because the harvester was a one-shot nothing re-ran | ✅ done |
+| F-94a | Major | The port refresh updated the CSVs but not `master_long`, so the tonnage screen would have gone current while the forecast's congestion features stayed 19 days behind | ✅ done |
 
 Legend: ⬜ not started · 🔶 in progress · ✅ done · ⏸️ deferred (with reason) · ➖ no action needed
 
@@ -3774,3 +3776,101 @@ The real path stays option (b): the harvester runs daily, and every family reach
 its lane is first published and VALIDATED five publication days later, with no code change.
 
 28 tests added on the route harvester, 2 rewritten on the basis mechanism.
+
+### 2026-09-03 — F-94: the port data stops going stale too
+
+Found by sweeping every screen in the running app rather than by reading anything. The Tonnage Field
+rendered a header saying **AS OF 2026-08-14** while the rate data, freshly harvested, ran to
+2026-09-02. Checking the source behind it: all **128** PortWatch port-call files ended on the same
+date, uniformly. Congestion, expected waiting time, the tightness index and the anchorage
+calibration all derive from those files, so all of them were serving figures from data nineteen days
+old.
+
+Same shape as F-92 and the same root cause: a harvester existed and nothing ran it. But the fix
+could not be the same, and that difference is the interesting part.
+
+#### Why the obvious refresh was the wrong one
+
+`pull_ports` is a one-shot. It skips any port whose file already exists, so re-running it changes
+nothing at all; forcing it with `skip_existing=False` re-downloads **every port's entire history**
+and rewrites 53 MB. One does nothing and the other is a full overwrite — and an overwrite is exactly
+what must not happen to data the models were fitted on.
+
+The cheap path needed the API to support a date predicate, which was verified against the live
+service before any code was written: the unfiltered query returns 2019 rows, and
+`portid='port883' AND date > DATE '2026-08-14'` returns 2026-08-15 onward. The filter is genuinely
+applied server-side rather than silently ignored — worth checking, because a predicate that is
+quietly dropped would return the whole history and append it on top of itself.
+
+`refresh_ports` asks each port only for rows newer than its own file already carries, and appends
+them.
+
+#### Verified append-only across all 128 files
+
+The refresh added **1,792 rows** and brought every file to 2026-08-28 — the source's own latest, so
+the desk is now as current as PortWatch itself. Then, against a byte-level backup taken first:
+
+- **0 files with altered history.** Every original line survives byte-identical, in its original
+  position — checked by comparing the first *N* lines of each new file against the whole of its old
+  one, not by comparing row counts.
+- **0 column mismatches**, including on the appended rows.
+- Exactly +14 rows per file.
+
+The tightness index moved with it, from 2026-08-14 to **2026-08-28**.
+
+Three refusals worth naming:
+
+- **The portid is read from the file's own rows**, never from the port index, so a refresh cannot ask
+  one port for another's data if the index and the directory have drifted apart.
+- **A file containing two portids is refused rather than guessed at.** Appending to a file that
+  already mixes two ports would deepen the corruption.
+- **Failures are named, not counted.** A partial refresh leaves some ports current and others not,
+  and "12 failed" does not tell anyone which figures to distrust.
+
+It refreshes only files that already exist: this brings a harvest up to date, it does not start one.
+A port never pulled still needs `pull_ports`, which is a deliberate and much heavier job.
+
+Wired into the same daily loop as the rates, behind its own `DESK_DISABLE_PORT_REFRESH` flag —
+separate from the rate flag because it is a different source with a very different cost: 128 small
+queries paced at the 400 ms the original harvest established as safe, roughly a minute per pass.
+
+#### The refresh only half-landed at first
+
+Checking the data inventory afterwards caught the other half. `refresh_ports` updated the CSVs, and
+`tonnage.stockflow.reconstruct` reads those directly — so the Tonnage Field went current
+immediately, which is what made it look finished. But `ml.features.congestion` reads
+``PW_<PORT>_CALLS`` / ``_IMPORT_T`` / ``_EXPORT_T`` out of `master_long.parquet`, and **those are
+model features in the rate forecast**. The parquet was still at 2026-08-14.
+
+So the tonnage screen would have advanced while the forecast quietly kept pricing on nineteen-day-old
+congestion — a split state, and a worse one than being uniformly stale, because the visible screen
+would have said the data was current.
+
+`update_master_ports` folds the appended rows in, bounded the same way as everything else: only
+``PW_``-prefixed series the parquet **already carries**, and only dates it does not. It never
+introduces a new series — the 342 series from the extended harvest that the parquet has never
+carried remain a separate, deliberate decision, not one a daily top-up makes on anyone's behalf.
+Result: +588 rows, 42 series unchanged, `PW_` now current to 2026-08-28.
+
+It duplicates `build_master`'s series-naming rule rather than importing it, to avoid pulling the
+whole master build into a small refresh — and a test pins the two together, because if they ever
+disagree a daily top-up would write to a series a full rebuild does not produce.
+
+#### The sweep also cleared six screens
+
+Every screen driven with auth on: Season Plan, Port Twin, Tonnage Field, Fragility, Ledger,
+Portfolio. No console errors, no failed requests, no `NaN`/`undefined`/`[object Object]` anywhere in
+the rendered text, and every disabled control had a visible reason beside it.
+
+One false alarm worth recording: the sweep reported Tonnage Field as 110 characters with no heading,
+which looked like a broken render. It was the sweep sampling at 2.5 s while that page takes longer
+to load — the page is fine. Worth noting because the instinct on seeing it was to go fix the page.
+
+#### A fresh clone still works
+
+Auth became enforced by default in F-92, which changes the very first thing anyone does with this
+repository. Verified properly by moving the account database aside and driving the true first run:
+the sign-in screen offers to create the first administrator, three fields, and creating it lands
+straight on a working desk with backend data flowing and zero console errors.
+
+10 tests added on the incremental refresh and the parquet fold-in.

@@ -17,15 +17,17 @@ Two environment variables are set here, before any test module imports
     same environment logic the module uses rather than the value this file has
     already overridden.
 
-``DESK_DISABLE_ALERT_LOOP=1`` and ``DESK_DISABLE_RATE_REFRESH=1``
-    The app starts two background tasks: one evaluates standing alerts on a
-    timer, the other fetches the day's Baltic rates and folds them into
-    ``master_long.parquet``. Neither belongs in a test run. The rate refresh in
-    particular would make a real network request and rewrite a real data file
-    as a side effect of ``TestClient(app)`` being constructed, which would make
-    the suite non-deterministic and mutate the repository's own data.
-    ``tests/data_builders/test_harvest_handybulk.py`` exercises that harvester
-    properly, against a saved page and temporary files.
+``DESK_DISABLE_ALERT_LOOP=1``, ``DESK_DISABLE_RATE_REFRESH=1`` and
+``DESK_DISABLE_PORT_REFRESH=1``
+    The app starts background work on a timer: evaluating standing alerts,
+    fetching the day's Baltic index and route rates, and topping up 128 port-call
+    files. None of it belongs in a test run. Left on, merely constructing a
+    ``TestClient(app)`` would make real network requests and rewrite the
+    repository's own data files as a side effect, which is both
+    non-deterministic and destructive.
+
+    The harvesters are exercised properly in ``tests/data_builders/``, against
+    saved pages and temporary files.
 """
 
 from __future__ import annotations
@@ -35,3 +37,4 @@ import os
 os.environ.setdefault("DESK_REQUIRE_AUTH", "0")
 os.environ.setdefault("DESK_DISABLE_ALERT_LOOP", "1")
 os.environ.setdefault("DESK_DISABLE_RATE_REFRESH", "1")
+os.environ.setdefault("DESK_DISABLE_PORT_REFRESH", "1")

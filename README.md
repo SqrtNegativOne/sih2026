@@ -88,6 +88,7 @@ Other environment variables, all optional:
 | `DESK_DISABLE_ALERT_LOOP` | `1` to stop the background alert evaluation. |
 | `DESK_RATE_REFRESH_SECONDS` | How often the day's Baltic rates are fetched. Default 86400 (daily). |
 | `DESK_DISABLE_RATE_REFRESH` | `1` to stop the desk fetching rates at all — for an air-gapped run, or to drive `data_builders.harvest_handybulk` from cron instead. |
+| `DESK_DISABLE_PORT_REFRESH` | `1` to stop the daily top-up of PortWatch port-call data (`data_builders.harvest_portwatch.refresh_ports`). |
 
 ## Keeping the market data current
 
