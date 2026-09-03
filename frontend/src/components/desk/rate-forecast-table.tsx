@@ -3,6 +3,7 @@ import { motion, useReducedMotion } from 'motion/react'
 import { DURATION, drawPath, transition } from '@/lib/motion'
 import { Panel } from '@/components/desk/panel'
 import { Badge } from '@/components/ui/badge'
+import { Tooltip } from '@/components/ui/tooltip'
 import { PERCENTILE } from '@/lib/vocabulary'
 import { useElementSize } from '@/hooks/use-element-size'
 import { formatNumber } from '@/lib/format'
@@ -16,17 +17,19 @@ const ROUTE_EVIDENCE_LABEL: Record<RouteEvidence, string> = {
 
 function RouteEvidenceBadge({ evidence }: { evidence: RouteEvidence }) {
   return (
-    <Badge
-      variant={evidence === 'OBSERVED' ? 'secondary' : evidence === 'MODELLED' ? 'outline' : 'outline'}
-      className="text-micro"
-      title={
+    <Tooltip
+      content={
         evidence === 'ROUTE_RATE_BASIS_UNAVAILABLE'
-          ? 'No real route-level rate evidence clears the bar for this origin -- priced on the class benchmark, not this specific route.'
-          : undefined
+          ? 'No real route-level rate evidence clears the bar for this origin, so this is priced on the class benchmark rather than on this specific route.'
+          : evidence === 'MODELLED'
+            ? 'Real route-level rate evidence exists for this origin but is a thin sample, so the adjustment is modelled and carries a wide uncertainty.'
+            : 'Enough real route-level rate observations exist for this origin to validate the adjustment against the class benchmark.'
       }
     >
-      {ROUTE_EVIDENCE_LABEL[evidence]}
-    </Badge>
+      <Badge variant={evidence === 'OBSERVED' ? 'secondary' : 'outline'} className="text-micro">
+        {ROUTE_EVIDENCE_LABEL[evidence]}
+      </Badge>
+    </Tooltip>
   )
 }
 
@@ -163,6 +166,52 @@ function FanChart({ rows, todayQuote }: { rows: RateHorizon[]; todayQuote: numbe
   )
 }
 
+/**
+ * What the route evidence actually means for the number above it.
+ *
+ * The fault register's own words on the previous treatment: *"To be fair: the
+ * app discloses this with a 'Class-only' badge. But a badge is not a feature."*
+ * It was right. A small grey outline chip, with its only explanation in a
+ * native `title` that never opens on keyboard focus and never appears on
+ * touch, is not a disclosure anyone reads.
+ *
+ * The class-only case says the consequence in figures rather than in jargon,
+ * because the consequence is genuinely surprising: measured on this data, a
+ * cargo lifting from Newcastle (5,669 nm) and one from Hampton Roads
+ * (9,913 nm) return a ceiling identical to four decimal places. Someone
+ * comparing origins deserves to know that before they act on it, not after.
+ */
+function RouteEvidenceNote({
+  evidence,
+  adjustment,
+}: {
+  evidence: RouteEvidence
+  adjustment: number | null
+}) {
+  if (evidence === 'ROUTE_RATE_BASIS_UNAVAILABLE') {
+    return (
+      <p className="panel-note border-wait/40 text-wait-on-soft">
+        <span className="font-semibold">This price is for the vessel class, not for this route.</span>{' '}
+        No published route-level rate for this origin clears the evidence bar, so the forecast falls
+        back to the class benchmark — which means two origins on different continents can return the
+        same number. Use it to time the market, not to choose between load ports; the landed-cost
+        panel is where distance and fuel actually differ.
+      </p>
+    )
+  }
+  const pct = adjustment == null ? null : `${adjustment >= 0 ? '+' : ''}${(adjustment * 100).toFixed(1)}%`
+  return (
+    <p className="panel-note border-go/40">
+      <span className="font-semibold">
+        Adjusted for this route{pct ? ` by ${pct}` : ''}.
+      </span>{' '}
+      {evidence === 'MODELLED'
+        ? 'Built from real published route-level rates for this origin, but a thin sample — the adjustment is modelled and its uncertainty is deliberately wide.'
+        : 'Built from enough real published route-level rates for this origin to validate the adjustment against the class benchmark.'}
+    </p>
+  )
+}
+
 export function RateForecastTable({
   rows,
   todayQuote,
@@ -184,6 +233,7 @@ export function RateForecastTable({
       <div className="border-b border-border px-2 pb-1 pt-2">
         <FanChart rows={rows} todayQuote={todayQuote} />
       </div>
+      <RouteEvidenceNote evidence={routeEvidence} adjustment={rows[0]?.route_adjustment ?? null} />
       <table className="desk-table">
         <thead>
           <tr>

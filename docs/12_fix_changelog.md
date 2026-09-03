@@ -24,7 +24,7 @@ the number/behaviour changed, not just that code was edited.
 | F-02 | Blocker | "Price as of" defaults to today, always fails | ✅ done |
 | F-03 | Blocker | Verdict class ignores port feasibility | ✅ done |
 | F-04 | Blocker | Unseeded RNG, savings change every run | ✅ done |
-| F-05 | Major | Forecast is route-blind (needs more data — deferred) | ⏸️ deferred |
+| F-05 | Major | Forecast is route-blind — the PS's central ask | 🟡 partial (F-93: Indonesia only; Australia/US/Mozambique/Russia still class-only) |
 | F-06 | Major | Savings caption inverted | ✅ done |
 | F-07 | Major | Entry window ignores laycan | ✅ done |
 | F-08 | Major | Congestion alert: wrong port names for 10/12 ports | ✅ done |
@@ -36,7 +36,7 @@ the number/behaviour changed, not just that code was edited.
 | F-14 | Major | Wrong port DWT constants block Capesize everywhere | ✅ done |
 | F-15 | Major | as_of must be exact trading day or 503s | ✅ done |
 | F-16 | Major | No spot/period/COA screen (large scope gap — deferred) | ✅ done |
-| F-17 | Major | Only one cargo parcel ever priced (scope gap — deferred) | ⏸️ deferred |
+| F-17 | Major | Only one cargo parcel ever priced (scope gap) | ✅ done (F-87/F-88) |
 | F-18 | Major | Repositioning/backhaul score has no economics | ✅ done |
 | F-19 | Major | 89.7% accuracy claim is a trend artifact | ✅ done |
 | F-20 | Moderate | "Real-time" congestion isn't (data-coverage — documentation only) | ➖ no action needed |
@@ -120,6 +120,9 @@ the number/behaviour changed, not just that code was edited.
 | F-92d | Major | Sign-in was off by default on a system whose value is an auditable record of who decided what | ✅ done |
 | F-92e | Minor | `test_supplycurve.py` pinned `n_obs == 185`, a snapshot literal that would fail every day once the data started updating | ✅ done |
 | F-92f | Minor | `master_summary.csv` had drifted from the parquet it describes, and was only refreshed on runs that added rows | ✅ done |
+| F-93 | Major | Route-level $/day evidence harvested, activating `opt.basis` for the first time — six origins no longer return an identical ceiling | ✅ done (F-05 partial) |
+| F-93a | Major | `_class_benchmark_series` silently returned None for every Handysize route series — "HANDYSIZE" begins HA, not the HS it tested for, so those observations would have been collected and discarded | ✅ done |
+| F-93b | Minor | Registering series ids made `test_families_with_zero_real_hits_are_unavailable` iterate nothing while still passing | ✅ done |
 
 Legend: ⬜ not started · 🔶 in progress · ✅ done · ⏸️ deferred (with reason) · ➖ no action needed
 
@@ -3645,3 +3648,129 @@ drifted, and the first fix only rewrote it when rows were added, which is exactl
 the first place. `update_master` now refreshes it on every run, including a no-op one.
 
 38 tests added on the harvester, 4 on the default rule, and one rewritten to survive its own data.
+
+### 2026-09-03 — F-93: the forecast stops being uniformly route-blind (F-05, partially)
+
+F-05 is the register's oldest open major fault and the problem statement's central ask —
+forecasting "for various vessel types **and trade routes**". Its reproduction was six origin
+countries returning a ceiling identical to four decimal places.
+
+`opt.basis` has always had the mechanism. Its docstring said precisely what it was waiting for:
+
+> either activates automatically, with no code change, the moment real $/day-denominated
+> route-level evidence for a family reaches the relevant sample size
+
+and why the one route series on disk could not serve: `SG_SUPRAMAX_INDONESIA_ECI_USD_T` is three
+observations **in dollars per tonne**, and converting a voyage $/tonne rate to a $/day equivalent
+needs cargo-quantity, voyage-duration and bunker assumptions that would "cross from modelled into
+invented".
+
+handybulk publishes a sibling page — daily indicative charter levels, by class and named lane,
+**quoted in dollars per day**. That is the missing denomination.
+`src/data_builders/harvest_route_rates.py` harvests it, and the mechanism activated with no change
+to it.
+
+#### What changed, exactly
+
+| Origin | Before | After | Route evidence |
+|---|---|---|---|
+| Balikpapan, Indonesia | 18,141.4554 | **20,898.06** | MODELLED, +7.87% |
+| Muara Pantai, Indonesia | 18,141.4554 | **20,898.06** | MODELLED, +7.87% |
+| Newcastle, Australia | 18,141.4554 | 19,142.05 | class-only |
+| Richards Bay, S. Africa | 18,141.4554 | 19,142.05 | class-only |
+| Hampton Roads, USA | 18,141.4554 | 19,142.05 | class-only |
+| Beira, Mozambique | 18,141.4554 | 18,061.72 | class-only |
+
+#### What did NOT change, which matters more
+
+**F-05 stays open.** Of 92 lanes published on the day this was built, exactly **one** route family
+gained evidence. Australia, the US, Mozambique and Russia have no EC-India lane quoted at all —
+including Newcastle, the desk's most-quoted origin.
+
+South Africa looked like a second family right up until the destination was checked. Both its India
+lanes discharge on the **west** coast — a different coast and a different market — and mapping them
+would have looked entirely reasonable and been quietly wrong. That refusal is the sharpest test in
+the new suite, and the fixture deliberately contains a WCI lane so the test has something real to
+reject.
+
+Two caveats recorded rather than buried: these are indicative broker levels ("fixed around
+$22,500"), not settled fixtures — ESTIMATED, never OBSERVED; and the source has no archive, so the
+evidence accumulates forward from today and cannot be backfilled. At n=1 the family is MODELLED; it
+becomes VALIDATED after five publication days with no code change.
+
+#### A silent-failure bug in the wiring, found by hand
+
+`_class_benchmark_series` infers a class TCAVG from the series id after stripping the publisher
+prefix. Signal's codes are short (`P5TC`, `S10TC`, `HS3_38`, `C5`); the new series spell the class
+out. Three of four resolved fine — and `HB_HANDYSIZE_..._USD_DAY` did not, because "HANDYSIZE"
+begins **HA**, not the **HS** the function tested for.
+
+Nothing would have failed. `None` from that function is indistinguishable at the call site from
+"this family has no evidence", so every Handysize route observation would have been collected daily,
+written to disk, and silently discarded. Found by tracing an `HB_` series through the function by
+hand rather than by any test going red. All ten prefix cases — both publishers, all four classes,
+plus the `SUPRAMAX_USG` exclusion that must keep returning None — are now pinned.
+
+#### A test of mine that became vacuous
+
+Registering the series ids each family *would* use broke `test_families_with_zero_real_hits_are_
+unavailable`, which keyed off an empty tuple in `ROUTE_FAMILY_TO_SIGNAL_SERIES`. Every family now
+has ids, so the loop skipped all of them and asserted nothing — and still reported as a pass, which
+is worse than a failure.
+
+Rewritten to test the property that actually matters: a family with no observations *in
+master_long* resolves to the honest branch. It now also asserts that it checked at least one family,
+so it cannot silently become vacuous again.
+
+The Indonesia test was rewritten too. It asserted the honest dead end (three $/tonne points, no
+basis); it now asserts the better state while pinning the part that must not change — the $/tonne
+points are still not converted, and the fit uses only $/day observations.
+
+#### Option (c) as well: the badge became a disclosure
+
+F-05's third suggested fix was "at minimum, make the class-only limitation loud rather than a small
+grey badge". It was still a small grey badge, with its only explanation in a native `title` that --
+by this project's own F-79 finding -- never opens on keyboard focus and never appears on touch.
+
+The limitation now states its consequence in the charterer's terms, under the chart where the
+numbers are, rather than as a chip beside the panel title:
+
+> **This price is for the vessel class, not for this route.** No published route-level rate for this
+> origin clears the evidence bar, so the forecast falls back to the class benchmark — which means two
+> origins on different continents can return the same number. Use it to time the market, not to
+> choose between load ports; the landed-cost panel is where distance and fuel actually differ.
+
+And where evidence does exist it says so positively, with the figure:
+*"Adjusted for this route by +7.4%. Built from real published route-level rates for this origin, but
+a thin sample."* Both branches verified in the running app.
+
+#### Why option (a) was NOT taken
+
+The remaining fix option is "derive a per-route basis from the sailing-distance and bunker-cost
+differential you already compute". It is not implemented, deliberately.
+
+First the measurement that makes the fault look worse than the register states it. Sailing distances
+to Paradip, against the ceilings each returns:
+
+| Origin | Distance | Transit | Ceiling |
+|---|---|---|---|
+| Richards Bay | 4,668 nm | 15.0 d | 19,142.0450 |
+| Newcastle | 5,669 nm | 18.2 d | 19,142.0450 |
+| Hampton Roads | **9,913 nm** | **31.8 d** | 19,142.0450 |
+
+Hampton Roads is more than twice Richards Bay's distance and returns a figure identical to four
+decimal places. So distance genuinely does not touch the ceiling today, and adding a
+distance-derived basis would not double-count anything.
+
+It still should not be added. Route rate spreads are a function of trade imbalance, ballast
+positioning and cargo availability — which is why the Baltic publishes P2A and P5TC separately
+rather than deriving one from the other's mileage. Deriving a hire differential from distance
+asserts a causal relationship that does not hold, and would produce a confident, plausible-looking,
+per-route number with nothing real behind it. That is precisely the failure `opt.basis` was written
+to refuse, and it would be a worse outcome than the honest "same number twice" the badge now
+explains in full.
+
+The real path stays option (b): the harvester runs daily, and every family reaches MODELLED the day
+its lane is first published and VALIDATED five publication days later, with no code change.
+
+28 tests added on the route harvester, 2 rewritten on the basis mechanism.

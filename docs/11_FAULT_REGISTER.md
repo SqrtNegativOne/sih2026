@@ -180,6 +180,48 @@ bunker-cost differential you already compute, labelled as modelled, not observed
 more route-level anchors; (c) at minimum, make the class-only limitation loud rather than a
 small grey badge.
 
+**PARTIALLY RESOLVED (2026-09-03, F-93) — via option (b), and only for one family.**
+
+`data_builders.harvest_route_rates` harvests handybulk's daily page of indicative charter levels,
+which quotes lanes **in dollars per day** — the denomination this entry and `opt.basis` both
+identify as the blocker. The mechanism then activated with no change to it, exactly as its
+docstring promised.
+
+The reproduction above no longer reproduces:
+
+| Origin | Ceiling $/day | Route evidence |
+|---|---|---|
+| Balikpapan, Indonesia | **20,898.06** | MODELLED, +7.87% |
+| Muara Pantai, Indonesia | **20,898.06** | MODELLED, +7.87% |
+| Newcastle, Australia | 19,142.05 | ROUTE_RATE_BASIS_UNAVAILABLE |
+| Richards Bay, S. Africa | 19,142.05 | ROUTE_RATE_BASIS_UNAVAILABLE |
+| Hampton Roads, USA | 19,142.05 | ROUTE_RATE_BASIS_UNAVAILABLE |
+| Beira, Mozambique | 18,061.72 | ROUTE_RATE_BASIS_UNAVAILABLE |
+
+**This fault stays OPEN**, and the table is why. Of 92 lanes the source published on the day this
+was built, exactly **one** route family gained evidence. Australia, the US, Mozambique and Russia
+have no EC-India lane quoted at all — including Newcastle, the desk's most-quoted origin. South
+Africa looked like a second family until the destination was checked: both its India lanes
+discharge on the **west** coast, a different coast and a different market, and counting them would
+have been quietly wrong.
+
+So "should I lift from Australia or Mozambique this month?" is still answered class-only for both.
+What has changed is that the answer is no longer *uniformly* class-only, the Indonesia families
+move on real published evidence, and the honest branch is now visibly the exception rather than
+the entire behaviour.
+
+Two further caveats, recorded rather than buried:
+
+- These are **indicative broker levels** ("fixed around $22,500"), not settled fixtures — ESTIMATED,
+  the same standing as the Signal assessments already feeding this module, and never OBSERVED.
+- The source publishes no archive, so this evidence accumulates forward from 2026-09-03 and cannot
+  be backfilled. At `n=1` the family is MODELLED; it reaches `MIN_ROUTE_OBS` and becomes VALIDATED
+  after five publication days, with no code change.
+
+Option (a) — a distance-and-bunker-derived basis, which would cover *every* family including
+Australia — remains unbuilt and is the obvious next move on this fault. It was not attempted here
+because it is a modelling decision rather than a data one, and worth taking deliberately.
+
 ---
 
 ### F-06 · MAJOR · The savings label is inverted
@@ -479,6 +521,17 @@ is real, but the API surface offers no way to submit a second parcel.
 So "N voyages over a period", the thing a COA actually is, cannot be expressed.
 
 **Fix:** accept a list of parcels on the quote request.
+
+**RESOLVED (2026-09-03, F-87/F-88).** Via a dedicated `POST /season-plan` and a Season Plan screen
+rather than by widening `/quote`, which is the better shape: scheduling six lots together is a
+different problem from pricing six lots separately, so it deserves its own request and its own
+answer. `opt.voyage.schedule_voyages` — the multi-parcel CP-SAT model this entry calls "real but
+unreachable" — is what serves it, unchanged.
+
+Worth recording that this entry was accurate and stayed marked *deferred* for two releases after it
+had actually been built. A register that under-reports its own progress is a smaller problem than
+one that over-reports it, but it is still a wrong answer to the question the register exists to
+answer.
 
 ---
 

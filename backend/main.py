@@ -228,7 +228,7 @@ def _refresh_rates_once() -> int:
     thread. It makes a network request and rewrites a parquet file, neither of
     which belongs on the event loop.
     """
-    from data_builders import harvest_handybulk
+    from data_builders import harvest_handybulk, harvest_route_rates
 
     result = harvest_handybulk.harvest()
     if not result.fetched:
@@ -245,6 +245,19 @@ def _refresh_rates_once() -> int:
         LOGGER.info(
             "Rate refresh: +%d row(s), source now current to %s", added, result.latest_date
         )
+
+    # Route-level lanes, from a sibling page. Separate call because it is a
+    # separate publication with its own failure mode: a class-average fetch
+    # that works must not be held hostage to a lane page that does not, and
+    # vice versa. This is what feeds opt.basis, and therefore the only reason
+    # a quote from Indonesia prices differently from one from Australia.
+    try:
+        routes = harvest_route_rates.harvest()
+        if routes.fetched and not routes.reason:
+            added += harvest_route_rates.update_master(list(routes.quotes))
+    except Exception:
+        LOGGER.exception("Route-rate refresh failed; class averages are unaffected")
+
     return added
 
 

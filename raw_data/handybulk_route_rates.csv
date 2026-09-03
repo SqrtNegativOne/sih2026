@@ -1,0 +1,93 @@
+date,vessel_class,origin_text,dest_text,usd_per_day,route_family,series_id,source_url
+2026-09-03,HANDYSIZE,Continent,East Coast South America (ECSA),8000,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,HANDYSIZE,Continent,East Coast North America (ECNA),11000,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,HANDYSIZE,East Coast South America (ECSA),Continent,23000,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,HANDYSIZE,US Gulf (USG),Continent,15500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,HANDYSIZE,North Coast South America (NCSA),Continent,15500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,HANDYSIZE,South East Asia (SEA),China,18500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,HANDYSIZE,Indonesia,Japan-Korea,18500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,HANDYSIZE,North China,South East Asia (SEA),17500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,HANDYSIZE,Japan-Korea,Indonesia,17500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,HANDYSIZE,Colombia East Coast,West Africa (WAFR),16500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,HANDYSIZE,US East Coast (USEC),Turkiye,17000,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,HANDYSIZE,US East Coast (USEC),UK,17000,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,HANDYSIZE,US East Coast (USEC),Netherlands,18000,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,HANDYSIZE,Thailand,Myanmar,16000,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,HANDYSIZE,ARAG via Baltic,Brazil,11000,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,HANDYSIZE,Germany,Turkiye,16500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,HANDYSIZE,Poland,Turkiye,17000,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,HANDYSIZE,Brazil,Norway,20000,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,HANDYSIZE,North France,West Africa (WAFR),15500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,HANDYSIZE,Japan,West Coast India (WCI),23500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,HANDYSIZE,Argentina,West Africa (WAFR),17000,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,HANDYSIZE,Peru,Colombia West Coast,16500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,HANDYSIZE,Denmark via Baltic,West Africa (WAFR),16000,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,HANDYSIZE,Indonesia via Indonesia,Taiwan,15500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,HANDYSIZE,South Korea,Vietnam,18000,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,HANDYSIZE,Australia,Indonesia,19500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,HANDYSIZE,Indonesia,Taiwan,15500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,HANDYSIZE,South Africa (SAF),West Coast India (WCI),13500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,HANDYSIZE,South Africa (SAF),Germany,16500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,HANDYSIZE,South Africa (SAF),Vietnam,14500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,Continent,China,23000,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,Black Sea,China,23000,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,East Mediterranean (EMED),China,23000,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,US Gulf (USG),China,31000,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,North Coast South America (NCSA),China,31000,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,China via Australia,China,19000,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,China via North Pacific (NOPAC),China,19000,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,China,West Africa (WAFR),19000,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,US Gulf (USG),Continent,31000,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,Continent,US Gulf (USG),14000,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,West Africa (WAFR) via East Coast South America (ECSA),China,26000,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,West Africa (WAFR) via East Coast South America (ECSA),Continent,22000,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,South China via Indonesia,East Coast India (ECI),22500,indonesia_ec_india,HB_SUPRAMAX_INDONESIA_ECI_USD_DAY,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,South China via Indonesia,South China,15500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,West Coast India (WCI) via South Africa (SAF),China,18000,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,Continent,China,23500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,Black Sea,China,23500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,East Mediterranean (EMED),China,23500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,US Gulf (USG),China,31500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,North Coast South America (NCSA),China,31500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,China via Australia,China,19500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,China via North Pacific (NOPAC),China,19500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,China,West Africa (WAFR),19500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,US Gulf (USG),Continent,31500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,Continent,US Gulf (USG),14500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,West Africa (WAFR) via East Coast South America (ECSA),China,26500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,West Africa (WAFR) via East Coast South America (ECSA),Continent,22500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,South China via Indonesia,East Coast India (ECI),23000,indonesia_ec_india,HB_SUPRAMAX_INDONESIA_ECI_USD_DAY,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,South China via Indonesia,South China,16000,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,West Coast India (WCI) via South Africa (SAF),China,18500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,West Coast India (WCI) via Indonesia,Bangladesh,15000,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,US East Coast (USEC),UK,30500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,US East Coast (USEC),ARAG,29500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,Mexico East Coast via Colombia East Coast,Japan,27500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,SW Passage via US Gulf (USG),Turkiye,27500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,East Coast India (ECI),West Coast India (WCI),21000,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,Singapore via Indonesia,Thailand,22000,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,South China,Mauritus,23000,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,Pakistan,East Coast India (ECI),16500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,South Africa (SAF),China,18500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,South Africa (SAF),Pakistan,23500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,Netherlands,Turkiye,22500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,Denmark via Netherlands,Turkiye,22000,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,Argentina,Indonesia,19000,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,Brazil,Japan,19500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,West Africa (WAFR) via West Africa (WAFR),China,27500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,SUPRAMAX,South China via Vietnam,Bangladesh,27500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,PANAMAX,Continent via East Coast South America (ECSA),Continent,22000,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,PANAMAX,China via Australia,China,21500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,PANAMAX,China via North Pacific (NOPAC),China,21500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,PANAMAX,China,Continent,13500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,PANAMAX,Singapore via Argentina,China,22500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,PANAMAX,Indonesia via Australia,South China,23500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,PANAMAX,North China via North Pacific (NOPAC),Japan,21000,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,PANAMAX,Hong Kong via Argentina,China,22500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,PANAMAX,Spain via US East Coast (USEC),Poland,22500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,PANAMAX,Hong Kong via Australia,South Korea,20500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,PANAMAX,Oman via South Africa (SAF),West Coast India (WCI),22500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,PANAMAX,Hong Kong via Australia,South China,21500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,PANAMAX,East Coast India (ECI) via Argentina,China,24000,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,PANAMAX,Taiwan via Australia,Malaysia,19500,,,https://www.handybulk.com/ship-charter-rates/
+2026-09-03,PANAMAX,Taiwan via Australia,China,24500,,,https://www.handybulk.com/ship-charter-rates/

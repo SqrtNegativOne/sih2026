@@ -9,6 +9,7 @@ import polars as pl
 import pytest
 
 from opt.basis import (
+    MASTER_LONG_PATH,
     MIN_ROUTE_OBS,
     ROUTE_FAMILY_TO_SIGNAL_SERIES,
     RouteEvidence,
@@ -27,15 +28,50 @@ class TestRealRouteBasisTable:
         assert set(table) == set(RouteFamily)
 
     def test_indonesia_evidence_is_real_and_disclosed(self) -> None:
-        """The one real EC-India-destination series found in this repo's
-        Signal weekly extractions -- 3 real points, ~$9/tonne, checked
-        directly against raw_data/signal_weekly/*.extraction.csv."""
+        """Indonesia is the one family with real EC-India route evidence.
+
+        This used to assert the honest dead end: three Signal points, all
+        ~$9/**tonne**, none of them convertible to the $/day this module needs,
+        so the family resolved ROUTE_RATE_BASIS_UNAVAILABLE like every other.
+
+        `data_builders.harvest_route_rates` now supplies the missing
+        denomination -- handybulk publishes this lane daily in dollars per day
+        -- so the family resolves to a real basis. What must stay true is that
+        the $/tonne points are still not converted: the fit uses only $/day
+        observations, and the unconvertible ones remain visible rather than
+        being quietly dropped or forced into the fit.
+        """
         table = build_route_basis_table()
         result = table[RouteFamily.INDONESIA_EC_INDIA]
-        assert result.n_real_observations == 3
-        assert len(result.raw_observations) == 3
-        assert all(o.series_id == "SG_SUPRAMAX_INDONESIA_ECI_USD_T" for o in result.raw_observations)
-        assert all(o.unit in ("usd/ton", "usd/tonne") for o in result.raw_observations)
+
+        assert result.evidence is not RouteEvidence.ROUTE_RATE_BASIS_UNAVAILABLE
+        assert result.basis_entry is not None
+
+        # The fit counts only the usable $/day observations.
+        usd_day = [o for o in result.raw_observations if o.series_id.endswith("_USD_DAY")]
+        assert usd_day, "the whole point of this family is that a $/day observation now exists"
+        assert result.n_real_observations == len(usd_day)
+        assert all(o.unit == "usd/day" for o in usd_day)
+
+        # And they come from the route harvester, not from Signal.
+        assert all(o.series_id.startswith("HB_") for o in usd_day)
+
+    def test_the_per_tonne_points_are_still_not_converted(self) -> None:
+        """The reason they were unusable has not changed: turning a voyage
+        $/tonne rate into a $/day TC-equivalent needs cargo-quantity, voyage-
+        duration and bunker assumptions this module has no evidence for. A
+        newly available $/day series must not be taken as licence to convert
+        them."""
+        table = build_route_basis_table()
+        result = table[RouteFamily.INDONESIA_EC_INDIA]
+        per_tonne = [o for o in result.raw_observations if o.unit in ("usd/ton", "usd/tonne")]
+        # They may or may not be inside the as-of window; if they are, they
+        # must not be counted in the fit.
+        assert result.n_real_observations == len(
+            [o for o in result.raw_observations if o.series_id.endswith("_USD_DAY")]
+        )
+        for o in per_tonne:
+            assert not o.series_id.endswith("_USD_DAY")
 
     def test_no_calibration_factor_or_fabricated_premium(self) -> None:
         """Real evidence exists for Indonesia (unit mismatch, thin sample) and
@@ -51,14 +87,32 @@ class TestRealRouteBasisTable:
                 assert result.basis_entry is not None
             assert result.reason  # every result explains itself
 
-    def test_families_with_zero_real_hits_are_unavailable(self) -> None:
+    def test_families_with_no_real_observations_are_unavailable(self) -> None:
+        """Registering a series id is not the same as having data for it.
+
+        This test used to key off an empty tuple in
+        ROUTE_FAMILY_TO_SIGNAL_SERIES. That stopped meaning anything the moment
+        every family got the series ids it *would* use once its lane is
+        published -- the loop skipped every family and asserted nothing, which
+        is worse than failing because it still reports as a pass.
+
+        The real property is about observations, not registrations: a family
+        with nothing in master_long must resolve to the honest branch.
+        """
+        master = pl.read_parquet(MASTER_LONG_PATH)
+        present = set(master["series_id"].unique().to_list())
         table = build_route_basis_table()
+
+        checked = 0
         for route_family, series_ids in ROUTE_FAMILY_TO_SIGNAL_SERIES.items():
-            if series_ids:
+            if any(sid in present for sid in series_ids):
                 continue
+            checked += 1
             result = table[route_family]
             assert result.evidence is RouteEvidence.ROUTE_RATE_BASIS_UNAVAILABLE
+            assert result.basis_entry is None
             assert result.n_real_observations == 0
+        assert checked, "no family lacks data -- this test would be asserting nothing"
 
 
 class TestBasisMechanismWithSyntheticData:

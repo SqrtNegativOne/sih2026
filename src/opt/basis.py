@@ -95,22 +95,76 @@ class RouteEvidence(str, Enum):
     ROUTE_RATE_BASIS_UNAVAILABLE = "ROUTE_RATE_BASIS_UNAVAILABLE"
 
 
-#: RouteFamily -> the real Signal ``SG_*`` series_id(s) that are genuinely
-#: this route family's own rate (same origin region AND EC-India as the
-#: named destination in the source article -- never a same-origin,
-#: different-destination series treated as if it were the same route; that
-#: would be exactly the kind of proxy substitution the P4 prompt forbids).
-#: Investigated directly against every real row in
-#: raw_data/signal_weekly/*.extraction.csv -- families absent here were
-#: checked and found to have zero real direct hits, not merely unchecked.
+#: RouteFamily -> the real series_id(s) that are genuinely this route family's
+#: own rate (same origin region AND EC-India as the named destination in the
+#: source -- never a same-origin, different-destination series treated as if it
+#: were the same route; that would be exactly the kind of proxy substitution
+#: the P4 prompt forbids). Investigated directly against every real row in
+#: raw_data/signal_weekly/*.extraction.csv -- families absent here were checked
+#: and found to have zero real direct hits, not merely unchecked.
+#:
+#: Two publishers now appear here, and the prefix says which:
+#:
+#: - ``SG_`` -- Signal weekly report extractions.
+#: - ``HB_`` -- handybulk's daily indicative charter levels, harvested by
+#:   ``data_builders.harvest_route_rates``. These are the first $/day-
+#:   denominated route observations this project has ever had, which is what
+#:   the module docstring above was waiting for; the ``_USD_T`` Signal series
+#:   beside them still cannot be converted and still does not feed a basis.
+#:
+#: A publisher is never collapsed into another's namespace: the prefix is how
+#: a reader of a basis result can tell whose assessment moved a number.
 ROUTE_FAMILY_TO_SIGNAL_SERIES: Final[dict[RouteFamily, tuple[str, ...]]] = {
-    RouteFamily.INDONESIA_EC_INDIA: ("SG_SUPRAMAX_INDONESIA_ECI_USD_T",),
-    RouteFamily.AUSTRALIA_EC_INDIA: (),
-    RouteFamily.SOUTH_AFRICA_EC_INDIA: (),
-    RouteFamily.MOZAMBIQUE_EC_INDIA: (),
-    RouteFamily.US_EC_INDIA: (),
-    RouteFamily.SINGAPORE_EC_INDIA: (),
-    RouteFamily.RUSSIA_EC_INDIA: (),
+    RouteFamily.INDONESIA_EC_INDIA: (
+        "SG_SUPRAMAX_INDONESIA_ECI_USD_T",
+        "HB_SUPRAMAX_INDONESIA_ECI_USD_DAY",
+        "HB_PANAMAX_INDONESIA_ECI_USD_DAY",
+        "HB_HANDYSIZE_INDONESIA_ECI_USD_DAY",
+        "HB_CAPESIZE_INDONESIA_ECI_USD_DAY",
+    ),
+    # Registered but empty until the source actually quotes an EC-India lane
+    # for them. Listing the series ids a family WOULD use is not the same as
+    # claiming it has data: `_real_observations` returns nothing for a series
+    # that is not in master_long, so an unpublished lane resolves to
+    # ROUTE_RATE_BASIS_UNAVAILABLE exactly as before.
+    RouteFamily.AUSTRALIA_EC_INDIA: (
+        "HB_SUPRAMAX_AUSTRALIA_ECI_USD_DAY",
+        "HB_PANAMAX_AUSTRALIA_ECI_USD_DAY",
+        "HB_HANDYSIZE_AUSTRALIA_ECI_USD_DAY",
+        "HB_CAPESIZE_AUSTRALIA_ECI_USD_DAY",
+    ),
+    RouteFamily.SOUTH_AFRICA_EC_INDIA: (
+        "HB_SUPRAMAX_SOUTH_AFRICA_ECI_USD_DAY",
+        "HB_PANAMAX_SOUTH_AFRICA_ECI_USD_DAY",
+        "HB_HANDYSIZE_SOUTH_AFRICA_ECI_USD_DAY",
+        "HB_CAPESIZE_SOUTH_AFRICA_ECI_USD_DAY",
+    ),
+    RouteFamily.MOZAMBIQUE_EC_INDIA: (
+        "HB_SUPRAMAX_MOZAMBIQUE_ECI_USD_DAY",
+        "HB_PANAMAX_MOZAMBIQUE_ECI_USD_DAY",
+        "HB_HANDYSIZE_MOZAMBIQUE_ECI_USD_DAY",
+        "HB_CAPESIZE_MOZAMBIQUE_ECI_USD_DAY",
+    ),
+    RouteFamily.US_EC_INDIA: (
+        "HB_SUPRAMAX_US_ECI_USD_DAY",
+        "HB_PANAMAX_US_ECI_USD_DAY",
+        "HB_HANDYSIZE_US_ECI_USD_DAY",
+        "HB_CAPESIZE_US_ECI_USD_DAY",
+    ),
+    RouteFamily.SINGAPORE_EC_INDIA: (
+        "HB_SUPRAMAX_SINGAPORE_ECI_USD_DAY",
+        "HB_PANAMAX_SINGAPORE_ECI_USD_DAY",
+        "HB_HANDYSIZE_SINGAPORE_ECI_USD_DAY",
+        "HB_CAPESIZE_SINGAPORE_ECI_USD_DAY",
+    ),
+    RouteFamily.RUSSIA_EC_INDIA: (
+        "HB_SUPRAMAX_RUSSIA_ECI_USD_DAY",
+        "HB_PANAMAX_RUSSIA_ECI_USD_DAY",
+        "HB_HANDYSIZE_RUSSIA_ECI_USD_DAY",
+        "HB_CAPESIZE_RUSSIA_ECI_USD_DAY",
+    ),
+    # Coastal repositioning within EC-India. The source does not quote it and
+    # is unlikely to; left empty rather than given ids that could never fill.
     RouteFamily.INTRA_EC_INDIA: (),
 }
 
@@ -152,16 +206,44 @@ def _real_observations(master: pl.DataFrame, series_ids: tuple[str, ...], as_of:
 
 
 def _class_benchmark_series(master: pl.DataFrame, series_id: str) -> str | None:
-    """The class TCAVG series_id to compare a $/day route observation
-    against, inferred from which real vessel-class route code the Signal
-    series carries (its own route_code prefix -- P, S, C, HS)."""
-    prefix = series_id.removeprefix("SG_")
+    """The class TCAVG series_id to compare a $/day route observation against.
+
+    Inferred from the vessel-class code the series carries after its publisher
+    prefix -- Signal's own route codes (P, S, C, HS) and handybulk's spelled-out
+    class names both resolve here, because both begin with the same letters.
+    Stripping either prefix first is what makes that true: without it an
+    ``HB_``-prefixed series falls through to None and silently never produces a
+    basis, which looks exactly like "no evidence" from the outside.
+    """
+    prefix = series_id.removeprefix("SG_").removeprefix("HB_")
+
+    # Spelled-out class names first, because Signal's short codes would
+    # mis-claim them. "HANDYSIZE" begins "HA", not the "HS" Signal uses, so it
+    # fell through every branch below and returned None -- and a None here is
+    # indistinguishable from "no evidence" at the call site, so a whole class
+    # of route observations would have been silently discarded rather than
+    # producing a basis. Found by tracing an HB_ series through this function
+    # by hand rather than by anything failing.
+    for name, tcavg in (
+        ("HANDYSIZE", "HANDYSIZE_TCAVG"),
+        ("SUPRAMAX", "SUPRAMAX_TCAVG"),
+        ("PANAMAX", "PANAMAX_TCAVG"),
+        ("CAPESIZE", "CAPESIZE_TCAVG"),
+    ):
+        if prefix.startswith(f"{name}_"):
+            # SUPRAMAX_USG is a Signal series for a different destination and
+            # is excluded below by the same rule it always was.
+            if prefix.startswith("SUPRAMAX_USG"):
+                return None
+            return tcavg
+
+    # Signal's own single-letter route codes (P2A_82, S10TC, C5, HS3_38 ...).
+    if prefix.startswith("HS"):
+        return "HANDYSIZE_TCAVG"
     if prefix.startswith("P"):
         return "PANAMAX_TCAVG"
     if prefix.startswith("S") and not prefix.startswith("SUPRAMAX_USG"):
         return "SUPRAMAX_TCAVG"
-    if prefix.startswith("HS"):
-        return "HANDYSIZE_TCAVG"
     if prefix.startswith("C"):
         return "CAPESIZE_TCAVG"
     return None
