@@ -1,11 +1,14 @@
 # Deployment: Render (backend) + Vercel (frontend)
 
 This is a two-service deploy, not a single platform, because the two halves
-have genuinely different resource shapes: the backend loads `torch`,
-`xgboost` and `polars` plus the parquet/model files under `src/data/` into a
-long-lived process at startup (wrong fit for a serverless function with a
+have genuinely different resource shapes: the backend loads `xgboost` and
+`polars` plus the parquet/model files under `src/data/` into a long-lived
+process at startup (wrong fit for a serverless function with a
 cold-start-per-request model), while the frontend is a static Vite build that
-any static host can serve.
+any static host can serve. `torch` is a project dependency but is not part of
+this: it's only ever imported by `src/ml/model_lstm.py`, an offline training
+script nothing in `backend/main.py`'s import chain reaches, so it costs
+install time but not runtime memory.
 
 ## Why the frontend proxies through Vercel instead of calling Render directly
 
@@ -35,10 +38,19 @@ proxies `/api` itself") — no frontend or backend code changed to support it.
    permanent failure to Render's default health check).
 
    The free plan (`render.yaml`'s default) has 512MB RAM and spins down after
-   15 minutes idle. If the build gets OOM-killed or the live service crashes
-   under load, that is almost certainly `torch`/`xgboost`/`polars` all
-   resident at once — switch the plan to `starter` in the Render dashboard
-   (or edit `render.yaml`) rather than trying to slim the dependency set.
+   15 minutes idle. **Confirmed in production on 2026-09-07**: Render's own
+   "exceeded its memory limit" alert fired and auto-restarted the instance —
+   a request landing right after reads as the app hanging or failing, when
+   what actually happened is the process got killed and is restarting. The
+   cause is `xgboost`'s three loaded models plus `polars` holding the on-disk
+   market/port-call data in memory across everything `backend/main.py`
+   imports at startup — not `torch` (see above). Fix: Render dashboard →
+   the service → Settings → Instance Type → `starter` or above. This is a
+   billing change only the account owner can make, so it isn't set in
+   `render.yaml` by default; slimming the dependency set is not the right
+   fix here, the data this backend holds in memory to answer a quote
+   honestly (real market history, real port-call records) is the point of
+   the product.
 
 2. **Get the real backend URL** from the Render dashboard once it deploys
    (`https://<service-name>.onrender.com`). If it differs from

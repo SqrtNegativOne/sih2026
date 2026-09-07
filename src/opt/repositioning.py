@@ -122,6 +122,17 @@ def clear_hazard_cache() -> None:
     _port_class_hazard_rates.cache_clear()
 
 
+def warm_hazard_cache() -> int:
+    """Pay the "order of seconds, not milliseconds" cost from the module
+    docstring now, not on whichever request first calls
+    ``recommend_repositioning`` or ``opt.backhaul``'s scorer. Returns the
+    number of (port, class) hazard rates loaded, purely so a caller can log
+    something more informative than "done". Safe to call repeatedly --
+    ``_port_class_hazard_rates`` is itself cached, so a second call is free.
+    """
+    return len(_port_class_hazard_rates())
+
+
 def cargo_probability_within_window(
     port: PortEnum, vessel_class: VesselClass, window_days: float
 ) -> tuple[float, bool]:

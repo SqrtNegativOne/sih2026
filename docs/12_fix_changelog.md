@@ -5082,3 +5082,78 @@ Verified: `render.yaml` parses as valid YAML (`yaml.safe_load`),
 live Render/Vercel deployments -- that requires the user's own accounts and
 is documented as the next step in `docs/16_deployment.md`, not something this
 session could complete.
+
+## 2026-09-07 — Deployment doc: torch was never the OOM cause
+
+The deployed Render backend hit its 512MB free-tier memory limit in
+production and auto-restarted, exactly the risk `render.yaml` and
+`docs/16_deployment.md` had flagged as possible -- but both blamed
+`torch`/`xgboost`/`polars` jointly, without having actually checked whether
+torch is loaded into the live process at all. Checked now: `grep` across
+`backend/main.py`, `src/opt/`, `src/ml/inference.py` and
+`src/ml/live_forecast.py` for any torch import found nothing; the only
+importer anywhere in `src/` is `src/ml/model_lstm.py`, an offline training
+script that nothing in `backend/main.py`'s import chain reaches. So torch
+costs `uv sync` install time on Render's build machine but zero runtime
+memory -- the actual pressure is `xgboost`'s three loaded models plus
+`polars` holding the real on-disk market history and ~130-port satellite
+port-call data in memory across everything `backend/main.py` imports at
+startup.
+
+Corrected both files to say so plainly rather than leave a plausible-sounding
+but unverified guess standing, and pointed the user at the actual fix
+(Render dashboard -> Settings -> Instance Type -> a paid plan with more
+RAM, since the free tier's 512MB is genuinely not enough for this backend's
+real working set). No code changed -- this is a documentation-accuracy fix
+only, triggered by the user reporting Render's "exceeded its memory limit"
+email and slow requests in the live deployment.
+
+## 2026-09-07 (later) — Repositioning's hazard-rate cache was never warmed
+
+Follow-up to the memory-limit report: the user's real complaint was that a
+worked-example quote took ~2s locally but ~20s on the deployed Render free
+instance, and they explicitly do not want to pay for a bigger plan, so the
+fix had to be a real one, not "upgrade the plan."
+
+The deployed app's own live progress panel (a screenshot of the SSE stage
+timings) showed the gap wasn't spread evenly across all 8 pipeline stages --
+13,795 of the ~19,000ms total sat in exactly one stage, "Repositioning idle
+vessels." `src/opt/repositioning.py`'s own module docstring already names
+the cause precisely: `_port_class_hazard_rates()` does real per-port file
+I/O across every port the P2 tonnage harvest covers ("order of seconds, not
+milliseconds"), and is deliberately cached at process scope
+(`functools.lru_cache(maxsize=1)`) specifically so `opt.api.run_optimizer`
+doesn't redo that work more than once per process lifetime.
+
+The cache is correctly a process-lifetime cache. What was missing is that
+nothing ever paid its cost proactively. `backend/main.py`'s own
+`_warm_caches()` already exists for exactly this class of problem --
+its own comment says a warmup exists so an expensive first computation "is
+a visible failure rather than a slow response... the cost fell on whoever
+clicked first -- at a competition, a judge" -- and already warms the
+tonnage-field snapshot and its ablation. The repositioning hazard cache was
+simply never added to that list, so it kept landing on whichever request
+first included a vessel, in full, on every single process start. On a host
+that restarts the process after 15 minutes idle (Render's free-tier
+behaviour, which the user is intentionally staying on), that is not a rare
+cold-start tax -- it's most real clicks.
+
+Fix: added `opt.repositioning.warm_hazard_cache()` (mirrors the existing
+`clear_hazard_cache()`), and called it from `_warm_caches()` alongside the
+tonnage-field warmup, in the same guarded, log-and-continue style the
+existing warmup steps use -- a warmup failing must never be why the desk
+fails to start. Verified locally: cold, `warm_hazard_cache()` takes 1.28s
+and loads 512 port/class hazard pairs; a second call is 0.0000s, confirming
+the cache is doing its job once this actually runs before a real request
+needs it. `tests/opt/test_repositioning.py` (6 tests) still passes
+unchanged.
+
+Not verified against the live Render deployment -- that requires a push and
+a real cold-start cycle to observe, which is the user's next step, not
+something checkable from here. If the stall persists after this deploys,
+the next place to look is `dynamic_wait_days` (`opt.congestion`, also
+process-cached, also not warmed) being paid per candidate port on that same
+first request -- deliberately not warmed here too, since its own per-call
+cost looked small next to the hazard-rate table in this session's read of
+the code, and warming a cache that turns out not to matter is its own kind
+of clutter.

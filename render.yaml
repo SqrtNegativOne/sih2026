@@ -20,11 +20,17 @@ services:
     name: sih2026-backend
     runtime: python
     # Free tier: 512MB RAM and spins down after 15 min idle (cold starts take
-    # ~30-60s on the next request). This backend loads torch, xgboost and
-    # polars plus the models/parquet files under src/data/ into memory on
-    # startup -- if the free instance OOMs or the build itself gets killed for
-    # memory, that is the cause; change this to `starter` (paid, 512MB-2GB
-    # depending on tier, always-on) in the Render dashboard or here.
+    # ~30-60s on the next request). Confirmed in production (2026-09-07):
+    # Render's own "exceeded its memory limit" alert fired and auto-restarted
+    # the instance. NOT torch -- checked, and it's only ever imported by
+    # src/ml/model_lstm.py, an offline training script nothing in
+    # backend/main.py's import chain reaches. The real pressure is xgboost's
+    # three loaded models plus polars holding the on-disk parquet/csv (market
+    # history, ~130 ports of satellite port-call data, berth records) in
+    # memory across everything backend/main.py imports at startup. Fix:
+    # `starter` plan or above in the Render dashboard (Settings -> Instance
+    # Type) -- that's a billing change only the account owner can make, so
+    # it isn't set here by default.
     plan: free
     buildCommand: |
       curl -LsSf https://astral.sh/uv/install.sh | sh

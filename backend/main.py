@@ -390,6 +390,21 @@ def _warm_caches() -> None:
         except Exception:
             LOGGER.exception("Warmup: %s failed; it will compute on demand", label)
 
+    # opt.repositioning's own docstring already names this cost ("order of
+    # seconds, not milliseconds" of per-port file I/O) and caches it for the
+    # process lifetime -- but nothing paid it here until now, so it fell on
+    # whichever quote first included a vessel (the "Repositioning idle
+    # vessels" stage), every single time the process had just (re)started.
+    # On a host that restarts the process after an idle period, that is not
+    # a rare cold-start tax, it's most requests.
+    try:
+        from opt.repositioning import warm_hazard_cache
+
+        n = warm_hazard_cache()
+        LOGGER.info("Warmup: repositioning hazard rates ready (%d port/class pairs)", n)
+    except Exception:
+        LOGGER.exception("Warmup: repositioning hazard rates failed; they will compute on demand")
+
 @asynccontextmanager
 async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # Done here rather than at import: uvicorn installs its handlers as part of
