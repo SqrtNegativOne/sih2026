@@ -118,3 +118,4 @@ raw_data/sentinel1/*.png
 #
 # census.jsonl is likewise NOT ignored -- that IS the real observation, kept
 # the same way opt/ledger's log is.
+.vercel
